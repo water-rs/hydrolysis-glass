@@ -957,6 +957,7 @@ impl GlassRenderer {
     }
 
     /// The field texture of the last rendered group.
+    #[cfg(feature = "verification")]
     #[must_use]
     pub fn field_texture(&self) -> Option<&wgpu::Texture> {
         self.composites.as_ref().map(|(_, f, _)| f)
@@ -965,8 +966,11 @@ impl GlassRenderer {
 
 /// Reads a texture back as `f32` RGBA rows (`Rgba16Float` or `Rgba32Float`).
 ///
+/// Verification only: no runtime render path may read the GPU back.
+///
 /// # Panics
 /// On an unsupported format or a failed buffer map.
+#[cfg(feature = "verification")]
 #[must_use]
 pub fn read_texture(
     device: &wgpu::Device,
@@ -1037,6 +1041,7 @@ pub fn read_texture(
 }
 
 /// Decodes an IEEE half-precision float.
+#[cfg(feature = "verification")]
 #[must_use]
 pub fn half_to_f32(h: u16) -> f32 {
     let sign = if h & 0x8000 != 0 { -1.0 } else { 1.0 };
@@ -1056,6 +1061,7 @@ pub fn half_to_f32(h: u16) -> f32 {
 }
 
 /// Encodes an `f32` as IEEE half precision (round to nearest even).
+#[cfg(feature = "verification")]
 #[must_use]
 pub fn f32_to_half(v: f32) -> u16 {
     let bits = v.to_bits();

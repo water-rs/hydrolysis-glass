@@ -56,6 +56,14 @@ fn d_at(r: &Render, x: f32, y: f32) -> f32 {
 }
 
 #[test]
+fn readback_is_gated_by_the_verification_feature() {
+    assert!(
+        cfg!(feature = "verification"),
+        "read_texture/field_texture are test-only API: off without `verification`"
+    );
+}
+
+#[test]
 fn adapter_reports() {
     let g = gpu();
     assert!(!g.adapter_name.is_empty());

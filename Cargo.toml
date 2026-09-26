@@ -21,6 +21,10 @@ default = []
 # shader paints and the `Backdrop` capability. Off until the engine ships
 # them; `ENGINE_REQUIREMENTS.md` lists every API the gated code needs.
 engine = []
+# GPU→CPU readback and internal-texture access for the verification
+# harness. Off for consumers: nothing may build a readback path on the
+# runtime API.
+verification = []
 
 [dependencies]
 bytemuck = { version = "1", features = ["derive"] }
@@ -35,6 +39,8 @@ waterui-form = "0.5.1"
 wgpu = { version = "29.0.4", default-features = false, features = ["wgsl"] }
 
 [dev-dependencies]
+# The test harness exercises the `verification` surface.
+hydrolysis-glass = { path = ".", version = "0.1.0", features = ["verification"] }
 pollster = "1.0"
 # Dumps the verification renders as PNG so a failing property can be looked at.
 image = { version = "0.25.10", default-features = false, features = ["png"] }
