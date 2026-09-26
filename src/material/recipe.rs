@@ -193,6 +193,10 @@ pub fn highlight_spread(m: f32) -> f32 {
 /// The full per-element parameter block of the background effect plus the
 /// sibling layers (highlight, tint).
 #[derive(Clone, Copy, Debug, PartialEq)]
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "the fields mirror the specification's independent recipe flags"
+)]
 pub struct Recipe {
     /// Backdrop capture scale: 0.25 regular-class, 0.5 clear. **[logged]**
     pub capture_scale: f32,
@@ -449,17 +453,15 @@ pub fn piecewise(xs: &[f32; 5], ys: &[f32; 5], x: f32) -> f32 {
     ys[4]
 }
 
-/// `blurR` against `m`: flat 1 for clear; for regular a saturating ramp
-/// through the measured points (1.333 at 34.3 and 40, 1.516 at 55.7,
-/// 1.619 at 60, 2.095 at 80, 4.0 at 200) **[logged points; the curve between
-/// them is inferred]**. Below 40 pt the value is held; between the points
-/// the ramp is a monotone cubic through the table, which stays within the
-/// ±10 % verification tolerance everywhere.
+/// `blurR` against `m`: flat 1 for clear; a saturating ramp for regular.
+///
+/// The ramp passes through the measured points (1.333 at 34.3 and 40,
+/// 1.516 at 55.7, 1.619 at 60, 2.095 at 80, 4.0 at 200). **[logged points;
+/// the curve between them is inferred]** Below 40 pt the value is held;
+/// between the points the ramp is a monotone cubic through the table,
+/// which stays within the ±10 % verification tolerance everywhere.
 #[must_use]
 pub fn blur_r(m: f32, variant: Variant) -> f32 {
-    if variant == Variant::Clear {
-        return 1.0;
-    }
     const TABLE: [(f32, f32); 5] = [
         (40.0, 1.333),
         (55.7, 1.516),
@@ -467,6 +469,9 @@ pub fn blur_r(m: f32, variant: Variant) -> f32 {
         (80.0, 2.095),
         (200.0, 4.0),
     ];
+    if variant == Variant::Clear {
+        return 1.0;
+    }
     if m <= TABLE[0].0 {
         return TABLE[0].1;
     }
@@ -508,9 +513,11 @@ pub fn sdr_op(m: f32) -> f32 {
     0.001f32.mul_add(m - 40.0, 0.08).clamp(0.08, 0.24)
 }
 
-/// Positive field range for regular-class elements: the logged values span
-/// 34.5–39.5 pt (34.46 at m=200, 37.08 capsule, 37.6 container) with no
-/// identified law; 37 pt is used at every size. **[unknown; chosen]**
+/// Positive field range for regular-class elements, pt.
+///
+/// The logged values span 34.5–39.5 pt (34.46 at m=200, 37.08 capsule,
+/// 37.6 container) with no identified law; 37 pt is used at every size.
+/// **[unknown; chosen]**
 #[must_use]
 pub const fn positive_range(_m: f32) -> f32 {
     37.0

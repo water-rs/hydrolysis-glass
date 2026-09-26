@@ -57,6 +57,10 @@ pub struct Surface {
 
 /// Converts kurbo bounds to material bounds.
 #[must_use]
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "kurbo f64 layout coordinates are display-resolution and well inside f32"
+)]
 pub const fn rect(bounds: KRect) -> Rect {
     Rect::new(
         bounds.x0 as f32,

@@ -19,11 +19,12 @@ pub enum CornerCurve {
     Continuous,
 }
 
-/// Superellipse exponent of a `continuous` corner. The specification only
-/// pins the corner to "between 2 (circle) and ∞ (square)", bulging outward
-/// of the circular arc by ≲0.5 px at the capture resolution; `2.02` puts the
-/// bulge at ≈0.14 pt on a 40 pt radius (0.4 px at 3 px/pt). **[unknown;
-/// chosen]**
+/// Superellipse exponent of a `continuous` corner.
+///
+/// The specification only pins the corner to "between 2 (circle) and
+/// ∞ (square)", bulging outward of the circular arc by ≲0.5 px at the
+/// capture resolution; `2.02` puts the bulge at ≈0.14 pt on a 40 pt radius
+/// (0.4 px at 3 px/pt). **[unknown; chosen]**
 pub const CONTINUOUS_EXPONENT: f32 = 2.02;
 
 /// Deep-interior clamp of the field. **[logged]**
@@ -158,6 +159,10 @@ impl Shape {
 
     /// Signed distance from `p` to the silhouette.
     #[must_use]
+    #[allow(
+        clippy::many_single_char_names,
+        reason = "the locals mirror the specification's SDF notation"
+    )]
     pub fn distance(&self, p: [f32; 2]) -> f32 {
         let [cx, cy] = self.rect.center();
         let hx = self.rect.w * 0.5;

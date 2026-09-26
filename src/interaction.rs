@@ -36,10 +36,12 @@ pub const ATTRACTION_GAP_MARGIN: f32 = 6.0;
 /// **[inferred]**
 pub const ATTRACTION_GAP_FRACTION: f32 = 0.5;
 /// Factor by which a group's union smoothing grows while a member is
-/// grabbed (`τ` tracks drag state): ×1.35 at full drag on the 30 pt
-/// container smoothing, which bridges the gap closed by an 8 pt pull across
-/// a 16 pt gap while the gap opening on the far side (≈19 pt after the
-/// press growth and the neighbour's lean) stays open. **[unknown; chosen]**
+/// grabbed (`τ` tracks drag state). **[unknown; chosen]**
+///
+/// ×1.35 at full drag on the 30 pt container smoothing, which bridges the
+/// gap closed by an 8 pt pull across a 16 pt gap while the gap opening on
+/// the far side (≈19 pt after the press growth and the neighbour's lean)
+/// stays open.
 pub const DRAG_SMOOTHING_GAIN: f32 = 0.35;
 
 /// Exponential approach of `current` towards `target` by `rate`.
@@ -55,10 +57,11 @@ fn approach2(current: [f32; 2], target: [f32; 2], rate: f32) -> [f32; 2] {
     ]
 }
 
-/// Neighbour lean: `û · min(18·(1 − dist/140)², 0.5·max(gap − 6, 0))` for
-/// an element whose centre lies `delta` away from the dragged element's
-/// centre, with `gap` the remaining surface-to-surface distance. Returns the
-/// zero vector beyond the attraction radius.
+/// Neighbour lean: `û · min(18·(1 − dist/140)², 0.5·max(gap − 6, 0))`.
+///
+/// For an element whose centre lies `delta` away from the dragged
+/// element's centre, with `gap` the remaining surface-to-surface distance.
+/// Returns the zero vector beyond the attraction radius.
 #[must_use]
 pub fn attraction(delta: [f32; 2], gap: f32) -> [f32; 2] {
     let dist = delta[0].hypot(delta[1]);

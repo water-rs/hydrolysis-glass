@@ -157,6 +157,10 @@ pub fn toggle_switch(
 
 /// A checkbox: an outlined continuous square that fills with the accent and
 /// draws its check mark as `progress` rises.
+#[allow(
+    clippy::many_single_char_names,
+    reason = "the locals mirror the checkbox's mark geometry"
+)]
 pub fn toggle_checkbox(
     palette: &Palette,
     draw: &mut dyn DrawContext,
@@ -441,6 +445,12 @@ pub fn progress_linear_indeterminate(
     }
 }
 
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_precision_loss,
+    reason = "arc subdivision counts are small positive values; kurbo wants f64 points"
+)]
 fn arc(center: Point, radius: f64, from: f64, to: f64) -> BezPath {
     let mut path = BezPath::new();
     let steps = ((to - from).abs() / (PI / 24.0)).ceil().max(1.0) as usize;
@@ -612,6 +622,10 @@ pub fn list_delete_control(palette: &Palette, draw: &mut dyn DrawContext, bounds
 }
 
 /// The background revealed behind a swiping row.
+#[allow(
+    clippy::cast_possible_truncation,
+    reason = "progress is clamped to [0, 1] before use"
+)]
 pub fn list_swipe_dismiss_background(
     palette: &Palette,
     draw: &mut dyn DrawContext,

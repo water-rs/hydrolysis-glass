@@ -1,16 +1,4 @@
-#![allow(
-    clippy::cast_precision_loss,
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    clippy::many_single_char_names,
-    clippy::needless_range_loop,
-    clippy::large_types_passed_by_value,
-    clippy::float_cmp,
-    reason = "verification harness: pixel arithmetic on synthetic images"
-)]
 //! Shared harness for the offscreen verification renders.
-
-#![allow(dead_code)]
 
 use hydrolysis_glass::material::geometry::{CornerCurve, Rect, Shape};
 use hydrolysis_glass::material::gpu::{COMPOSITE_FORMAT, f32_to_half, read_texture};

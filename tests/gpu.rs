@@ -1,13 +1,3 @@
-#![allow(
-    clippy::cast_precision_loss,
-    clippy::cast_possible_truncation,
-    clippy::cast_sign_loss,
-    clippy::many_single_char_names,
-    clippy::needless_range_loop,
-    clippy::large_types_passed_by_value,
-    clippy::float_cmp,
-    reason = "verification harness: pixel arithmetic on synthetic images"
-)]
 //! Offscreen verification of the glass material against the specification's
 //! synthetic scenes. Every test saves its render to `target/verification/`.
 //!
@@ -15,6 +5,18 @@
 //! reports them as pending until `GLASS_REFERENCE_CAPTURES` points at a
 //! directory of captures.
 
+// The harness module does pixel arithmetic on synthetic images by design.
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::many_single_char_names,
+    clippy::needless_range_loop,
+    clippy::large_types_passed_by_value,
+    clippy::float_cmp,
+    dead_code,
+    reason = "verification harness: pixel arithmetic on synthetic images"
+)]
 mod common;
 
 use common::*;
@@ -41,6 +43,12 @@ fn transparent() -> Image {
 }
 
 /// Horizontal luma ramp 0.1 → 0.9 over the scene width.
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "test probes convert small pixel counts and point coordinates to and from f32"
+)]
 fn ramp() -> Image {
     let (w, h) = scene_px(SCENE[0], SCENE[1]);
     Image::from_fn(w, h, |x, _| grey(0.1 + 0.8 * x / w as f32))
@@ -119,6 +127,13 @@ fn passes_are_scoped_to_member_bounds_and_reused_across_frames() {
 }
 
 #[test]
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::many_single_char_names,
+    reason = "test probes convert small pixel counts and point coordinates to and from f32; locals mirror pixel axes"
+)]
 fn silhouette_position_and_antialiasing() {
     let backdrop = flat(0.85);
     // Offset by half a pixel so the edge falls inside a pixel, not on a
@@ -250,6 +265,12 @@ fn thirds_backdrop() -> Image {
 }
 
 #[test]
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "test probes convert small pixel counts and point coordinates to and from f32"
+)]
 fn union_gaps_stay_open_and_ownership_is_local() {
     let r = render(&thirds_backdrop(), &merge_scene(0.0), None);
     r.output.save("union_static");
@@ -286,6 +307,12 @@ fn union_gaps_stay_open_and_ownership_is_local() {
 }
 
 #[test]
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "test probes convert small pixel counts and point coordinates to and from f32"
+)]
 fn drag_merge_bridges_the_gap() {
     let r4 = render(&thirds_backdrop(), &merge_scene(4.0), None);
     let r8 = render(&thirds_backdrop(), &merge_scene(8.0), None);
@@ -344,6 +371,12 @@ fn refraction_follows_the_meniscus() {
 }
 
 #[test]
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "test probes convert small pixel counts and point coordinates to and from f32"
+)]
 fn sample_reach_shows_distant_content_in_the_rim() {
     let (w, h) = scene_px(SCENE[0], SCENE[1]);
     let block = |start: f32| {
@@ -377,6 +410,12 @@ fn sample_reach_shows_distant_content_in_the_rim() {
 }
 
 #[test]
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "test probes convert small pixel counts and point coordinates to and from f32"
+)]
 fn outer_lobe_band_pulls_inward() {
     // Red left of x = LEFT+10, blue right of it: the inner lobe on the left
     // rim reaches outward into red, the outer lobe reaches inward into blue.
@@ -562,6 +601,12 @@ fn face_colour_response() {
 }
 
 #[test]
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::many_single_char_names,
+    reason = "band/column indices double as pixel coordinates in the synthetic probe"
+)]
 fn luma_lut_residuals() {
     // Horizontal ramps: grey, red, green, blue in four bands.
     let (w, h) = scene_px(SCENE[0], SCENE[1]);
@@ -579,15 +624,15 @@ fn luma_lut_residuals() {
     let r = render(&backdrop, &scene, None);
     r.output.save("lut_dark");
     let mut worst = [0.0f32; 4];
-    for band in 0..4 {
+    for (band, worst_band) in worst.iter_mut().enumerate() {
         let y = STD.y + (band as f32 + 0.5) * STD.h / 4.0;
         for i in 0..20 {
             let x = (i as f32).mul_add(12.0, LEFT + 30.0);
             let src = backdrop.at_pt(x, y);
             let expected = recipe.face.apply([src[0], src[1], src[2]]);
             let out = r.output.at_pt(x, y);
-            for c in 0..3 {
-                worst[band] = worst[band].max((out[c] - expected[c]).abs());
+            for (o, e) in out.iter().zip(expected.iter()).take(3) {
+                *worst_band = worst_band.max((o - e).abs());
             }
         }
     }
@@ -603,12 +648,8 @@ fn luma_lut_residuals() {
         "grey residual {}",
         worst[0] * 255.0
     );
-    for c in 1..4 {
-        assert!(
-            worst[c] <= 8.0 / 255.0,
-            "primary residual {}",
-            worst[c] * 255.0
-        );
+    for w in &worst[1..] {
+        assert!(*w <= 8.0 / 255.0, "primary residual {}", w * 255.0);
     }
     compare_reference(&r.output, "lut_dark", 8.0 / 255.0);
 }
@@ -717,6 +758,12 @@ fn interactive_shadow_and_tint() {
 }
 
 #[test]
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "test probes convert small pixel counts and point coordinates to and from f32"
+)]
 fn highlight_is_directional_narrow_and_content_modulated() {
     let backdrop = flat(0.5);
     let scene = single_scene(SCENE, std_element(Variant::Regular, Appearance::Dark));
@@ -821,6 +868,12 @@ fn sdr_band_pulls_the_rim_to_a_fixed_tone() {
 }
 
 #[test]
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "test probes convert small pixel counts and point coordinates to and from f32"
+)]
 fn sdr_band_leaves_no_translucent_hairline() {
     let scene = single_scene(SCENE, std_element(Variant::Regular, Appearance::Dark));
     let r = render(&transparent(), &scene, None);
@@ -845,6 +898,13 @@ fn sdr_band_leaves_no_translucent_hairline() {
 }
 
 #[test]
+#[allow(
+    clippy::cast_precision_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::many_single_char_names,
+    reason = "test probes convert small pixel counts and point coordinates to and from f32; locals mirror pixel axes"
+)]
 fn foreground_dispersion_fringes_and_fades() {
     let (w, h) = scene_px(SCENE[0], SCENE[1]);
     // Thin black strokes crossing the left edge, on a transparent layer.

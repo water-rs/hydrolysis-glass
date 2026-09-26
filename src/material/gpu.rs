@@ -85,6 +85,11 @@ pub struct Scene {
 impl Scene {
     /// Output size in pixels.
     #[must_use]
+    #[allow(
+        clippy::cast_sign_loss,
+        clippy::cast_possible_truncation,
+        reason = "point sizes are positive and far below u32::MAX; `as` saturates, matching the clamp"
+    )]
     pub fn size_px(&self) -> [u32; 2] {
         [
             (self.size_pt[0] * self.px_per_pt).round().max(1.0) as u32,
@@ -540,6 +545,12 @@ struct GroupGpu {
 /// (`positive_range`), the displaced shadow falloff
 /// (`2·shadow_radius + |shadow_offset|`), and the capture taps displaced
 /// by the shadow/bleed/refraction lobes.
+#[allow(
+    clippy::cast_sign_loss,
+    clippy::cast_possible_truncation,
+    clippy::cast_precision_loss,
+    reason = "region coordinates are clamped to the scene's pixel bounds, which fit f32 exactly"
+)]
 fn group_region(group: &Group, scene: &Scene) -> [u32; 4] {
     let mut min = [f32::INFINITY; 2];
     let mut max = [f32::NEG_INFINITY; 2];
@@ -775,6 +786,10 @@ fn field_bind_group(
 impl GlassRenderer {
     /// Compiles the material's pipelines.
     #[must_use]
+    #[allow(
+        clippy::too_many_lines,
+        reason = "a flat sequence of pipeline/layout/buffer constructions; splitting adds indirection without structure"
+    )]
     pub fn new(device: &wgpu::Device) -> Self {
         let created = std::cell::Cell::new(0);
         let capture_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -915,6 +930,10 @@ impl GlassRenderer {
         }
     }
 
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "mip dimensions are powers of two far below f32's exact range"
+    )]
     fn ensure_targets(&mut self, device: &wgpu::Device, size: [u32; 2]) {
         if let Some(t) = &self.composite
             && t.size().width == size[0]
@@ -1044,6 +1063,12 @@ impl GlassRenderer {
     #[allow(
         clippy::too_many_arguments,
         reason = "the chain needs the device, layout, sampler, scene, region, scale, source lod bound and resource counter"
+    )]
+    #[allow(
+        clippy::cast_precision_loss,
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "capture texel counts and mip levels are small integers; region uv math needs f32"
     )]
     fn build_capture(
         device: &wgpu::Device,
@@ -1175,6 +1200,14 @@ impl GlassRenderer {
     /// by the shadow, bleed and refraction lobes — so cost scales with the
     /// elements, not the screen. Textures, buffers and bind groups are kept
     /// across frames and only rewritten with the new frame's contents.
+    ///
+    /// # Panics
+    /// If called before `ensure_targets` produced the composite (internal).
+    #[allow(
+        clippy::cast_precision_loss,
+        clippy::too_many_lines,
+        reason = "mip and region pixel counts are well inside f32's exact range; the frame is a flat sequence of passes"
+    )]
     pub fn render(
         &mut self,
         device: &wgpu::Device,
@@ -1185,7 +1218,6 @@ impl GlassRenderer {
     ) -> &wgpu::Texture {
         let size = scene.size_px();
         self.ensure_targets(device, size);
-        let composite_view = self.composite_view.clone().expect("targets");
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("glass frame"),
         });
@@ -1285,7 +1317,7 @@ impl GlassRenderer {
                 .zip(self.composite_mip_bgs.iter())
                 .enumerate()
             {
-                let k = (k + 1) as u32;
+                let k = u32::try_from(k + 1).expect("mip level fits u32");
                 let mw = (size[0] >> k).max(1);
                 let mh = (size[1] >> k).max(1);
                 // Grow the region by this level's source footprint so every
@@ -1320,171 +1352,282 @@ impl GlassRenderer {
             if group.members.is_empty() {
                 continue;
             }
-            self.last_field = Some(gi);
-            let region = group_region(group, scene);
-            let pp = scene.px_per_pt;
-            let region_pt = [
-                region[0] as f32 / pp,
-                region[1] as f32 / pp,
-                region[2] as f32 / pp,
-                region[3] as f32 / pp,
-            ];
-            let g = self.groups[gi].get_or_insert_with(|| {
-                GroupGpu::new(
-                    device,
-                    &self.field_layout,
-                    region,
-                    group.members.len(),
-                    &self.created,
-                )
-            });
-            g.set_region(device, region, &self.created);
-            g.ensure_capacity(
+            self.render_group(
+                device,
+                queue,
+                &mut encoder,
+                scene,
+                gi,
+                group,
+                foreground.is_some(),
+            );
+        }
+
+        queue.submit(Some(encoder.finish()));
+        self.composite.as_ref().expect("targets")
+    }
+
+    /// Renders one group: union of member bounds plus reach, region-local
+    /// field, capture, material and optional foreground passes, then a raw
+    /// copy of the finished patch back into the composite.
+    #[allow(
+        clippy::cast_precision_loss,
+        clippy::cast_possible_wrap,
+        clippy::too_many_arguments,
+        clippy::too_many_lines,
+        reason = "region pixel coordinates and element counts are small; uniforms need f32; the group pass is a flat pass sequence needing the device, queue, encoder and scene"
+    )]
+    fn render_group(
+        &mut self,
+        device: &wgpu::Device,
+        queue: &wgpu::Queue,
+        encoder: &mut wgpu::CommandEncoder,
+        scene: &Scene,
+        gi: usize,
+        group: &crate::material::Group,
+        foreground: bool,
+    ) {
+        self.last_field = Some(gi);
+        let region = group_region(group, scene);
+        let pp = scene.px_per_pt;
+        let region_pt = [
+            region[0] as f32 / pp,
+            region[1] as f32 / pp,
+            region[2] as f32 / pp,
+            region[3] as f32 / pp,
+        ];
+        let g = self.groups[gi].get_or_insert_with(|| {
+            GroupGpu::new(
                 device,
                 &self.field_layout,
+                region,
                 group.members.len(),
                 &self.created,
-            );
+            )
+        });
+        g.set_region(device, region, &self.created);
+        g.ensure_capacity(
+            device,
+            &self.field_layout,
+            group.members.len(),
+            &self.created,
+        );
 
-            // Per-frame contents: members, field uniforms, recipes.
-            let elements: Vec<GpuElement> = group
+        // Per-frame contents: members, field uniforms, recipes.
+        let elements: Vec<GpuElement> = group
+            .members
+            .iter()
+            .map(|e| GpuElement::from(&e.shape))
+            .collect();
+        queue.write_buffer(&g.element_buf, 0, bytemuck::cast_slice(&elements));
+        queue.write_buffer(
+            &g.field_uni,
+            0,
+            bytemuck::bytes_of(&FieldUniforms {
+                scene: [
+                    scene.size_pt[0],
+                    scene.size_pt[1],
+                    scene.px_per_pt,
+                    (group.smoothing * SMOOTHING_TO_TAU).max(1e-3),
+                ],
+                misc: [
+                    elements.len() as f32,
+                    CONTINUOUS_EXPONENT,
+                    region[0] as f32,
+                    region[1] as f32,
+                ],
+            }),
+        );
+
+        // Capture chains over the region of the current composite.
+        let needs_regular = group
+            .members
+            .iter()
+            .any(|e| e.recipe.capture_scale <= 0.375);
+        let needs_clear = group.members.iter().any(|e| e.recipe.capture_scale > 0.375);
+        for (slot, needed, scale) in [(0, needs_regular, 0.25), (1, needs_clear, 0.5)] {
+            if !needed {
+                continue;
+            }
+            if g.captures[slot].is_none() {
+                g.captures[slot] = Some(Self::build_capture(
+                    device,
+                    &self.capture_layout,
+                    &self.sampler,
+                    scene,
+                    region_pt,
+                    scale,
+                    (self.composite_mip_views.len() - 1) as f32,
+                    &self.created,
+                ));
+            }
+            let cap = g.captures[slot].as_mut().expect("capture");
+            if cap.src_bg.is_none() {
+                cap.src_bg = Some(Self::capture_bind_group(
+                    device,
+                    &self.capture_layout,
+                    &self.sampler,
+                    self.composite_view.as_ref().expect("targets"),
+                    &cap.params[0],
+                    &self.created,
+                ));
+            }
+            // Step 0: composite mip -> tmp_a (lod-prefiltered blit);
+            // steps 1,2: separable gaussian; steps 3..: the mip chain.
+            for (step, target) in cap.targets.iter().enumerate() {
+                let bg = if step == 0 {
+                    cap.src_bg.as_ref().expect("src bg")
+                } else {
+                    &cap.chain_bgs[step - 1]
+                };
+                let pipe = if step == 0 {
+                    &self.blit
+                } else if step == 1 || step == 2 {
+                    &self.gaussian
+                } else {
+                    &self.downsample
+                };
+                Self::fullscreen_pass(
+                    encoder,
+                    target,
+                    pipe,
+                    bg,
+                    wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                    None,
+                );
+            }
+        }
+
+        // Field pass over the region.
+        Self::fullscreen_pass(
+            encoder,
+            &g.field_view,
+            &self.field,
+            &g.field_bg,
+            wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+            None,
+        );
+
+        // Material pass into patch_a; the patch holds the fully
+        // composited pixel for every region texel, so it is copied
+        // back verbatim.
+        let regular_ref = g.captures[0].as_ref().or(g.captures[1].as_ref());
+        let clear_ref = g.captures[1].as_ref().or(g.captures[0].as_ref());
+        let (regular_ref, clear_ref) = (
+            regular_ref.expect("at least one capture"),
+            clear_ref.expect("at least one capture"),
+        );
+        queue.write_buffer(
+            &g.material_uni,
+            0,
+            bytemuck::bytes_of(&MaterialUniforms {
+                scene: [
+                    scene.size_pt[0],
+                    scene.size_pt[1],
+                    scene.px_per_pt,
+                    regular_ref.max_lod,
+                ],
+                misc: [clear_ref.max_lod, 0.0, 0.0, 0.0],
+                region: region_pt,
+                origin: [region[0] as f32, region[1] as f32, 0.0, 0.0],
+            }),
+        );
+        let recipes: Vec<GpuRecipe> = group
+            .members
+            .iter()
+            .map(|e| GpuRecipe::from(&e.recipe))
+            .collect();
+        queue.write_buffer(&g.recipe_buf, 0, bytemuck::cast_slice(&recipes));
+
+        if g.material_bg.is_none() {
+            self.created.set(self.created.get() + 1);
+            g.material_bg = Some(device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("glass material bind group"),
+                layout: &self.material_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: g.material_uni.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: g.recipe_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::TextureView(&g.field_view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: wgpu::BindingResource::TextureView(
+                            self.composite_view.as_ref().expect("targets"),
+                        ),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 4,
+                        resource: wgpu::BindingResource::TextureView(&regular_ref.view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 5,
+                        resource: wgpu::BindingResource::TextureView(&clear_ref.view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 6,
+                        resource: wgpu::BindingResource::Sampler(&self.sampler),
+                    },
+                ],
+            }));
+        }
+        Self::fullscreen_pass(
+            encoder,
+            &g.patch_a_view,
+            &self.material,
+            g.material_bg.as_ref().expect("material bg"),
+            wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+            None,
+        );
+
+        // Foreground dispersion into patch_b, then the used patch is
+        // copied back into the composite at the region origin.
+        let result = if foreground {
+            let lobes: Vec<[f32; 4]> = group
                 .members
                 .iter()
-                .map(|e| GpuElement::from(&e.shape))
+                .map(|e| [e.recipe.inner_amt, e.recipe.inner_h, 0.0, 0.0])
                 .collect();
-            queue.write_buffer(&g.element_buf, 0, bytemuck::cast_slice(&elements));
+            queue.write_buffer(&g.lobe_buf, 0, bytemuck::cast_slice(&lobes));
             queue.write_buffer(
-                &g.field_uni,
+                &g.fg_uni,
                 0,
-                bytemuck::bytes_of(&FieldUniforms {
+                bytemuck::bytes_of(&ForegroundUniforms {
                     scene: [
                         scene.size_pt[0],
                         scene.size_pt[1],
                         scene.px_per_pt,
-                        (group.smoothing * SMOOTHING_TO_TAU).max(1e-3),
+                        DISPERSION_AXIS_ANGLE,
                     ],
-                    misc: [
-                        elements.len() as f32,
-                        CONTINUOUS_EXPONENT,
+                    params: [
+                        DISPERSION_SPREAD_PT,
+                        FOREGROUND_FADE_PT,
                         region[0] as f32,
                         region[1] as f32,
                     ],
                 }),
             );
-
-            // Capture chains over the region of the current composite.
-            let needs_regular = group
-                .members
-                .iter()
-                .any(|e| e.recipe.capture_scale <= 0.375);
-            let needs_clear = group.members.iter().any(|e| e.recipe.capture_scale > 0.375);
-            for (slot, needed, scale) in [(0, needs_regular, 0.25), (1, needs_clear, 0.5)] {
-                if !needed {
-                    continue;
-                }
-                if g.captures[slot].is_none() {
-                    g.captures[slot] = Some(Self::build_capture(
-                        device,
-                        &self.capture_layout,
-                        &self.sampler,
-                        scene,
-                        region_pt,
-                        scale,
-                        (self.composite_mip_views.len() - 1) as f32,
-                        &self.created,
-                    ));
-                }
-                let cap = g.captures[slot].as_mut().expect("capture");
-                if cap.src_bg.is_none() {
-                    cap.src_bg = Some(Self::capture_bind_group(
-                        device,
-                        &self.capture_layout,
-                        &self.sampler,
-                        &composite_view,
-                        &cap.params[0],
-                        &self.created,
-                    ));
-                }
-                // Step 0: composite mip -> tmp_a (lod-prefiltered blit);
-                // steps 1,2: separable gaussian; steps 3..: the mip chain.
-                for (step, target) in cap.targets.iter().enumerate() {
-                    let bg = if step == 0 {
-                        cap.src_bg.as_ref().expect("src bg")
-                    } else {
-                        &cap.chain_bgs[step - 1]
-                    };
-                    let pipe = if step == 0 {
-                        &self.blit
-                    } else if step == 1 || step == 2 {
-                        &self.gaussian
-                    } else {
-                        &self.downsample
-                    };
-                    Self::fullscreen_pass(
-                        &mut encoder,
-                        target,
-                        pipe,
-                        bg,
-                        wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                        None,
-                    );
-                }
-            }
-
-            // Field pass over the region.
-            Self::fullscreen_pass(
-                &mut encoder,
-                &g.field_view,
-                &self.field,
-                &g.field_bg,
-                wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                None,
-            );
-
-            // Material pass into patch_a; the patch holds the fully
-            // composited pixel for every region texel, so it is copied
-            // back verbatim.
-            let regular_ref = g.captures[0].as_ref().or(g.captures[1].as_ref());
-            let clear_ref = g.captures[1].as_ref().or(g.captures[0].as_ref());
-            let (regular_ref, clear_ref) = (
-                regular_ref.expect("at least one capture"),
-                clear_ref.expect("at least one capture"),
-            );
-            queue.write_buffer(
-                &g.material_uni,
-                0,
-                bytemuck::bytes_of(&MaterialUniforms {
-                    scene: [
-                        scene.size_pt[0],
-                        scene.size_pt[1],
-                        scene.px_per_pt,
-                        regular_ref.max_lod,
-                    ],
-                    misc: [clear_ref.max_lod, 0.0, 0.0, 0.0],
-                    region: region_pt,
-                    origin: [region[0] as f32, region[1] as f32, 0.0, 0.0],
-                }),
-            );
-            let recipes: Vec<GpuRecipe> = group
-                .members
-                .iter()
-                .map(|e| GpuRecipe::from(&e.recipe))
-                .collect();
-            queue.write_buffer(&g.recipe_buf, 0, bytemuck::cast_slice(&recipes));
-
-            if g.material_bg.is_none() {
+            let fg_view = &self.fg_input.as_ref().expect("fg input").1;
+            if g.fg_bg.is_none() {
                 self.created.set(self.created.get() + 1);
-                g.material_bg = Some(device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("glass material bind group"),
-                    layout: &self.material_layout,
+                g.fg_bg = Some(device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: Some("glass foreground bind group"),
+                    layout: &self.foreground_layout,
                     entries: &[
                         wgpu::BindGroupEntry {
                             binding: 0,
-                            resource: g.material_uni.as_entire_binding(),
+                            resource: g.fg_uni.as_entire_binding(),
                         },
                         wgpu::BindGroupEntry {
                             binding: 1,
-                            resource: g.recipe_buf.as_entire_binding(),
+                            resource: g.lobe_buf.as_entire_binding(),
                         },
                         wgpu::BindGroupEntry {
                             binding: 2,
@@ -1492,135 +1635,57 @@ impl GlassRenderer {
                         },
                         wgpu::BindGroupEntry {
                             binding: 3,
-                            resource: wgpu::BindingResource::TextureView(&composite_view),
+                            resource: wgpu::BindingResource::TextureView(fg_view),
                         },
                         wgpu::BindGroupEntry {
                             binding: 4,
-                            resource: wgpu::BindingResource::TextureView(&regular_ref.view),
+                            resource: wgpu::BindingResource::Sampler(&self.sampler),
                         },
                         wgpu::BindGroupEntry {
                             binding: 5,
-                            resource: wgpu::BindingResource::TextureView(&clear_ref.view),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 6,
-                            resource: wgpu::BindingResource::Sampler(&self.sampler),
+                            resource: wgpu::BindingResource::TextureView(&g.patch_a_view),
                         },
                     ],
                 }));
             }
             Self::fullscreen_pass(
-                &mut encoder,
-                &g.patch_a_view,
-                &self.material,
-                g.material_bg.as_ref().expect("material bg"),
+                encoder,
+                &g.patch_b_view,
+                &self.foreground,
+                g.fg_bg.as_ref().expect("fg bg"),
                 wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
                 None,
             );
+            &g.patch_b
+        } else {
+            &g.patch_a
+        };
 
-            // Foreground dispersion into patch_b, then the used patch is
-            // copied back into the composite at the region origin.
-            let result = if foreground.is_some() {
-                let lobes: Vec<[f32; 4]> = group
-                    .members
-                    .iter()
-                    .map(|e| [e.recipe.inner_amt, e.recipe.inner_h, 0.0, 0.0])
-                    .collect();
-                queue.write_buffer(&g.lobe_buf, 0, bytemuck::cast_slice(&lobes));
-                queue.write_buffer(
-                    &g.fg_uni,
-                    0,
-                    bytemuck::bytes_of(&ForegroundUniforms {
-                        scene: [
-                            scene.size_pt[0],
-                            scene.size_pt[1],
-                            scene.px_per_pt,
-                            DISPERSION_AXIS_ANGLE,
-                        ],
-                        params: [
-                            DISPERSION_SPREAD_PT,
-                            FOREGROUND_FADE_PT,
-                            region[0] as f32,
-                            region[1] as f32,
-                        ],
-                    }),
-                );
-                let fg_view = &self.fg_input.as_ref().expect("fg input").1;
-                if g.fg_bg.is_none() {
-                    self.created.set(self.created.get() + 1);
-                    g.fg_bg = Some(device.create_bind_group(&wgpu::BindGroupDescriptor {
-                        label: Some("glass foreground bind group"),
-                        layout: &self.foreground_layout,
-                        entries: &[
-                            wgpu::BindGroupEntry {
-                                binding: 0,
-                                resource: g.fg_uni.as_entire_binding(),
-                            },
-                            wgpu::BindGroupEntry {
-                                binding: 1,
-                                resource: g.lobe_buf.as_entire_binding(),
-                            },
-                            wgpu::BindGroupEntry {
-                                binding: 2,
-                                resource: wgpu::BindingResource::TextureView(&g.field_view),
-                            },
-                            wgpu::BindGroupEntry {
-                                binding: 3,
-                                resource: wgpu::BindingResource::TextureView(fg_view),
-                            },
-                            wgpu::BindGroupEntry {
-                                binding: 4,
-                                resource: wgpu::BindingResource::Sampler(&self.sampler),
-                            },
-                            wgpu::BindGroupEntry {
-                                binding: 5,
-                                resource: wgpu::BindingResource::TextureView(&g.patch_a_view),
-                            },
-                        ],
-                    }));
-                }
-                Self::fullscreen_pass(
-                    &mut encoder,
-                    &g.patch_b_view,
-                    &self.foreground,
-                    g.fg_bg.as_ref().expect("fg bg"),
-                    wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                    None,
-                );
-                &g.patch_b
-            } else {
-                &g.patch_a
-            };
-
-            // Composite the group's region back: the patch is the fully
-            // composited region, a raw copy.
-            encoder.copy_texture_to_texture(
-                wgpu::TexelCopyTextureInfo {
-                    texture: result,
-                    mip_level: 0,
-                    origin: wgpu::Origin3d::ZERO,
-                    aspect: wgpu::TextureAspect::All,
+        // Composite the group's region back: the patch is the fully
+        // composited region, a raw copy.
+        encoder.copy_texture_to_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: result,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::TexelCopyTextureInfo {
+                texture: self.composite.as_ref().expect("targets"),
+                mip_level: 0,
+                origin: wgpu::Origin3d {
+                    x: region[0],
+                    y: region[1],
+                    z: 0,
                 },
-                wgpu::TexelCopyTextureInfo {
-                    texture: self.composite.as_ref().expect("targets"),
-                    mip_level: 0,
-                    origin: wgpu::Origin3d {
-                        x: region[0],
-                        y: region[1],
-                        z: 0,
-                    },
-                    aspect: wgpu::TextureAspect::All,
-                },
-                wgpu::Extent3d {
-                    width: region[2],
-                    height: region[3],
-                    depth_or_array_layers: 1,
-                },
-            );
-        }
-
-        queue.submit(Some(encoder.finish()));
-        self.composite.as_ref().expect("targets")
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::Extent3d {
+                width: region[2],
+                height: region[3],
+                depth_or_array_layers: 1,
+            },
+        );
     }
 
     /// The field texture of the last rendered group and the region's
@@ -1738,12 +1803,15 @@ pub fn half_to_f32(h: u16) -> f32 {
 }
 
 /// Encodes an `f32` as IEEE half precision (round to nearest even).
+///
+/// # Panics
+/// Never: the `expect`s guard masked bit-fields that provably fit.
 #[cfg(feature = "verification")]
 #[must_use]
 pub fn f32_to_half(v: f32) -> u16 {
     let bits = v.to_bits();
-    let sign = ((bits >> 16) & 0x8000) as u16;
-    let exp = ((bits >> 23) & 0xff) as i32;
+    let sign = u16::try_from((bits >> 16) & 0x8000).expect("masked to 16 bits");
+    let exp = i32::from(u8::try_from((bits >> 23) & 0xff).expect("masked to 8 bits"));
     let mant = bits & 0x7f_ffff;
     if exp == 0xff {
         return sign | 0x7c00 | if mant != 0 { 0x200 } else { 0 };
@@ -1758,14 +1826,14 @@ pub fn f32_to_half(v: f32) -> u16 {
         }
         let m = (mant | 0x80_0000) >> (1 - e);
         let rounded = (m + 0xfff + ((m >> 13) & 1)) >> 13;
-        return sign | rounded as u16;
+        return sign | u16::try_from(rounded).expect("denormal mantissa fits in 11 bits");
     }
     let mut out = (u32::try_from(e).unwrap_or(0) << 10) | (mant >> 13);
     let rem = mant & 0x1fff;
     if rem > 0x1000 || (rem == 0x1000 && (out & 1) == 1) {
         out += 1;
     }
-    sign | out as u16
+    sign | u16::try_from(out).expect("half exponent+mantissa fit in 16 bits")
 }
 
 #[cfg(test)]
