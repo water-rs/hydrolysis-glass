@@ -655,7 +655,10 @@ fn highlight_is_directional_narrow_and_content_modulated() {
         ul > face + 0.05,
         "key highlight present at upper-left: {ul} vs face {face}"
     );
-    assert!(ul >= lr, "key stronger than fill: {ul} vs {lr}");
+    assert!(
+        ul > lr + 0.05,
+        "key is the dominant light, strictly over the fill: {ul} vs {lr}"
+    );
     // Band width: bright pixels along the left edge at mid height span ≤ 2 pt.
     let y = (CY * PX_PER_PT) as u32;
     let mut bright = 0;

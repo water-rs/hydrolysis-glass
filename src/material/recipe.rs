@@ -142,8 +142,12 @@ pub struct Highlight {
     pub curvature: f32,
     /// Key light amount.
     pub key_amount: f32,
-    /// Fill light amount.
+    /// Fill light amount; the key is the dominant light, so the fill rides
+    /// at half the key. **[inferred: dominance logged; fill level chosen]**
     pub fill_amount: f32,
+    /// Soft-knee denominator of both lobes `v/(1 + knee·(1 − v))`: a fixed
+    /// shaping constant, not the lobe amounts. **[logged: 0.5]**
+    pub knee: f32,
     /// Key light angle, radians.
     pub key_angle: f32,
     /// Fill light angle, radians.
@@ -166,7 +170,8 @@ impl Highlight {
         Self {
             curvature: 0.7,
             key_amount: 0.5,
-            fill_amount: 0.5,
+            fill_amount: 0.25,
+            knee: 0.5,
             key_angle: -std::f32::consts::FRAC_PI_4,
             fill_angle: 3.0 * std::f32::consts::FRAC_PI_4,
             spread: highlight_spread(m),

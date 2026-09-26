@@ -27,7 +27,7 @@ struct Recipe {
     output: vec4<f32>,        // maxHeadroom, preserveHue, edrScale, positiveRange
     flags: vec4<f32>,         // materialEnabled, lumaTracking, hasTint, -
     hl_a: vec4<f32>,          // curvature, keyAmount, fillAmount, spread
-    hl_b: vec4<f32>,          // keyAngle, fillAngle, -, -
+    hl_b: vec4<f32>,          // keyAngle, fillAngle, knee, -
     hl_key: vec4<f32>,        // straight rgba
     hl_fill: vec4<f32>,       // straight rgba
     tint: vec4<f32>,          // straight rgb, declared alpha
@@ -265,8 +265,10 @@ fn highlight(r: Recipe, out: vec3<f32>, d: f32, n: vec2<f32>, cov: f32) -> vec3<
     let denom = max(1.0 - cs, 1e-4);
     var key = sat((dot(n, u_key) - cs) / denom);
     var fill = sat((dot(n, u_fill) - cs) / denom);
-    key = key / (1.0 + r.hl_a.y * (1.0 - key));
-    fill = fill / (1.0 + r.hl_a.z * (1.0 - fill));
+    // The soft knee is the spec's fixed 0.5 constant, independent of the
+    // lobe amounts it also modulates.
+    key = key / (1.0 + r.hl_b.z * (1.0 - key));
+    fill = fill / (1.0 + r.hl_b.z * (1.0 - fill));
     let key_c = r.hl_key.rgb * r.hl_key.a * r.hl_a.y * 2.0 * key;
     let fill_c = r.hl_fill.rgb * r.hl_fill.a * r.hl_a.z * 2.0 * fill;
     // "Vibrant" composite approximation: the rim is a gain on what lies

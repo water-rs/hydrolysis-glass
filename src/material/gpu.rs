@@ -248,7 +248,12 @@ impl From<&Recipe> for GpuRecipe {
                 r.highlight.fill_amount,
                 r.highlight.spread,
             ],
-            hl_b: [r.highlight.key_angle, r.highlight.fill_angle, 0.0, 0.0],
+            hl_b: [
+                r.highlight.key_angle,
+                r.highlight.fill_angle,
+                r.highlight.knee,
+                0.0,
+            ],
             hl_key: r.highlight.key_color,
             hl_fill: r.highlight.fill_color,
             tint,
