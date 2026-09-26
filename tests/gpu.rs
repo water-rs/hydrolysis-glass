@@ -69,6 +69,16 @@ fn readback_is_gated_by_the_verification_feature() {
 
 #[test]
 fn adapter_reports() {
+    // Every CI platform's native backend must be in the request mask —
+    // Metal (macOS), DX12 (Windows), Vulkan (Linux). A missing adapter is a
+    // test failure: `gpu()` panics when `request_adapter` returns None.
+    assert!(
+        common::BACKENDS.contains(wgpu::Backends::METAL)
+            && common::BACKENDS.contains(wgpu::Backends::DX12)
+            && common::BACKENDS.contains(wgpu::Backends::VULKAN),
+        "backend mask {:?} misses a CI platform's native backend",
+        common::BACKENDS
+    );
     let g = gpu();
     assert!(!g.adapter_name.is_empty());
     eprintln!("VERIFY adapter: {} via {}", g.adapter_name, g.backend);

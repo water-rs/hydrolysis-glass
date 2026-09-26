@@ -30,18 +30,22 @@ pub struct Gpu {
 
 static GPU: OnceLock<Gpu> = OnceLock::new();
 
+/// Every backend wgpu supports: the suite runs on CI's native backend
+/// (Vulkan/lavapipe on Linux, Metal on macOS, DX12 on Windows).
+pub const BACKENDS: wgpu::Backends = wgpu::Backends::all();
+
 /// The shared device; Vulkan first so Lavapipe is picked when present.
 pub fn gpu() -> &'static Gpu {
     GPU.get_or_init(|| {
         let mut desc = wgpu::InstanceDescriptor::new_without_display_handle();
-        desc.backends = wgpu::Backends::VULKAN | wgpu::Backends::GL;
+        desc.backends = BACKENDS;
         let instance = wgpu::Instance::new(desc);
         let adapter = pollster::block_on(instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::LowPower,
             force_fallback_adapter: false,
             compatible_surface: None,
         }))
-        .expect("an adapter");
+        .unwrap_or_else(|_| panic!("no wgpu adapter among {BACKENDS:?} on this platform"));
         let info = adapter.get_info();
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             label: Some("glass verification"),
