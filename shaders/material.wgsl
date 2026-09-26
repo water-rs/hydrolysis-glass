@@ -319,10 +319,12 @@ fn material_fragment(in: FullscreenOut) -> @location(0) vec4<f32> {
     }
     var res = mix(edge, inner, cov);
 
-    // SDR holding band.
+    // SDR holding band: pull the rim to the fixed premultiplied tone
+    // `sdrWhite * sat(a)` — a translucent texel's colour equals its alpha
+    // times sdrWhite, which is premultiply-valid by construction.
     let band = sat((d - r.sdr.x) / fw + 0.5) * sat((r.sdr.y - d) / fw + 0.5);
-    if band > 0.0 && res.a > EPS_ALPHA {
-        let held = vec4<f32>(res.rgb * (r.sdr.w * sat(res.a) / res.a), res.a);
+    if band > 0.0 {
+        let held = vec4<f32>(vec3<f32>(r.sdr.w * sat(res.a)), res.a);
         res = mix(res, held, r.sdr.z * band);
     }
     res = clamp_headroom(r, res);

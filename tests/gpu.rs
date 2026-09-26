@@ -707,6 +707,39 @@ fn bleed_halo_outside_large_elements() {
 }
 
 #[test]
+fn sdr_band_pulls_the_rim_to_a_fixed_tone() {
+    // With the band at full strength, the texel at mid-band (d ≈ −0.5 pt)
+    // becomes the fixed tone `sdrWhite·sat(a)` regardless of the backdrop —
+    // over black that is pure sdrWhite, not the darkened material.
+    let mut e = std_element(Variant::Regular, Appearance::Dark);
+    e.recipe.sdr_op = 1.0;
+    let scene = single_scene(SCENE, e);
+    let r = render(&flat(0.0), &scene, None);
+    r.output.save("sdr_band_full");
+    let band = luma(r.output.at_pt(LEFT + 0.5, CY));
+    assert!(
+        band > 0.9,
+        "band pixel pinned to sdrWhite over black: {band}"
+    );
+    // Deeper inside, the same recipe shows the ordinary dark material.
+    let interior = luma(r.output.at_pt(LEFT + 4.0, CY));
+    assert!(
+        interior < band - 0.3,
+        "the pull is confined to the band: {interior} vs {band}"
+    );
+    // With the band off, the same rim texel keeps the material colour.
+    let mut off = std_element(Variant::Regular, Appearance::Dark);
+    off.recipe.sdr_op = 0.0;
+    let r0 = render(&flat(0.0), &single_scene(SCENE, off), None);
+    let unheld = luma(r0.output.at_pt(LEFT + 0.5, CY));
+    assert!(
+        band > unheld + 0.3,
+        "the band changes the rim tone: {band} vs {unheld}"
+    );
+    eprintln!("VERIFY SDR tone: band {band:.3}, interior {interior:.3}, off {unheld:.3}");
+}
+
+#[test]
 fn sdr_band_leaves_no_translucent_hairline() {
     let scene = single_scene(SCENE, std_element(Variant::Regular, Appearance::Dark));
     let r = render(&transparent(), &scene, None);

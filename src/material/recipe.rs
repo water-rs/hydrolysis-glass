@@ -252,7 +252,9 @@ pub struct Recipe {
     pub sdr_dist: [f32; 2],
     /// SDR band strength.
     pub sdr_op: f32,
-    /// SDR band target scale.
+    /// SDR band tone: inside the band the premultiplied colour is pulled to
+    /// `sdrWhite · sat(alpha)` — the fixed tone whose straight colour is
+    /// `sdrWhite` at any coverage. **[logged: 1.0]**
     pub sdr_white: f32,
     /// Output luminance clamp; 9999 = inert.
     pub max_headroom: f32,
