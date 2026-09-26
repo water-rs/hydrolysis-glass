@@ -38,6 +38,11 @@ struct MaterialUniforms {
     scene: vec4<f32>,
     // clear capture max lod, -, -, -
     misc: vec4<f32>,
+    // region min pt, region size pt: the pass runs on a patch covering the
+    // group's bounds plus reach, and the captures cover the same rect
+    region: vec4<f32>,
+    // region origin px (field texel offset), -, -
+    origin: vec4<f32>,
 }
 
 @group(0) @binding(0) var<uniform> uni: MaterialUniforms;
@@ -62,7 +67,12 @@ struct FieldSample {
 
 fn load_field(px: vec2<f32>) -> FieldSample {
     let dims = vec2<i32>(textureDimensions(field_tex));
-    let c = clamp(vec2<i32>(floor(px)), vec2<i32>(0), dims - vec2<i32>(1));
+    // `px` are absolute composite px; the field texture is region-local.
+    let c = clamp(
+        vec2<i32>(floor(px)) - vec2<i32>(uni.origin.xy),
+        vec2<i32>(0),
+        dims - vec2<i32>(1),
+    );
     let v = textureLoad(field_tex, c, 0);
     var s: FieldSample;
     s.d = v.x;
@@ -79,7 +89,8 @@ fn load_field(px: vec2<f32>) -> FieldSample {
 // (2 for the regular capture, 1 for clear). This is what lets the blur dip
 // at the silhouette keep grid lines readable.
 fn sample_capture(r: Recipe, q_pt: vec2<f32>, radius_texels: f32) -> vec4<f32> {
-    let uv = q_pt / uni.scene.xy;
+    // The captures cover the group's region: uv is region-local.
+    let uv = (q_pt - uni.region.xy) / uni.region.zw;
     let lod = log2(max(radius_texels, 1e-3));
     var captured: vec4<f32>;
     if r.blur_tail.w > 0.5 {
@@ -92,7 +103,9 @@ fn sample_capture(r: Recipe, q_pt: vec2<f32>, radius_texels: f32) -> vec4<f32> {
     }
     let levels_below = -log2(r.blur_tail.z);
     let fine = sat(-lod / max(levels_below, 1e-3));
-    return mix(captured, textureSampleLevel(backdrop_tex, linear_sampler, uv, 0.0), fine);
+    // The backdrop is scene-sized: it keeps scene uv.
+    let backdrop_uv = q_pt / uni.scene.xy;
+    return mix(captured, textureSampleLevel(backdrop_tex, linear_sampler, backdrop_uv, 0.0), fine);
 }
 
 fn sample_backdrop(q_pt: vec2<f32>) -> vec4<f32> {
@@ -298,9 +311,10 @@ fn tint_layers(r: Recipe, out: vec3<f32>, d: f32, cov: f32) -> vec3<f32> {
 fn material_fragment(in: FullscreenOut) -> @location(0) vec4<f32> {
     let px_per_pt = uni.scene.z;
     let fw = 1.0 / px_per_pt;
-    let p = in.position.xy / px_per_pt;
+    // The pass draws on a region-sized patch: local px + origin = scene px.
+    let p = (in.position.xy + uni.origin.xy) / px_per_pt;
     let backdrop = sample_backdrop(p);
-    let f = load_field(in.position.xy);
+    let f = load_field(in.position.xy + uni.origin.xy);
     let r = recipes[f.owner];
     let d = f.d;
     if d > r.output.w {

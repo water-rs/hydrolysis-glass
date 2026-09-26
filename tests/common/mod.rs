@@ -184,8 +184,18 @@ pub fn render(backdrop: &Image, scene: &Scene, foreground: Option<&Image>) -> Re
     let out = renderer.render(&g.device, &g.queue, &bd_view, scene, fg_view.as_ref());
     let size = out.size();
     let pixels = read_texture(&g.device, &g.queue, out);
-    let field_tex = renderer.field_texture().expect("field");
-    let field = read_texture(&g.device, &g.queue, field_tex);
+    // The field texture covers only the rendered group's bounds plus
+    // reach; pixels outside it are far from every member.
+    let (field_tex, origin) = renderer.field_texture().expect("field");
+    let fsize = field_tex.size();
+    let data = read_texture(&g.device, &g.queue, field_tex);
+    let mut field = vec![[1e6f32, 0.0, 0.0, -1.0]; (size.width * size.height) as usize];
+    for y in 0..fsize.height {
+        for x in 0..fsize.width {
+            field[((origin[1] + y) * size.width + origin[0] + x) as usize] =
+                data[(y * fsize.width + x) as usize];
+        }
+    }
     Render {
         output: Image {
             width: size.width,

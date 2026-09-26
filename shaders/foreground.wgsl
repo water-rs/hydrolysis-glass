@@ -8,7 +8,8 @@
 struct ForegroundUniforms {
     // scene width pt, scene height pt, px per pt, aberration axis angle (rad)
     scene: vec4<f32>,
-    // dispersion spread (pt at the silhouette), edge fade band (pt), -, -
+    // dispersion spread (pt at the silhouette), edge fade band (pt),
+    // region origin px
     params: vec4<f32>,
 }
 
@@ -31,7 +32,9 @@ fn sample_content(q_pt: vec2<f32>) -> vec4<f32> {
 @fragment
 fn foreground_fragment(in: FullscreenOut) -> @location(0) vec4<f32> {
     let px_per_pt = fg.scene.z;
-    let p = in.position.xy / px_per_pt;
+    // The pass draws on a region-sized patch; the field and under textures
+    // share the region, so texel indices are local. `p` is scene pt.
+    let p = (in.position.xy + fg.params.zw) / px_per_pt;
     let dims = vec2<i32>(textureDimensions(field_tex));
     let c = clamp(vec2<i32>(floor(in.position.xy)), vec2<i32>(0), dims - vec2<i32>(1));
     let v = textureLoad(field_tex, c, 0);

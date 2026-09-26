@@ -22,7 +22,7 @@ use hydrolysis_glass::material::geometry::{
     CONTAINER_UNION_SMOOTHING, CornerCurve, Rect, Shape, meniscus,
 };
 use hydrolysis_glass::material::recipe::ColorMatrix;
-use hydrolysis_glass::{Appearance, Element, Group, Recipe, Scene, Variant};
+use hydrolysis_glass::{Appearance, Element, GlassRenderer, Group, Recipe, Scene, Variant};
 
 const CX: f32 = STD.x + STD.w / 2.0;
 const CY: f32 = STD.y + STD.h / 2.0;
@@ -56,6 +56,10 @@ fn d_at(r: &Render, x: f32, y: f32) -> f32 {
 }
 
 #[test]
+#[allow(
+    clippy::assertions_on_constants,
+    reason = "compile-time gate check: the GPU suite runs with `verification` enabled"
+)]
 fn readback_is_gated_by_the_verification_feature() {
     assert!(
         cfg!(feature = "verification"),
@@ -68,6 +72,40 @@ fn adapter_reports() {
     let g = gpu();
     assert!(!g.adapter_name.is_empty());
     eprintln!("VERIFY adapter: {} via {}", g.adapter_name, g.backend);
+}
+
+#[test]
+fn passes_are_scoped_to_member_bounds_and_reused_across_frames() {
+    // A 60 pt element in a 480x360 pt scene: the field pass covers the
+    // member's bounds plus reach, not the whole screen, and an identical
+    // second frame allocates no new textures, buffers or bind groups.
+    let g = gpu();
+    let mut renderer = GlassRenderer::new(&g.device);
+    let backdrop = upload(&flat(1.0));
+    let bd_view = backdrop.create_view(&wgpu::TextureViewDescriptor::default());
+    let scene = single_scene(
+        SCENE,
+        element(
+            rounded(CX - 30.0, CY - 30.0, 60.0, 60.0, 30.0),
+            Variant::Regular,
+            Appearance::Dark,
+        ),
+    );
+    renderer.render(&g.device, &g.queue, &bd_view, &scene, None);
+    let (field_tex, _origin) = renderer.field_texture().expect("field");
+    let fsize = field_tex.size();
+    let scene_px = scene.size_px();
+    assert!(
+        fsize.width <= scene_px[0] / 2 && fsize.height <= scene_px[1] / 2,
+        "a 60 pt element's field is {fsize:?}; the screen is {scene_px:?}"
+    );
+    let created = renderer.created_resources();
+    renderer.render(&g.device, &g.queue, &bd_view, &scene, None);
+    assert_eq!(
+        renderer.created_resources(),
+        created,
+        "an identical second frame must allocate nothing"
+    );
 }
 
 #[test]
@@ -454,9 +492,20 @@ fn clear_keeps_the_grid_readable() {
     r.output.save("grid_clear");
     let base = row_contrast(&backdrop, CY, CX - 40.0, CX + 40.0);
     let res = row_contrast(&r.output, CY, CX - 40.0, CX + 40.0) / base;
-    // The fixed σ≈1-texel pre-blur at 0.5 scale leaves ~10–30 % of the 8 pt
-    // grid's contrast.
-    assert!(res > 0.1, "clear residual {res}");
+    // The σ≈1-texel pre-blur at 0.5 scale keeps a visible share of the 8 pt
+    // grid: nonzero contrast, and clearly more than the regular variant's
+    // frost (which samples the deeper 0.25-scale chain) on the same element.
+    let regular = render(
+        &backdrop,
+        &single_scene(SCENE, element(shape, Variant::Regular, Appearance::Dark)),
+        None,
+    );
+    let regular_res = row_contrast(&regular.output, CY, CX - 40.0, CX + 40.0) / base;
+    assert!(res > 0.05, "clear residual {res}");
+    assert!(
+        res > 4.0 * regular_res,
+        "clear {res} should far exceed regular {regular_res}"
+    );
     // No shadow outside.
     let below = r.output.at_pt(CX, CY + 60.0);
     assert!((luma(below) - luma(backdrop.at_pt(CX, CY + 60.0))).abs() < 0.01);
@@ -591,10 +640,14 @@ fn shadow_offset_reach_and_opacity() {
     let far = 1.0 - luma(r.output.at_pt(CX, BOTTOM + 30.0));
     let past_range = 1.0 - luma(r.output.at_pt(CX, BOTTOM + recipe.positive_range + 4.0));
     let gone = 1.0
-        - luma(r.output.at_pt(
-            CX,
-            BOTTOM + 2.0 * recipe.shadow_radius + recipe.shadow_offset[1] + 1.0,
-        ));
+        - luma(
+            r.output.at_pt(
+                CX,
+                recipe
+                    .shadow_radius
+                    .mul_add(2.0, BOTTOM + recipe.shadow_offset[1] + 1.0),
+            ),
+        );
     assert!(
         far > 0.003 && past_range > 0.001 && gone.abs() < 1e-3,
         "reach: {far} at 30 pt, {past_range} past positive_range, {gone} beyond shadow reach"

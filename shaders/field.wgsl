@@ -15,7 +15,7 @@ struct FieldElement {
 struct FieldUniforms {
     // scene width/height in pt, px per pt, tau (pt)
     scene: vec4<f32>,
-    // member count, continuous exponent, -, -
+    // member count, continuous exponent, region origin px
     misc: vec4<f32>,
 }
 
@@ -93,7 +93,9 @@ fn ellipse_normal(e: FieldElement, p: vec2<f32>) -> vec2<f32> {
 @fragment
 fn field_fragment(in: FullscreenOut) -> @location(0) vec4<f32> {
     let px_per_pt = field.scene.z;
-    let p = in.position.xy / px_per_pt;
+    // The field texture covers the group's bounds, not the scene: local
+    // texels map onto scene pt through the region origin.
+    let p = (in.position.xy + field.misc.zw) / px_per_pt;
     let f = fused_distance(p);
     let h = 0.05;
     let gx = fused_distance(p + vec2<f32>(h, 0.0)).distance - fused_distance(p - vec2<f32>(h, 0.0)).distance;
