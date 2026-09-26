@@ -1742,6 +1742,7 @@ dependencies = [
  "bytemuck",
  "hydrolysis",
  "image",
+ "nami",
  "pollster 1.0.1",
  "vello",
  "waterui",
@@ -6844,58 +6845,3 @@ dependencies = [
  "syn 3.0.6",
  "winnow",
 ]
-
-[[patch.unused]]
-name = "waterkit-screen"
-version = "0.1.4"
-source = "git+https://github.com/water-rs/waterkit?rev=123b0581c908d424826c4f07cd25d5c0cc0d07ec#123b0581c908d424826c4f07cd25d5c0cc0d07ec"
-
-[[patch.unused]]
-name = "waterui-assets-macros"
-version = "0.5.1"
-source = "git+https://github.com/water-rs/waterui?rev=91c2aa414a4cd8b771ab5451a157f9477a7b912c#91c2aa414a4cd8b771ab5451a157f9477a7b912c"
-
-[[patch.unused]]
-name = "waterui-assets-planner"
-version = "0.5.1"
-source = "git+https://github.com/water-rs/waterui?rev=91c2aa414a4cd8b771ab5451a157f9477a7b912c#91c2aa414a4cd8b771ab5451a157f9477a7b912c"
-
-[[patch.unused]]
-name = "waterui-canvas"
-version = "0.2.0"
-source = "git+https://github.com/water-rs/canvas?rev=e56945bd4c71a7d3cf8f9c9a040624ec07851418#e56945bd4c71a7d3cf8f9c9a040624ec07851418"
-
-[[patch.unused]]
-name = "waterui-chart"
-version = "0.3.0"
-source = "git+https://github.com/water-rs/chart?rev=ff481c3d319b7d025a1fa0c1dcdb283f92be9689#ff481c3d319b7d025a1fa0c1dcdb283f92be9689"
-
-[[patch.unused]]
-name = "waterui-icons-codegen"
-version = "0.5.1"
-source = "git+https://github.com/water-rs/waterui?rev=91c2aa414a4cd8b771ab5451a157f9477a7b912c#91c2aa414a4cd8b771ab5451a157f9477a7b912c"
-
-[[patch.unused]]
-name = "waterui-icons-lucide"
-version = "0.5.1"
-source = "git+https://github.com/water-rs/waterui?rev=91c2aa414a4cd8b771ab5451a157f9477a7b912c#91c2aa414a4cd8b771ab5451a157f9477a7b912c"
-
-[[patch.unused]]
-name = "waterui-inspector-app"
-version = "0.5.2"
-source = "git+https://github.com/water-rs/waterui?rev=91c2aa414a4cd8b771ab5451a157f9477a7b912c#91c2aa414a4cd8b771ab5451a157f9477a7b912c"
-
-[[patch.unused]]
-name = "waterui-preview-protocol"
-version = "0.5.1"
-source = "git+https://github.com/water-rs/waterui?rev=91c2aa414a4cd8b771ab5451a157f9477a7b912c#91c2aa414a4cd8b771ab5451a157f9477a7b912c"
-
-[[patch.unused]]
-name = "waterui-testing"
-version = "0.5.1"
-source = "git+https://github.com/water-rs/waterui?rev=91c2aa414a4cd8b771ab5451a157f9477a7b912c#91c2aa414a4cd8b771ab5451a157f9477a7b912c"
-
-[[patch.unused]]
-name = "xcb"
-version = "1.7.0"
-source = "git+https://github.com/rust-x-bindings/rust-xcb?rev=ae3b2cd080e78173223038ccbebdc644eaf4a9ad#ae3b2cd080e78173223038ccbebdc644eaf4a9ad"
