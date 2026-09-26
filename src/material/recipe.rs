@@ -267,7 +267,8 @@ pub struct Recipe {
     pub preserve_hue: bool,
     /// Final scalar on premultiplied RGB.
     pub edr_scale: f32,
-    /// Positive field range, pt: beyond it the backdrop shows directly.
+    /// Positive field range, pt: the element's own field bound. The
+    /// displaced shadow still reaches `2·shadow_radius` past it.
     pub positive_range: f32,
     /// Whether the material is enabled (else the interior is the blurred backdrop).
     pub material_enabled: bool,

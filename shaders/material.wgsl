@@ -196,7 +196,9 @@ fn interior(r: Recipe, p: vec2<f32>, d: f32, n: vec2<f32>, fw: f32) -> vec4<f32>
 
 fn edge_term(r: Recipe, p: vec2<f32>, d: f32, n: vec2<f32>, px_per_pt: f32) -> vec4<f32> {
     var edge = vec4<f32>(0.0);
-    // Shadow: the field of the shape displaced by shadowOffset.
+    // Shadow: the field of the shape displaced by shadowOffset. The falloff
+    // is nonzero for ds < 2·shadowRadius, which is what bounds the early-out
+    // above — not positive_range.
     let shifted = load_field((p - r.shadow_a.xy) * px_per_pt);
     let ds = shifted.d;
     if r.shadow_b.z > 0.0 {
@@ -302,7 +304,14 @@ fn material_fragment(in: FullscreenOut) -> @location(0) vec4<f32> {
     let r = recipes[f.owner];
     let d = f.d;
     if d > r.output.w {
-        return backdrop;
+        // positive_range bounds the element's own field, but the shadow's
+        // field is sampled under the shadowOffset displacement and its
+        // falloff reaches 2·shadowRadius past the shifted silhouette. Only
+        // skip when that shifted distance is also beyond the falloff.
+        let ds = load_field((p - r.shadow_a.xy) * px_per_pt).d;
+        if r.shadow_b.z <= 0.0 || ds > 2.0 * r.shadow_b.y {
+            return backdrop;
+        }
     }
     let m = r.disp_mat;
     var n = vec2<f32>(m.x * f.n.x + m.y * f.n.y, m.z * f.n.x + m.w * f.n.y);

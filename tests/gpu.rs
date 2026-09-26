@@ -577,12 +577,19 @@ fn shadow_offset_reach_and_opacity() {
         below > above + 0.01,
         "shadow offset: below {below} above {above}"
     );
-    // Reach: still present at 30 pt, gone at the positive range.
+    // Reach: the displaced falloff extends 2·shadowRadius = 48 pt past the
+    // shifted silhouette — perceptible to ≈48 pt below, not truncated at
+    // positive_range (37). Truly gone only past reach + offset.
     let far = 1.0 - luma(r.output.at_pt(CX, BOTTOM + 30.0));
-    let gone = 1.0 - luma(r.output.at_pt(CX, BOTTOM + recipe.positive_range + 1.0));
+    let past_range = 1.0 - luma(r.output.at_pt(CX, BOTTOM + recipe.positive_range + 4.0));
+    let gone = 1.0
+        - luma(r.output.at_pt(
+            CX,
+            BOTTOM + 2.0 * recipe.shadow_radius + recipe.shadow_offset[1] + 1.0,
+        ));
     assert!(
-        far > 0.003 && gone.abs() < 1e-3,
-        "reach: {far} at 30 pt, {gone} beyond range"
+        far > 0.003 && past_range > 0.001 && gone.abs() < 1e-3,
+        "reach: {far} at 30 pt, {past_range} past positive_range, {gone} beyond shadow reach"
     );
     eprintln!(
         "VERIFY shadow: peak opacity {opacity:.3} (recipe {:.3}); darkening below/above at 20 pt {below:.3}/{above:.3}; at 30 pt {far:.4}",
