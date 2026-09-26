@@ -29,7 +29,9 @@ nami = "0.11.1"
 vello = "0.9"
 waterui = { version = "0.5.2", default-features = false }
 waterui-backend-core = { version = "0.5.2", default-features = false, features = ["widgets", "gestures"] }
+waterui-controls = "0.5.1"
 waterui-core = "0.5.1"
+waterui-form = "0.5.1"
 wgpu = { version = "29.0.4", default-features = false, features = ["wgsl"] }
 
 [dev-dependencies]

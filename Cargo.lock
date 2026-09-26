@@ -1747,7 +1747,9 @@ dependencies = [
  "vello",
  "waterui",
  "waterui-backend-core",
+ "waterui-controls",
  "waterui-core",
+ "waterui-form",
  "wgpu",
 ]
 
