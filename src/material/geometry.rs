@@ -284,22 +284,25 @@ impl<'a> UnionField<'a> {
 
     fn distance_and_owner(&self, p: [f32; 2]) -> (f32, usize) {
         let tau = self.tau();
+        // Two passes over the whole slice, as `field.wgsl` does: every
+        // member contributes, however many there are.
         let mut min_d = f32::INFINITY;
         let mut owner = 0;
-        let mut raw = [0.0f32; 64];
-        let count = self.members.len().min(raw.len());
-        for (j, member) in self.members.iter().take(count).enumerate() {
+        for (j, member) in self.members.iter().enumerate() {
             let d = member.distance(p);
-            raw[j] = d;
             if d < min_d {
                 min_d = d;
                 owner = j;
             }
         }
-        if count == 1 {
+        if self.members.len() == 1 {
             return (min_d.max(NEGATIVE_SENTINEL), owner);
         }
-        let sum: f32 = raw[..count].iter().map(|d| ((min_d - d) / tau).exp()).sum();
+        let sum: f32 = self
+            .members
+            .iter()
+            .map(|member| ((min_d - member.distance(p)) / tau).exp())
+            .sum();
         (tau.mul_add(-sum.ln(), min_d).max(NEGATIVE_SENTINEL), owner)
     }
 
@@ -424,6 +427,24 @@ mod tests {
         // Deep inside a member the union equals that member's own field to within τ·ln(count) tails.
         let inside = field.distance([30.0, 30.0]);
         assert!((inside - circles[0].distance([30.0, 30.0])).abs() < 0.01);
+    }
+
+    #[test]
+    fn union_counts_members_past_64() {
+        // The GPU field pass iterates the whole member slice; the CPU field
+        // must not cap the set. 64 members far away, the 65th under the probe.
+        let mut members: Vec<Shape> = (0u16..64)
+            .map(|i| Shape::circle(2000.0 + f32::from(i), -2000.0, 10.0))
+            .collect();
+        members.push(Shape::circle(0.0, 0.0, 10.0));
+        let field = UnionField::new(&members, STANDALONE_UNION_SMOOTHING);
+        let s = field.sample([0.0, 0.0]);
+        assert_eq!(s.owner, 64, "the 65th member owns its own centre");
+        assert!(
+            (s.distance - members[64].distance([0.0, 0.0])).abs() < 0.01,
+            "inside the 65th member the union tracks it: {}",
+            s.distance
+        );
     }
 
     #[test]
