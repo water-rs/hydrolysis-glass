@@ -1,0 +1,9 @@
+[env]
+# The engine's build script requires a deployment target of at least 26.0.
+# Set here because a dependency's own cargo config does not reach this
+# workspace.
+MACOSX_DEPLOYMENT_TARGET = "26.0"
+IPHONEOS_DEPLOYMENT_TARGET = "26.0"
+[target.x86_64-pc-windows-msvc]
+linker = "rust-lld"
+rustflags = ["-Clinker-flavor=lld-link"]
