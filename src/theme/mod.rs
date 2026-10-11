@@ -2,16 +2,18 @@
 //! are the glass material.
 //!
 //! Buttons and capsules, tab bars, toolbars, sheets and containers are glass;
-//! [`surfaces`] decides their silhouette and recipe. The material samples the
-//! backdrop behind the widget, and a [`Recorder`] cannot record a backdrop
-//! sample (water-rs/waterui#1788), so those surfaces cannot be drawn through
-//! the `WidgetTheme` drawing methods: calling one panics naming the missing
-//! engine capability (`ENGINE_REQUIREMENTS.md`) rather than drawing a
-//! look-alike. Everything else — toggles, steppers, inputs, pickers, sliders,
-//! progress, badges, lists, tables, dividers and opaque menus — is recorded
-//! through the `Recorder` in [`chrome`].
+//! [`surfaces`] decides their silhouette and recipe and [`materials`] records
+//! each surface as a `Recorder::backdrop_material` — the engine's material
+//! contract (water-rs/waterui#1788 and followers). A backend drawing chrome
+//! through `Content::record_layered` realizes each surface as a backdrop
+//! member of the group its capture class names; [`materials::register`]
+//! declares the shader and the capture classes the members record under.
+//! Everything else — toggles, steppers, inputs, pickers, sliders, progress,
+//! badges, lists, tables, dividers and opaque menus — is recorded through the
+//! `Recorder` in [`chrome`].
 
 pub mod chrome;
+pub mod materials;
 pub mod palette;
 pub mod surfaces;
 
