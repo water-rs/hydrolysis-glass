@@ -26,10 +26,11 @@
 //! - **Union.** Every glass class groups as a
 //!   [`MaterialGrouping::Union`] field: standalone members share the
 //!   standalone 8 pt smoothing, a container's members the 30 pt
-//!   container smoothing, mapped onto the engine's quadratic smooth
-//!   minimum. Members of one scope, canvas and class share one capture
-//!   and one field; a single-member union degenerates to the member's
-//!   own field.
+//!   container smoothing, carried onto the engine's quadratic smooth
+//!   minimum by [`SMOOTHING_TO_UNION_K`] so both renderers fuse the
+//!   same field. Members of one scope, canvas and class share one
+//!   capture and one field; a single-member union degenerates to the
+//!   member's own field.
 
 use cherenkov::kurbo::{Rect as KRect, RoundedRect, RoundedRectRadii};
 use cherenkov::{BlendSpace, ContinuousRect, Fixed, Recorder, ShapeData};
@@ -40,8 +41,8 @@ use cherenkov_record::{
 };
 
 use crate::material::geometry::{
-    CONTAINER_UNION_SMOOTHING, CONTINUOUS_EXPONENT, CornerCurve, Element, Shape,
-    STANDALONE_UNION_SMOOTHING,
+    CONTAINER_UNION_SMOOTHING, CONTINUOUS_EXPONENT, CornerCurve, Element, SMOOTHING_TO_UNION_K,
+    STANDALONE_UNION_SMOOTHING, Shape,
 };
 use crate::material::recipe::Recipe;
 
@@ -49,11 +50,12 @@ use crate::material::recipe::Recipe;
 /// WGSL source serves every capture class.
 pub const GLASS_SHADER: MaterialShader = MaterialShader::new(1);
 
-/// The capture-scale lattice the registry declares, ascending. These are
-/// the recipe's measured `capture_scale` values (§4.1): the clear family
-/// and the small regulars at the default translucency sit on 0.5, the
-/// largest regulars on 0.25, the deepest-translucency large elements on
-/// 0.333 and 0.125.
+/// The capture-scale lattice the registry declares, ascending.
+///
+/// These are the recipe's measured `capture_scale` values (§4.1): the
+/// clear family and the small regulars at the default translucency sit on
+/// 0.5, the largest regulars on 0.25, the deepest-translucency large
+/// elements on 0.333 and 0.125.
 pub const CAPTURE_SCALES: [f32; 4] = [0.125, 0.25, 0.333, 0.5];
 
 /// `CaptureClass` key of a standalone member at `CAPTURE_SCALES[i]`.
@@ -74,14 +76,21 @@ const LEVELS: u32 = CaptureLevels::MAX;
 /// smallest class's 8 px texel).
 const SHADER_REACH: f32 = 0.35 * 200.33 * 4.0 + 14.0;
 
-/// The union smoothing of a container member's field, and of every
-/// standalone member's.
+/// The blend distance `k` the engine's quadratic smooth minimum folds a
+/// container's member fields with, pt, and the one every standalone
+/// member's field takes.
+///
+/// The material's smoothing is [`CONTAINER_UNION_SMOOTHING`] /
+/// [`STANDALONE_UNION_SMOOTHING`]; [`SMOOTHING_TO_UNION_K`] carries it
+/// onto this family, so the engine's fused field has the standalone
+/// renderer's fillets rather than a second, looser union.
 const fn union_smoothing(container: bool) -> f32 {
-    if container {
+    let smoothing = if container {
         CONTAINER_UNION_SMOOTHING
     } else {
         STANDALONE_UNION_SMOOTHING
-    }
+    };
+    smoothing * SMOOTHING_TO_UNION_K
 }
 
 /// The capture class an element records under: `container` selects the
@@ -123,6 +132,11 @@ fn shader_source() -> BackdropShaderSource {
 /// Registers the glass backdrop shader and every capture class the
 /// theme's materials name. Called from
 /// `WidgetTheme::register_backdrop_shaders`.
+///
+/// # Panics
+/// When [`CAPTURE_SCALES`], the level count or a union smoothing steps
+/// outside the contract's valid ranges — a constant, not a value a caller
+/// can feed back.
 pub fn register(registry: &mut MaterialRegistry) {
     registry.register_shader(GLASS_SHADER, shader_source());
     for container in [false, true] {
@@ -136,10 +150,8 @@ pub fn register(registry: &mut MaterialRegistry) {
                 #[allow(clippy::cast_possible_truncation, reason = "the index is at most 3")]
                 CaptureClass::new(base + i as u32),
                 MaterialCapture {
-                    scale: CaptureScale::new(scale)
-                        .expect("the lattice stays inside (0, 1]"),
-                    levels: CaptureLevels::new(LEVELS)
-                        .expect("the level count is inside 1..=MAX"),
+                    scale: CaptureScale::new(scale).expect("the lattice stays inside (0, 1]"),
+                    levels: CaptureLevels::new(LEVELS).expect("the level count is inside 1..=MAX"),
                     grouping: MaterialGrouping::Union {
                         smoothing: UnionSmoothing::new(union_smoothing(container))
                             .expect("the union smoothings are positive"),
@@ -157,11 +169,13 @@ pub fn register(registry: &mut MaterialRegistry) {
 const CONTINUOUS_SMOOTHING: f64 = (CONTINUOUS_EXPONENT as f64 - 2.0) * 0.5;
 
 /// Converts the element's silhouette to the engine's analytic shape.
+///
 /// Circular corners become a `RoundedRect`, the recipe's continuous
-/// corner a `ContinuousRect` at [`CONTINUOUS_SMOOTHING`], and a shape
-/// whose radii all clamp to zero a plain `Rect`. The member's own field
-/// and the group's union field are both analytic, so only analytic
-/// shapes are allowed — a `Path` member could not join a union.
+/// corner a `ContinuousRect` at the Lamé smoothing matching the
+/// recipe's exponent, and a shape whose radii all clamp to zero a plain
+/// `Rect`. The member's own field and the group's union field are both
+/// analytic, so only analytic shapes are allowed — a `Path` member
+/// could not join a union.
 #[must_use]
 pub fn shape_data(shape: &Shape) -> ShapeData {
     let r = shape.rect;
@@ -194,9 +208,11 @@ pub fn shape_data(shape: &Shape) -> ShapeData {
 const CAST_REACH_FALLOFF: f32 = 1.3;
 
 /// Packs one element's recipe and member rect into the effect the member
-/// binds — the shader's sixteen `vec4`s in header order — and sets the
-/// member's outer extent so the cast shadow and exterior span are not
-/// clipped by the composite's draw bound.
+/// binds.
+///
+/// The uniforms are the shader's sixteen `vec4`s in header order; the
+/// member's outer extent follows the cast shadow and exterior span so
+/// they are not clipped by the composite's draw bound.
 ///
 /// # Panics
 /// When the recipe contradicts the constants folded into
@@ -208,11 +224,9 @@ pub fn effect(element: &Element) -> MaterialEffect {
     let r = &element.recipe;
     let rect = element.shape.rect;
     assert_folded_constants(r);
-    let tint = r.tint.map_or([0.0; 4], |t| [t.rgb[0], t.rgb[1], t.rgb[2], t.alpha]);
-    #[expect(
-        clippy::cast_possible_truncation,
-        reason = "rect coordinates are display-resolution and well inside f32"
-    )]
+    let tint = r
+        .tint
+        .map_or([0.0; 4], |t| [t.rgb[0], t.rgb[1], t.rgb[2], t.alpha]);
     let uniforms = vec![
         r.primary_shift,
         r.primary_depth,
@@ -286,7 +300,7 @@ pub fn effect(element: &Element) -> MaterialEffect {
     );
     let outer = r
         .exterior_span
-        .max(r.cast_shift[0].hypot(r.cast_shift[1]) + CAST_REACH_FALLOFF * r.cast_falloff);
+        .max(CAST_REACH_FALLOFF.mul_add(r.cast_falloff, r.cast_shift[0].hypot(r.cast_shift[1])));
     MaterialEffect::new(uniforms).outer(
         OuterExtent::new(outer)
             .expect("the exterior span and cast reach keep the extent finite and non-negative"),
@@ -326,9 +340,11 @@ fn assert_folded_constants(r: &Recipe) {
 }
 
 /// Records one glass element as a `Recorder::backdrop_material` at the
-/// recorder's top level: the shape is the member's clip and union-field
-/// record, the recipe its live effect. `container` selects the
-/// container union field's capture class.
+/// recorder's top level.
+///
+/// The shape is the member's clip and union-field record, the recipe its
+/// live effect; `container` selects the container union field's capture
+/// class.
 ///
 /// # Panics
 /// As `Recorder::backdrop_material` does: outside a

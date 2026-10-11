@@ -18,15 +18,19 @@ highlights and shape-merging interaction.
   places them (`theme::surfaces`) and everything else records through the
   framework's `Recorder`.
 
-The glass surfaces need a backdrop capture with explicit mip levels that the
-recorder cannot yet express, so the theme refuses to draw them there instead
-of drawing a look-alike. Rendering through the engine sits behind the
-off-by-default `engine` feature, which fails to compile until the engine
-grows the APIs; [`ENGINE_REQUIREMENTS.md`](ENGINE_REQUIREMENTS.md) lists
-exactly which ones it waits for and how the material's stages map onto them.
+The glass surfaces draw as Cherenkov backdrop materials: the theme records
+each surface as a `backdrop_material` member under the recording contract's
+shared union field, capture class and sRGB-encoded blend space, and the
+in-tree engine samples a captured, mip-levelled backdrop behind the widget —
+never a look-alike (`theme::materials`, `shaders/material_engine.wgsl`).
+[`EngineHost`](src/engine.rs), behind the off-by-default `engine` feature,
+owns the engine and offscreen surface that realize those recordings — the
+same mount Hydrolysis performs for a `ChromeMaterial` run. The standalone
+`GlassRenderer` wgpu path stays for hosts that render `Group`s directly.
 
 The material follows [`docs/specification.md`](docs/specification.md), which
 tags every recipe value with its evidence: measured, fitted or chosen.
 `cargo nextest run` renders the specification's verification scenes — its
 twelve elements over six backdrops in both appearances and at the
-translucency extremes — to `target/verification/*.png` for review.
+translucency extremes — to `target/verification/*.png` for review, through
+both renderers.

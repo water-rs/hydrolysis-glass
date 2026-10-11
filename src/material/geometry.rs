@@ -44,6 +44,19 @@ pub const CONTAINER_UNION_SMOOTHING: f32 = 30.0;
 /// container's fillets. **[chosen]**
 pub const SMOOTHING_TO_TAU: f32 = 0.3;
 
+/// Fraction of the union smoothing that is the blend distance `k` of a
+/// quadratic smooth minimum, the family Cherenkov's `BackdropUnion`
+/// folds a group's member fields with.
+///
+/// The fused field is the material's, not a renderer's: both unions must
+/// put the same fillet in the same place. A quadratic smooth minimum
+/// blends over a finite `k`, a log-sum-exp over all distances at the
+/// rate τ, so `k` is fitted rather than equal to the smoothing — at
+/// `k = 3τ` the two zero contours coincide across the §7 container's
+/// 16 pt gaps (both bridge in by 2.18 pt), which is `0.9` of the
+/// smoothing at [`SMOOTHING_TO_TAU`]. **[fitted]**
+pub const SMOOTHING_TO_UNION_K: f32 = 3.0 * SMOOTHING_TO_TAU;
+
 /// An axis-aligned rectangle in points.
 #[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub struct Rect {

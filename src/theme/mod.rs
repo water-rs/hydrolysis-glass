@@ -21,6 +21,7 @@ use core::time::Duration;
 
 use cherenkov::kurbo::{BezPath, Point, Rect, RoundedRectRadii};
 use cherenkov::{Paint, Recorder, WorkingColor};
+use cherenkov_record::MaterialRegistry;
 use hydrolysis::Style;
 use waterui::Plugin as _;
 use waterui::animation::Animation;
@@ -191,24 +192,12 @@ impl Default for Glass {
     }
 }
 
-/// Panics naming the engine capability a glass surface needs.
-///
-/// The material refracts and blurs the content behind the widget; drawing it
-/// needs a capture of that backdrop, which a widget theme's `Recorder`
-/// cannot record — a recording has no way to create a `BackdropGroup` or to
-/// put a `BackdropSample` into the content (water-rs/waterui#1788). This is
-/// the Hydrolysis rule for a component the backend cannot realise: fail at
-/// the first draw, never draw a stand-in.
-#[track_caller]
-fn unsupported_glass_surface(what: &str) -> ! {
-    panic!(
-        "hydrolysis-glass cannot draw {what} through `Recorder`: the glass material samples \
-         the backdrop behind the widget and a widget theme cannot record a backdrop sample \
-         (water-rs/waterui#1788; see ENGINE_REQUIREMENTS.md for the full list). Render the \
-         surface through the engine once it ships the APIs listed there \
-         (`engine` feature), or place it with `hydrolysis_glass::theme::surfaces` and draw the \
-         resulting `Group` with `hydrolysis_glass::GlassRenderer` over a captured backdrop."
-    )
+/// Records `surface`'s element as a standalone backdrop material — the
+/// widget-chrome surfaces (a button, a tab bar, a toolbar) draw as their
+/// own members; the containers that fuse neighbours mount under a
+/// `MaterialScope` the host gives the recording.
+fn record_standalone(recorder: &mut Recorder, surface: &Surface) {
+    materials::record(recorder, &surface.element, false);
 }
 
 impl Style for Glass {
@@ -326,16 +315,31 @@ impl WidgetTheme for Glass {
         Some(Font::from(Subheadline))
     }
 
+    fn register_backdrop_shaders(&self, registry: &mut MaterialRegistry) {
+        materials::register(registry);
+    }
+
     fn draw_button_chrome(
         &self,
-        _draw: &mut Recorder,
-        _bounds: Rect,
+        draw: &mut Recorder,
+        bounds: Rect,
         style: ButtonStyle,
-        _icon_only: bool,
-        _state: WidgetInteractionState,
+        icon_only: bool,
+        state: WidgetInteractionState,
     ) {
-        if surfaces::button_is_glass(style) {
-            unsupported_glass_surface("a glass button capsule");
+        let press = surfaces::press_amount(state, self.interaction_motion().pressed_opacity);
+        // `surfaces::button`'s size argument only informs a style's chrome
+        // metrics, which the button's layout already resolved into `bounds`.
+        if let Some(surface) = surfaces::button(
+            &self.palette,
+            bounds,
+            style,
+            ControlSize::Medium,
+            icon_only,
+            press,
+            self.translucency,
+        ) {
+            record_standalone(draw, &surface);
         }
     }
 
@@ -842,8 +846,11 @@ impl WidgetTheme for Glass {
         }
     }
 
-    fn draw_navigation_bar(&self, _draw: &mut Recorder, _bounds: Rect, _background: &Paint) {
-        unsupported_glass_surface("a glass toolbar");
+    fn draw_navigation_bar(&self, draw: &mut Recorder, bounds: Rect, _background: &Paint) {
+        record_standalone(
+            draw,
+            &surfaces::toolbar(&self.palette, bounds, self.translucency),
+        );
     }
 
     fn draw_navigation_bar_separator(&self, _draw: &mut Recorder, _bounds: Rect) {}
@@ -856,8 +863,15 @@ impl WidgetTheme for Glass {
         TabsMetrics::new(60.0, 64.0, 12.0, 0.0, 0.0, 6.0)
     }
 
-    fn draw_tabs_bar(&self, _draw: &mut Recorder, _bounds: Rect, _top_edge: bool) {
-        unsupported_glass_surface("a glass tab bar");
+    fn draw_tabs_bar(&self, draw: &mut Recorder, surface: Rect) {
+        record_standalone(
+            draw,
+            &surfaces::tab_bar(&self.palette, surface, self.translucency),
+        );
+    }
+
+    fn draw_tabs_bar_divider(&self, draw: &mut Recorder, divider: Rect) {
+        chrome::separator(&self.palette, draw, divider);
     }
 
     fn draw_tabs_highlight(&self, draw: &mut Recorder, bounds: Rect, _layout: TabItemLayout) {
@@ -1067,11 +1081,28 @@ mod tests {
         );
     }
 
+    fn layered_recorder(body: impl FnOnce(&mut Recorder)) -> cherenkov_record::LayeredContent {
+        Content::record_layered(
+            &LayoutSize::new(),
+            cherenkov_record::MaterialScope::SOLO,
+            body,
+        )
+    }
+
     #[test]
-    #[should_panic(expected = "ENGINE_REQUIREMENTS.md")]
-    fn glass_button_refuses_a_stand_in() {
+    fn registry_declares_the_shader_and_classes() {
         let g = Glass::light();
-        with_recorder(|r| {
+        let mut registry = MaterialRegistry::new();
+        g.register_backdrop_shaders(&mut registry);
+        assert!(registry.shader(materials::GLASS_SHADER).is_some());
+        // 4 capture scales × standalone and container.
+        assert_eq!(registry.capture_classes().count(), 8);
+    }
+
+    #[test]
+    fn glass_button_records_a_backdrop_material() {
+        let g = Glass::light();
+        let layered = layered_recorder(|r| {
             g.draw_button_chrome(
                 r,
                 Rect::new(0.0, 0.0, 100.0, 40.0),
@@ -1080,5 +1111,42 @@ mod tests {
                 WidgetInteractionState::NONE,
             );
         });
+        assert!(layered.below.is_empty());
+        assert_eq!(layered.runs.len(), 1);
+        let material = &layered.runs[0].material;
+        assert_eq!(material.shader(), materials::GLASS_SHADER);
+        assert!(material.scope().is_solo());
+        // The button's recipe capture scale snaps up to the smallest
+        // registered class at or above it.
+        let surface = g
+            .button_surface(
+                Rect::new(0.0, 0.0, 100.0, 40.0),
+                ButtonStyle::Glass,
+                ControlSize::Medium,
+                false,
+                WidgetInteractionState::NONE,
+            )
+            .expect("glass surface");
+        assert_eq!(
+            material.capture(),
+            materials::capture_class(false, surface.element.recipe.capture_scale),
+        );
+    }
+
+    #[test]
+    fn tab_bar_and_toolbar_record_backdrop_materials() {
+        let g = Glass::light();
+        let layered = layered_recorder(|r| {
+            g.draw_tabs_bar(r, Rect::new(0.0, 0.0, 390.0, 50.0));
+            g.draw_navigation_bar(
+                r,
+                Rect::new(0.0, 0.0, 390.0, 44.0),
+                &Paint::Solid(working(palette::alpha(Palette::LIGHT.surface, 0.8))),
+            );
+        });
+        assert_eq!(layered.runs.len(), 2);
+        for run in &layered.runs {
+            assert_eq!(run.material.shader(), materials::GLASS_SHADER);
+        }
     }
 }

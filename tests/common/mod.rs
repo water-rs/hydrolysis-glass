@@ -1,10 +1,18 @@
 //! Shared harness for the §7 verification-scene exports.
 
-use hydrolysis_glass::material::geometry::{CornerCurve, Rect, Shape};
+use cherenkov::kurbo::Rect as KRect;
+use cherenkov::{Content, Draw, ImageColorSpace, ImageData, LayoutSize, Rgba16F, Sampling};
+use cherenkov_record::{LayeredContent, MaterialRegistry, MaterialScope};
+use hydrolysis_glass::engine::EngineHost;
+use hydrolysis_glass::material::geometry::{
+    CONTAINER_UNION_SMOOTHING, CornerCurve, Rect, STANDALONE_UNION_SMOOTHING, Shape,
+};
 use hydrolysis_glass::material::gpu::{COMPOSITE_FORMAT, f32_to_half, read_texture};
 use hydrolysis_glass::material::recipe::Translucency;
+use hydrolysis_glass::theme::materials;
 use hydrolysis_glass::{Appearance, Element, Family, GlassRenderer, Group, Recipe, Scene};
 use image::ImageEncoder as _;
+use std::num::NonZeroU64;
 use std::path::PathBuf;
 
 /// Record scale: output pixels per pt (§7: 3 px/pt).
@@ -437,4 +445,184 @@ pub fn verification_scene(
         PX_PER_PT,
         verification_groups(appearance, translucency, container_circles),
     )
+}
+
+// === In-tree engine harness ===
+
+/// A `Group` as a `LayeredContent` under its own material scope: the
+/// group's members share the scope, and the group's union smoothing picks
+/// the standalone or container capture class.
+///
+/// # Panics
+/// When `group.smoothing` is neither `STANDALONE_UNION_SMOOTHING` nor
+/// `CONTAINER_UNION_SMOOTHING` — the registry's lattice holds exactly the
+/// two classes, so an off-lattice smoothing cannot be recorded.
+pub fn record_group(group: &Group, scope: u64) -> LayeredContent {
+    let container = if group.smoothing == CONTAINER_UNION_SMOOTHING {
+        true
+    } else if group.smoothing == STANDALONE_UNION_SMOOTHING {
+        false
+    } else {
+        panic!(
+            "group smoothing {} names no registered union class",
+            group.smoothing
+        );
+    };
+    Content::record_layered(
+        &LayoutSize::new(),
+        MaterialScope::new(NonZeroU64::new(scope).expect("scope ids are nonzero")),
+        |rec| {
+            for member in &group.members {
+                materials::record(rec, member, container);
+            }
+        },
+    )
+}
+
+/// The sRGB encode of `v`, sign-preserving like the engine's
+/// `srgb_encode_signed`.
+fn srgb_encode(v: f32) -> f32 {
+    let a = v.abs();
+    let enc = if a <= 0.003_130_8 {
+        a * 12.92
+    } else {
+        1.055f32.mul_add(a.powf(1.0 / 2.4), -0.055)
+    };
+    enc.copysign(v)
+}
+
+/// Linear Display-P3 → linear sRGB primaries, the engine's `P3_TO_SRGB`
+/// row-major.
+const P3_TO_SRGB: [[f32; 3]; 3] = [
+    [1.224_940_1, -0.224_940_4, 0.0],
+    [-0.042_056_9, 1.042_057_1, 0.0],
+    [-0.019_637_6, -0.078_636_1, 1.098_273_5],
+];
+
+/// One readback pixel — premultiplied linear Display P3 — as the test
+/// `Image`'s premultiplied sRGB-encoded pixel: the engine's own
+/// `move_space` conversion applied on the CPU so both renderers' outputs
+/// land in one encoding.
+fn p3_to_srgb(p: [f32; 4]) -> [f32; 4] {
+    let a = p[3];
+    if a <= 0.0 {
+        return [0.0; 4];
+    }
+    let straight = [p[0] / a, p[1] / a, p[2] / a];
+    let mut enc = [0.0f32; 3];
+    for (out, row) in enc.iter_mut().zip(P3_TO_SRGB.iter()) {
+        *out = srgb_encode(row[2].mul_add(
+            straight[2],
+            row[0].mul_add(straight[0], row[1] * straight[1]),
+        ));
+    }
+    [enc[0] * a, enc[1] * a, enc[2] * a, a]
+}
+
+/// A `Scene` as engine state: the backdrop as an image layer under the
+/// root, then each `Group` mounted as its own `record_layered` scope —
+/// the same paint order `GlassRenderer` composites in, so a member's
+/// capture sees the backdrop and every earlier group.
+pub struct EngineHarness {
+    /// The engine host: one offscreen surface at the scene's size and
+    /// `PX_PER_PT` device pixels per pt, the theme's registry on it.
+    pub host: EngineHost,
+    /// Backdrop images registered once per kind; the handle keeps the
+    /// image alive.
+    backdrops: Vec<EngineBackdrop>,
+}
+
+/// A backdrop's registered image.
+struct EngineBackdrop {
+    kind: Backdrop,
+    image: cherenkov::Image<Rgba16F>,
+}
+
+impl EngineHarness {
+    /// A host at the §7 scene size, `PX_PER_PT` px/pt.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::sized(SCENE_PT)
+    }
+
+    /// A host at `size_pt` pt, `PX_PER_PT` px/pt.
+    #[must_use]
+    pub fn sized(size_pt: [f32; 2]) -> Self {
+        let mut registry = MaterialRegistry::new();
+        materials::register(&mut registry);
+        let (w, h) = scene_px(size_pt[0], size_pt[1]);
+        let host = EngineHost::new((w, h), f64::from(PX_PER_PT), registry)
+            .expect("engine host on the GPU backend");
+        Self {
+            host,
+            backdrops: Vec::new(),
+        }
+    }
+
+    /// The backdrop's registered image, uploaded as premultiplied
+    /// sRGB-encoded `Rgba16F` — the same texels `upload` writes the
+    /// standalone composite.
+    fn backdrop_image(&mut self, backdrop: Backdrop) -> cherenkov::Image<Rgba16F> {
+        if let Some(b) = self.backdrops.iter().find(|b| b.kind == backdrop) {
+            return b.image.clone();
+        }
+        let img = backdrop.image();
+        let mut bytes = Vec::with_capacity(img.pixels.len() * 8);
+        for p in &img.pixels {
+            for c in p {
+                bytes.extend_from_slice(&f32_to_half(*c).to_le_bytes());
+            }
+        }
+        let image = self
+            .host
+            .image(
+                ImageData::new(img.width, img.height, bytes)
+                    .expect("the upload's byte length matches its dimensions")
+                    .color_space(ImageColorSpace::Srgb)
+                    .premultiplied(),
+            )
+            .expect("the backdrop image registers");
+        self.backdrops.push(EngineBackdrop {
+            kind: backdrop,
+            image: image.clone(),
+        });
+        image
+    }
+
+    /// Renders `scene` over `backdrop` through the in-tree engine and
+    /// returns the readback converted to the test `Image`'s premultiplied
+    /// sRGB encoding.
+    pub fn render(&mut self, backdrop: Backdrop, scene: &Scene) -> Image {
+        let image = self.backdrop_image(backdrop);
+        // The backdrop image draws at the scene's logical size; the layer's
+        // scale transform maps pt to device px, so the fill reads the
+        // image 1:1.
+        let w = f64::from(scene.size_pt[0]);
+        let h = f64::from(scene.size_pt[1]);
+        let bg = self
+            .host
+            .mount_content(Content::record(&LayoutSize::new(), |c| {
+                c.image(image.id(), KRect::new(0.0, 0.0, w, h), Sampling::Linear);
+            }));
+        let mut mounts = Vec::with_capacity(scene.groups.len());
+        for (i, group) in scene.groups.iter().enumerate() {
+            mounts.push(self.host.mount(record_group(group, i as u64 + 1)));
+        }
+        let readback = self.host.render_readback().expect("the frame renders");
+        drop(mounts);
+        drop(bg);
+        Image {
+            width: readback.width,
+            height: readback.height,
+            pixels: readback.pixels.iter().map(|&p| p3_to_srgb(p)).collect(),
+        }
+    }
+
+    /// Renders the scene and writes `target/verification/<name>.png`;
+    /// returns the path.
+    pub fn export(&mut self, backdrop: Backdrop, scene: &Scene, name: &str) -> PathBuf {
+        let path = self.render(backdrop, scene).save(name);
+        assert!(path.is_file(), "{name}: PNG written");
+        path
+    }
 }

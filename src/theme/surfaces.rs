@@ -1,10 +1,11 @@
 //! Which widget surfaces are glass, and what shape and recipe each one takes.
 //!
-//! Every surface here is a [`Element`] ready for [`crate::GlassRenderer`]:
-//! bounds in points, a silhouette, a recipe scaled to the element's size and a
-//! press response. The descriptors are pure so a host that owns the backdrop
-//! (see `ENGINE_REQUIREMENTS.md`) can build the frame's [`Group`]s from the
-//! same decisions the theme makes for layout.
+//! Every surface here is a [`Element`]: bounds in points, a silhouette, a
+//! recipe scaled to the element's size and a press response. The descriptors
+//! are pure so both render paths build from the same decisions — the widget
+//! theme records them as `backdrop_material` members ([`super::materials`]),
+//! and the standalone [`crate::GlassRenderer`] takes them as the frame's
+//! [`Group`]s over a captured backdrop.
 
 use cherenkov::kurbo::Rect as KRect;
 use waterui::interaction::InteractionState;
