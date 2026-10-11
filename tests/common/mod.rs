@@ -1,19 +1,16 @@
 //! Shared harness for the §7 verification-scene exports.
 
-use cherenkov::kurbo::Rect as KRect;
-use cherenkov::{Content, Draw, ImageColorSpace, ImageData, LayoutSize, Rgba16F, Sampling};
-use cherenkov_record::{LayeredContent, MaterialRegistry, MaterialScope};
-use hydrolysis_glass::engine::EngineHost;
-use hydrolysis_glass::material::geometry::{
-    CONTAINER_UNION_SMOOTHING, CornerCurve, Rect, STANDALONE_UNION_SMOOTHING, Shape,
-};
+use hydrolysis::{HeadlessRuntime, HeadlessSnapshot, OutputAlpha};
+use hydrolysis_glass::material::geometry::{CornerCurve, Rect, Shape};
 use hydrolysis_glass::material::gpu::{COMPOSITE_FORMAT, f32_to_half, read_texture};
 use hydrolysis_glass::material::recipe::Translucency;
-use hydrolysis_glass::theme::materials;
-use hydrolysis_glass::{Appearance, Element, Family, GlassRenderer, Group, Recipe, Scene};
+use hydrolysis_glass::{Appearance, Element, Family, Glass, GlassRenderer, Group, Recipe, Scene};
 use image::ImageEncoder as _;
-use std::num::NonZeroU64;
 use std::path::PathBuf;
+use std::time::{Duration, Instant};
+use waterui::View;
+use waterui_core::handler::AnyViewBuilder;
+use waterui_core::{AnyView, Environment};
 
 /// Record scale: output pixels per pt (§7: 3 px/pt).
 pub const PX_PER_PT: f32 = 3.0;
@@ -447,182 +444,135 @@ pub fn verification_scene(
     )
 }
 
-// === In-tree engine harness ===
+// === The theme mounted on Hydrolysis ===
 
-/// A `Group` as a `LayeredContent` under its own material scope: the
-/// group's members share the scope, and the group's union smoothing picks
-/// the standalone or container capture class.
-///
-/// # Panics
-/// When `group.smoothing` is neither `STANDALONE_UNION_SMOOTHING` nor
-/// `CONTAINER_UNION_SMOOTHING` — the registry's lattice holds exactly the
-/// two classes, so an off-lattice smoothing cannot be recorded.
-pub fn record_group(group: &Group, scope: u64) -> LayeredContent {
-    let container = if group.smoothing == CONTAINER_UNION_SMOOTHING {
-        true
-    } else if group.smoothing == STANDALONE_UNION_SMOOTHING {
-        false
-    } else {
-        panic!(
-            "group smoothing {} names no registered union class",
-            group.smoothing
-        );
-    };
-    Content::record_layered(
-        &LayoutSize::new(),
-        MaterialScope::new(NonZeroU64::new(scope).expect("scope ids are nonzero")),
-        |rec| {
-            for member in &group.members {
-                materials::record(rec, member, container);
-            }
-        },
-    )
+/// One pumped frame of virtual time: 60 Hz, the rate Hydrolysis's own
+/// headless tests advance at.
+const VIRTUAL_FRAME: Duration = Duration::from_micros(16_667);
+
+/// How many frames a mount is given to reach quiescence. The press and
+/// navigation animations are the longest live motion a scene here holds
+/// (§5.5, 201 ms), so a settled scene is reached in a fraction of this.
+const SETTLE_FRAMES: u32 = 240;
+
+/// A view tree mounted on Hydrolysis's headless offscreen runtime under
+/// the [`Glass`] style: the real backend, the real widget theme, the real
+/// `register_backdrop_shaders`/`backdrop_material` path — the only
+/// difference from a windowed app is that the frame is read back instead
+/// of presented.
+pub struct GlassApp {
+    runtime: HeadlessRuntime,
+    /// The virtual clock the pump advances, so a scene's animations
+    /// resolve deterministically rather than on wall time.
+    at: Instant,
 }
 
-/// The sRGB encode of `v`, sign-preserving like the engine's
-/// `srgb_encode_signed`.
-fn srgb_encode(v: f32) -> f32 {
-    let a = v.abs();
-    let enc = if a <= 0.003_130_8 {
-        a * 12.92
-    } else {
-        1.055f32.mul_add(a.powf(1.0 / 2.4), -0.055)
-    };
-    enc.copysign(v)
-}
-
-/// Linear Display-P3 → linear sRGB primaries, the engine's `P3_TO_SRGB`
-/// row-major.
-const P3_TO_SRGB: [[f32; 3]; 3] = [
-    [1.224_940_1, -0.224_940_4, 0.0],
-    [-0.042_056_9, 1.042_057_1, 0.0],
-    [-0.019_637_6, -0.078_636_1, 1.098_273_5],
-];
-
-/// One readback pixel — premultiplied linear Display P3 — as the test
-/// `Image`'s premultiplied sRGB-encoded pixel: the engine's own
-/// `move_space` conversion applied on the CPU so both renderers' outputs
-/// land in one encoding.
-fn p3_to_srgb(p: [f32; 4]) -> [f32; 4] {
-    let a = p[3];
-    if a <= 0.0 {
-        return [0.0; 4];
-    }
-    let straight = [p[0] / a, p[1] / a, p[2] / a];
-    let mut enc = [0.0f32; 3];
-    for (out, row) in enc.iter_mut().zip(P3_TO_SRGB.iter()) {
-        *out = srgb_encode(row[2].mul_add(
-            straight[2],
-            row[0].mul_add(straight[0], row[1] * straight[1]),
-        ));
-    }
-    [enc[0] * a, enc[1] * a, enc[2] * a, a]
-}
-
-/// A `Scene` as engine state: the backdrop as an image layer under the
-/// root, then each `Group` mounted as its own `record_layered` scope —
-/// the same paint order `GlassRenderer` composites in, so a member's
-/// capture sees the backdrop and every earlier group.
-pub struct EngineHarness {
-    /// The engine host: one offscreen surface at the scene's size and
-    /// `PX_PER_PT` device pixels per pt, the theme's registry on it.
-    pub host: EngineHost,
-    /// Backdrop images registered once per kind; the handle keeps the
-    /// image alive.
-    backdrops: Vec<EngineBackdrop>,
-}
-
-/// A backdrop's registered image.
-struct EngineBackdrop {
-    kind: Backdrop,
-    image: cherenkov::Image<Rgba16F>,
-}
-
-impl EngineHarness {
-    /// A host at the §7 scene size, `PX_PER_PT` px/pt.
+impl GlassApp {
+    /// Mounts `view` at the §7 scene size, [`PX_PER_PT`] device pixels
+    /// per pt.
     #[must_use]
-    pub fn new() -> Self {
-        Self::sized(SCENE_PT)
+    pub fn mount(view: impl View + Clone + 'static, glass: Glass) -> Self {
+        Self::sized(view, glass, SCENE_PT)
     }
 
-    /// A host at `size_pt` pt, `PX_PER_PT` px/pt.
+    /// Mounts `view` in a `size_pt` window at [`PX_PER_PT`] device pixels
+    /// per pt: the window's logical frame is the scene's pt size and the
+    /// display scale is the record scale, so the snapshot's pixel grid is
+    /// the standalone renderer's.
     #[must_use]
-    pub fn sized(size_pt: [f32; 2]) -> Self {
-        let mut registry = MaterialRegistry::new();
-        materials::register(&mut registry);
-        let (w, h) = scene_px(size_pt[0], size_pt[1]);
-        let host = EngineHost::new((w, h), f64::from(PX_PER_PT), registry)
-            .expect("engine host on the GPU backend");
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "the scene's point size is positive and far below u32::MAX"
+    )]
+    pub fn sized(view: impl View + Clone + 'static, glass: Glass, size_pt: [f32; 2]) -> Self {
+        let content = AnyViewBuilder::new(move || AnyView::new(view.clone()));
+        let runtime = HeadlessRuntime::new_for_tests(
+            Environment::new(),
+            content,
+            size_pt[0] as u32,
+            size_pt[1] as u32,
+            glass,
+        )
+        .with_scale_factor(f64::from(PX_PER_PT));
         Self {
-            host,
-            backdrops: Vec::new(),
+            runtime,
+            at: Instant::now(),
         }
     }
 
-    /// The backdrop's registered image, uploaded as premultiplied
-    /// sRGB-encoded `Rgba16F` — the same texels `upload` writes the
-    /// standalone composite.
-    fn backdrop_image(&mut self, backdrop: Backdrop) -> cherenkov::Image<Rgba16F> {
-        if let Some(b) = self.backdrops.iter().find(|b| b.kind == backdrop) {
-            return b.image.clone();
-        }
-        let img = backdrop.image();
-        let mut bytes = Vec::with_capacity(img.pixels.len() * 8);
-        for p in &img.pixels {
-            for c in p {
-                bytes.extend_from_slice(&f32_to_half(*c).to_le_bytes());
+    /// Pumps one frame, capturing it when `capture`.
+    fn pump(&mut self, capture: bool) -> Option<HeadlessSnapshot> {
+        self.at += VIRTUAL_FRAME;
+        self.runtime.pump_at(capture, self.at).snapshot
+    }
+
+    /// Pumps until the runtime reports quiescence.
+    ///
+    /// # Panics
+    /// When the scene is still animating after [`SETTLE_FRAMES`] frames —
+    /// a glass scene's motion is bounded by the press response, so an
+    /// unsettled one means the mount never reached its resting frame.
+    pub fn settle(&mut self) {
+        for _ in 0..SETTLE_FRAMES {
+            self.pump(false);
+            if self.runtime.is_settled() {
+                return;
             }
         }
-        let image = self
-            .host
-            .image(
-                ImageData::new(img.width, img.height, bytes)
-                    .expect("the upload's byte length matches its dimensions")
-                    .color_space(ImageColorSpace::Srgb)
-                    .premultiplied(),
-            )
-            .expect("the backdrop image registers");
-        self.backdrops.push(EngineBackdrop {
-            kind: backdrop,
-            image: image.clone(),
-        });
-        image
+        panic!("the mounted glass scene did not settle");
     }
 
-    /// Renders `scene` over `backdrop` through the in-tree engine and
-    /// returns the readback converted to the test `Image`'s premultiplied
-    /// sRGB encoding.
-    pub fn render(&mut self, backdrop: Backdrop, scene: &Scene) -> Image {
-        let image = self.backdrop_image(backdrop);
-        // The backdrop image draws at the scene's logical size; the layer's
-        // scale transform maps pt to device px, so the fill reads the
-        // image 1:1.
-        let w = f64::from(scene.size_pt[0]);
-        let h = f64::from(scene.size_pt[1]);
-        let bg = self
-            .host
-            .mount_content(Content::record(&LayoutSize::new(), |c| {
-                c.image(image.id(), KRect::new(0.0, 0.0, w, h), Sampling::Linear);
-            }));
-        let mut mounts = Vec::with_capacity(scene.groups.len());
-        for (i, group) in scene.groups.iter().enumerate() {
-            mounts.push(self.host.mount(record_group(group, i as u64 + 1)));
-        }
-        let readback = self.host.render_readback().expect("the frame renders");
-        drop(mounts);
-        drop(bg);
+    /// Settles the scene and reads its frame back.
+    ///
+    /// The snapshot is RGBA8 in the surface's straight-alpha sRGB
+    /// encoding; the returned [`Image`] is the premultiplied form the
+    /// standalone harness produces, so both paths' outputs land in one
+    /// encoding.
+    ///
+    /// # Panics
+    /// When the capturing pump produces no frame, or the frame's byte
+    /// count contradicts its dimensions.
+    pub fn snapshot(&mut self) -> Image {
+        self.settle();
+        let snapshot = self
+            .pump(true)
+            .expect("a capturing pump reads a frame back");
+        assert_eq!(
+            snapshot.output_alpha,
+            OutputAlpha::Straight,
+            "the offscreen surface presents straight alpha",
+        );
+        let count = (snapshot.width * snapshot.height) as usize;
+        assert_eq!(snapshot.rgba8.len(), count * 4, "the frame's byte count");
+        let pixels = snapshot
+            .rgba8
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|p| {
+                let a = f32::from(p[3]) / 255.0;
+                [
+                    f32::from(p[0]) / 255.0 * a,
+                    f32::from(p[1]) / 255.0 * a,
+                    f32::from(p[2]) / 255.0 * a,
+                    a,
+                ]
+            })
+            .collect();
         Image {
-            width: readback.width,
-            height: readback.height,
-            pixels: readback.pixels.iter().map(|&p| p3_to_srgb(p)).collect(),
+            width: snapshot.width,
+            height: snapshot.height,
+            pixels,
         }
     }
 
-    /// Renders the scene and writes `target/verification/<name>.png`;
-    /// returns the path.
-    pub fn export(&mut self, backdrop: Backdrop, scene: &Scene, name: &str) -> PathBuf {
-        let path = self.render(backdrop, scene).save(name);
+    /// Settles the scene, reads it back and writes
+    /// `target/verification/<name>.png`.
+    pub fn export(&mut self, name: &str) -> Image {
+        let image = self.snapshot();
+        let path = image.save(name);
         assert!(path.is_file(), "{name}: PNG written");
-        path
+        image
     }
 }

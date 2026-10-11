@@ -17,12 +17,6 @@ include = ["src/**", "shaders/**", "README.md", "LICENSE-*"]
 
 [features]
 default = []
-# Rendering the material through the engine: the recorded
-# `Content::record_layered` runs become Cherenkov `BackdropGroup`s whose
-# members run the glass `backdrop_effect` shader. The feature adds the
-# GPU engine (`cherenkov-gpu`) used by the crate's engine host — the
-# theme's recording path itself needs no feature.
-engine = ["dep:cherenkov-gpu"]
 # GPU→CPU readback for the verification harness. Off for consumers:
 # nothing may build a readback path on the runtime API.
 verification = []
@@ -37,12 +31,8 @@ cherenkov = "0.0.0"
 # `Recorder::backdrop_material`, `MaterialEffect`, `CaptureClass` — lives
 # in the moved layer-tree crate `cherenkov` does not re-export.
 cherenkov-record = "0.0.0"
-# The in-tree GPU engine behind the `engine` feature: the crate's engine
-# host realizes layered recordings into `BackdropGroup`s on it.
-cherenkov-gpu = { version = "0.0.0", optional = true }
 hydrolysis = "0.3.1"
 nami = "0.12"
-thiserror = "2"
 waterui = { version = "0.5.2", default-features = false }
 waterui-backend-core = { version = "0.5.2", default-features = false, features = ["widgets", "gestures"] }
 waterui-controls = "0.5.1"
@@ -51,8 +41,14 @@ waterui-form = "0.5.1"
 wgpu = { version = "30.0.1", default-features = false, features = ["wgsl"] }
 
 [dev-dependencies]
-# The test harness exercises the `verification` surface and the engine host.
-hydrolysis-glass = { path = ".", version = "0.1.0", features = ["verification", "engine"] }
+# The test harness exercises the `verification` surface.
+hydrolysis-glass = { path = ".", version = "0.1.0", features = ["verification"] }
+# `testing` carries Hydrolysis's headless offscreen runtime
+# (`HeadlessRuntime::new_for_tests`): the verification suite mounts real
+# `WaterUI` views under this theme on the backend's own render path and
+# reads the frames back, so what it checks is the app path, not a copy of
+# it. The feature adds no dependency of its own.
+hydrolysis = { version = "0.3.1", features = ["testing"] }
 pollster = "1.0"
 tracing = "0.1"
 # Writes the verification renders as PNG so a failing property can be looked at.

@@ -21,16 +21,19 @@ highlights and shape-merging interaction.
 The glass surfaces draw as Cherenkov backdrop materials: the theme records
 each surface as a `backdrop_material` member under the recording contract's
 shared union field, capture class and sRGB-encoded blend space, and the
-in-tree engine samples a captured, mip-levelled backdrop behind the widget —
-never a look-alike (`theme::materials`, `shaders/material_engine.wgsl`).
-[`EngineHost`](src/engine.rs), behind the off-by-default `engine` feature,
-owns the engine and offscreen surface that realize those recordings — the
-same mount Hydrolysis performs for a `ChromeMaterial` run. The standalone
-`GlassRenderer` wgpu path stays for hosts that render `Group`s directly.
+engine samples a captured, mip-levelled backdrop behind the widget — never a
+look-alike (`theme::materials`, `shaders/material_engine.wgsl`). Hydrolysis
+owns that mount: it registers the theme's shader and capture classes, groups
+the members a `.material_group()` scope holds into one capture and one union
+field, and runs the engine pass. The standalone `GlassRenderer` wgpu path
+stays for hosts that render `Group`s directly.
 
 The material follows [`docs/specification.md`](docs/specification.md), which
 tags every recipe value with its evidence: measured, fitted or chosen.
 `cargo nextest run` renders the specification's verification scenes — its
 twelve elements over six backdrops in both appearances and at the
-translucency extremes — to `target/verification/*.png` for review, through
-both renderers.
+translucency extremes — to `target/verification/*.png` for review. The
+standalone renderer draws those scenes directly (`tests/gpu.rs`); beside
+them, `tests/hydrolysis.rs` mounts real glass-styled views on Hydrolysis's
+headless runtime and compares the engine's frame against the standalone
+render of the same material.
