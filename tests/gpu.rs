@@ -6,6 +6,10 @@
 //! observations. Each test asserts only that rendering succeeded and the
 //! file was written.
 
+#[allow(
+    dead_code,
+    reason = "the harness is shared across test binaries; each uses a different subset"
+)]
 mod common;
 
 use common::*;

@@ -1,7 +1,5 @@
 #![doc = include_str!("../README.md")]
 
-#[cfg(feature = "engine")]
-mod engine;
 pub mod interaction;
 pub mod material;
 pub mod theme;

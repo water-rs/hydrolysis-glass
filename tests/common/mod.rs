@@ -1,11 +1,16 @@
 //! Shared harness for the §7 verification-scene exports.
 
+use hydrolysis::{HeadlessRuntime, HeadlessSnapshot, OutputAlpha};
 use hydrolysis_glass::material::geometry::{CornerCurve, Rect, Shape};
 use hydrolysis_glass::material::gpu::{COMPOSITE_FORMAT, f32_to_half, read_texture};
 use hydrolysis_glass::material::recipe::Translucency;
-use hydrolysis_glass::{Appearance, Element, Family, GlassRenderer, Group, Recipe, Scene};
+use hydrolysis_glass::{Appearance, Element, Family, Glass, GlassRenderer, Group, Recipe, Scene};
 use image::ImageEncoder as _;
 use std::path::PathBuf;
+use std::time::{Duration, Instant};
+use waterui::View;
+use waterui_core::handler::AnyViewBuilder;
+use waterui_core::{AnyView, Environment};
 
 /// Record scale: output pixels per pt (§7: 3 px/pt).
 pub const PX_PER_PT: f32 = 3.0;
@@ -437,4 +442,137 @@ pub fn verification_scene(
         PX_PER_PT,
         verification_groups(appearance, translucency, container_circles),
     )
+}
+
+// === The theme mounted on Hydrolysis ===
+
+/// One pumped frame of virtual time: 60 Hz, the rate Hydrolysis's own
+/// headless tests advance at.
+const VIRTUAL_FRAME: Duration = Duration::from_micros(16_667);
+
+/// How many frames a mount is given to reach quiescence. The press and
+/// navigation animations are the longest live motion a scene here holds
+/// (§5.5, 201 ms), so a settled scene is reached in a fraction of this.
+const SETTLE_FRAMES: u32 = 240;
+
+/// A view tree mounted on Hydrolysis's headless offscreen runtime under
+/// the [`Glass`] style: the real backend, the real widget theme, the real
+/// `register_backdrop_shaders`/`backdrop_material` path — the only
+/// difference from a windowed app is that the frame is read back instead
+/// of presented.
+pub struct GlassApp {
+    runtime: HeadlessRuntime,
+    /// The virtual clock the pump advances, so a scene's animations
+    /// resolve deterministically rather than on wall time.
+    at: Instant,
+}
+
+impl GlassApp {
+    /// Mounts `view` at the §7 scene size, [`PX_PER_PT`] device pixels
+    /// per pt.
+    #[must_use]
+    pub fn mount(view: impl View + Clone + 'static, glass: Glass) -> Self {
+        Self::sized(view, glass, SCENE_PT)
+    }
+
+    /// Mounts `view` in a `size_pt` window at [`PX_PER_PT`] device pixels
+    /// per pt: the window's logical frame is the scene's pt size and the
+    /// display scale is the record scale, so the snapshot's pixel grid is
+    /// the standalone renderer's.
+    #[must_use]
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        reason = "the scene's point size is positive and far below u32::MAX"
+    )]
+    pub fn sized(view: impl View + Clone + 'static, glass: Glass, size_pt: [f32; 2]) -> Self {
+        let content = AnyViewBuilder::new(move || AnyView::new(view.clone()));
+        let runtime = HeadlessRuntime::new_for_tests(
+            Environment::new(),
+            content,
+            size_pt[0] as u32,
+            size_pt[1] as u32,
+            glass,
+        )
+        .with_scale_factor(f64::from(PX_PER_PT));
+        Self {
+            runtime,
+            at: Instant::now(),
+        }
+    }
+
+    /// Pumps one frame, capturing it when `capture`.
+    fn pump(&mut self, capture: bool) -> Option<HeadlessSnapshot> {
+        self.at += VIRTUAL_FRAME;
+        self.runtime.pump_at(capture, self.at).snapshot
+    }
+
+    /// Pumps until the runtime reports quiescence.
+    ///
+    /// # Panics
+    /// When the scene is still animating after [`SETTLE_FRAMES`] frames —
+    /// a glass scene's motion is bounded by the press response, so an
+    /// unsettled one means the mount never reached its resting frame.
+    pub fn settle(&mut self) {
+        for _ in 0..SETTLE_FRAMES {
+            self.pump(false);
+            if self.runtime.is_settled() {
+                return;
+            }
+        }
+        panic!("the mounted glass scene did not settle");
+    }
+
+    /// Settles the scene and reads its frame back.
+    ///
+    /// The snapshot is RGBA8 in the surface's straight-alpha sRGB
+    /// encoding; the returned [`Image`] is the premultiplied form the
+    /// standalone harness produces, so both paths' outputs land in one
+    /// encoding.
+    ///
+    /// # Panics
+    /// When the capturing pump produces no frame, or the frame's byte
+    /// count contradicts its dimensions.
+    pub fn snapshot(&mut self) -> Image {
+        self.settle();
+        let snapshot = self
+            .pump(true)
+            .expect("a capturing pump reads a frame back");
+        assert_eq!(
+            snapshot.output_alpha,
+            OutputAlpha::Straight,
+            "the offscreen surface presents straight alpha",
+        );
+        let count = (snapshot.width * snapshot.height) as usize;
+        assert_eq!(snapshot.rgba8.len(), count * 4, "the frame's byte count");
+        let pixels = snapshot
+            .rgba8
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .map(|p| {
+                let a = f32::from(p[3]) / 255.0;
+                [
+                    f32::from(p[0]) / 255.0 * a,
+                    f32::from(p[1]) / 255.0 * a,
+                    f32::from(p[2]) / 255.0 * a,
+                    a,
+                ]
+            })
+            .collect();
+        Image {
+            width: snapshot.width,
+            height: snapshot.height,
+            pixels,
+        }
+    }
+
+    /// Settles the scene, reads it back and writes
+    /// `target/verification/<name>.png`.
+    pub fn export(&mut self, name: &str) -> Image {
+        let image = self.snapshot();
+        let path = image.save(name);
+        assert!(path.is_file(), "{name}: PNG written");
+        image
+    }
 }
