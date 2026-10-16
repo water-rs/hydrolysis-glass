@@ -13,8 +13,9 @@
 mod common;
 
 use common::*;
+use hydrolysis_glass::material::geometry::CONTAINER_UNION_SMOOTHING;
 use hydrolysis_glass::material::recipe::Translucency;
-use hydrolysis_glass::{Appearance, Family, Group, Scene};
+use hydrolysis_glass::{Appearance, Family, Group, Scene, Shape};
 
 #[test]
 fn adapter_reports() {
@@ -56,6 +57,48 @@ fn container_circles_touch() {
     for (appearance, name) in [(Appearance::Dark, "dark"), (Appearance::Light, "light")] {
         let scene = verification_scene(appearance, Translucency::default(), [0.0, 60.0, 120.0]);
         h.export(Backdrop::White, &scene, &format!("container_touch_{name}"));
+    }
+}
+
+#[test]
+fn mixed_container() {
+    let mut h = Harness::new();
+    // §7, scene 4: the large card and a 60 pt circle in one container,
+    // beside the same two shapes standing alone. In the container the
+    // circle renders the card's recipe, its capture scale among it (§5.6).
+    let reg = |shape| {
+        element(
+            shape,
+            Family::Regular,
+            Appearance::Dark,
+            Translucency::default(),
+        )
+    };
+    let card = |y: f32| rounded(51.0, y, 300.0, 200.33, 40.0);
+    let circle = |y: f32| Shape::circle(201.0, y + 30.0, 30.0);
+    let scene = Scene::new(
+        SCENE_PT,
+        PX_PER_PT,
+        vec![
+            Group::container(
+                vec![reg(card(120.0)), reg(circle(360.33))],
+                CONTAINER_UNION_SMOOTHING,
+            ),
+            Group::single(reg(card(480.0))),
+            Group::single(reg(circle(720.33))),
+        ],
+    );
+    for backdrop in [
+        Backdrop::Black,
+        Backdrop::Grey,
+        Backdrop::White,
+        Backdrop::Split,
+    ] {
+        h.export(
+            backdrop,
+            &scene,
+            &format!("mixed_container_{}_dark", backdrop.name()),
+        );
     }
 }
 

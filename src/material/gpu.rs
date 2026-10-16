@@ -45,13 +45,18 @@ pub const DISPERSION_WIDTH_PT: f32 = 0.6;
 /// there. **[chosen]**
 pub const FOREGROUND_FADE_PT: f32 = 1.5;
 
-/// A set of elements sharing one union field.
+/// A set of elements sharing one backdrop capture and one union field.
+///
+/// The members of a group render with one recipe (§5.6), so a group has
+/// one capture scale; only each member's tint and ellipse bend are its
+/// own. The constructors establish that, and the fields stay private so
+/// nothing else can break it.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Group {
     /// The members, in ownership-index order.
-    pub members: Vec<Element>,
+    members: Vec<Element>,
     /// Union smoothing, pt: 8 standalone, 30 for a container.
-    pub smoothing: f32,
+    smoothing: f32,
 }
 
 impl Group {
@@ -65,9 +70,57 @@ impl Group {
     }
 
     /// A container over `members` with the given smoothing.
+    ///
+    /// Every member takes the container's recipe (§5.6,
+    /// [`Recipe::for_container`]) from the members' own recipes: the one
+    /// of the member with the largest `m`, with the primary lobe and the
+    /// first blur depth of the member with the smallest `m`; the first
+    /// such member wins a tie. Each member keeps its own tint and ellipse
+    /// bend. **[measured; the tie order, the tint and the ellipse bend
+    /// are chosen]**
     #[must_use]
-    pub const fn container(members: Vec<Element>, smoothing: f32) -> Self {
+    pub fn container(mut members: Vec<Element>, smoothing: f32) -> Self {
+        let by_m = |a: &&Element, b: &&Element| a.shape.rect.m().total_cmp(&b.shape.rect.m());
+        // `max_by` keeps the last of equal elements and `min_by` the first:
+        // reversing the iterator makes both keep the first.
+        let largest = members.iter().rev().max_by(by_m);
+        let smallest = members.iter().min_by(by_m);
+        if let (Some(largest), Some(smallest)) = (largest, smallest) {
+            let shared = Recipe::for_container(&largest.recipe, &smallest.recipe);
+            for member in &mut members {
+                member.recipe = Recipe {
+                    tint: member.recipe.tint,
+                    ellipse_bend: member.recipe.ellipse_bend,
+                    ..shared
+                };
+            }
+        }
         Self { members, smoothing }
+    }
+
+    /// The members, in ownership-index order.
+    #[must_use]
+    pub fn members(&self) -> &[Element] {
+        &self.members
+    }
+
+    /// Union smoothing, pt: 8 standalone, 30 for a container.
+    #[must_use]
+    pub const fn smoothing(&self) -> f32 {
+        self.smoothing
+    }
+
+    /// The group's capture scale: its members' shared recipe's.
+    ///
+    /// # Panics
+    /// On an empty group, which captures nothing.
+    #[must_use]
+    pub fn capture_scale(&self) -> f32 {
+        self.members
+            .first()
+            .expect("an empty group has no capture")
+            .recipe
+            .capture_scale
     }
 }
 
@@ -159,10 +212,9 @@ struct CaptureParams {
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Pod, Zeroable)]
 struct MaterialUniforms {
-    /// Scene size pt, px per pt, this pass's capture max lod.
+    /// Scene size pt, px per pt, the group capture's max lod.
     scene: [f32; 4],
-    /// This pass's capture scale, the display peak, the capture texel's
-    /// size in pt along x and y.
+    /// The display peak, the capture texel's size in pt along x and y, -.
     misc: [f32; 4],
     /// Region the material pass renders, pt: min.xy, size.xy.
     region: [f32; 4],
@@ -227,7 +279,7 @@ impl From<&Recipe> for GpuRecipe {
                 r.haze_max_weight,
                 r.haze_mix,
             ],
-            limit_grade: [r.luminance_limit, r.grade_mix, r.capture_scale, 0.0],
+            limit_grade: [r.luminance_limit, r.grade_mix, 0.0, 0.0],
             grade: [r.grade.floor, r.grade.ceiling, r.grade.chroma, 0.0],
             wash: [r.wash[0], r.wash[1], r.wash[2], r.wash_alpha],
             ambient: [
@@ -537,23 +589,15 @@ struct GroupGpu {
     recipe_buf: wgpu::Buffer,
     lobe_buf: wgpu::Buffer,
     field_uni: wgpu::Buffer,
-    /// One material uniform buffer per distinct capture scale: the
-    /// scale-specific values (`scene.w`, `misc.x`, `misc.zw`) differ per
-    /// pass, and a single buffer written once per pass inside one encoder
-    /// would leave every pass reading the last scale's values. The
-    /// buffers are created on demand and never cleared: 64 bytes each,
-    /// independent of region and scale set, rewritten before every pass —
-    /// only the bind groups follow the region and the scale set.
-    material_unis: Vec<wgpu::Buffer>,
+    material_uni: wgpu::Buffer,
     fg_uni: wgpu::Buffer,
     field_bg: wgpu::BindGroup,
-    /// One material bind group per distinct capture scale in the group.
-    material_bgs: Vec<wgpu::BindGroup>,
+    /// Follows the region, the capture and the member capacity.
+    material_bg: Option<wgpu::BindGroup>,
     fg_bg: Option<wgpu::BindGroup>,
-    /// One capture (with its full mip chain) per distinct capture scale.
-    captures: Vec<Capture>,
-    /// The distinct member capture scales, in first-seen order.
-    capture_scales: Vec<f32>,
+    /// The group's capture with its full mip chain, and the scale it was
+    /// built at: it follows the region and the group's capture scale.
+    capture: Option<(f32, Capture)>,
 }
 
 /// The rect a group's passes run in, px: member bounds inflated by the
@@ -765,6 +809,12 @@ impl GroupGpu {
             size_of::<ForegroundUniforms>() as u64,
             uniform,
         );
+        let material_uni = create_buffer(
+            device,
+            "glass material uniforms",
+            size_of::<MaterialUniforms>() as u64,
+            uniform,
+        );
         let field_bg = field_bind_group(field_layout, device, &field_uni, &element_buf);
         Self {
             region_px,
@@ -779,13 +829,12 @@ impl GroupGpu {
             recipe_buf,
             lobe_buf,
             field_uni,
-            material_unis: Vec::new(),
+            material_uni,
             fg_uni,
             field_bg,
-            material_bgs: Vec::new(),
+            material_bg: None,
             fg_bg: None,
-            captures: Vec::new(),
-            capture_scales: Vec::new(),
+            capture: None,
         }
     }
 
@@ -809,9 +858,8 @@ impl GroupGpu {
         self.patch_b_view = self
             .patch_b
             .create_view(&wgpu::TextureViewDescriptor::default());
-        self.captures.clear();
-        self.capture_scales.clear();
-        self.material_bgs.clear();
+        self.capture = None;
+        self.material_bg = None;
         self.fg_bg = None;
     }
 
@@ -847,7 +895,7 @@ impl GroupGpu {
             storage,
         );
         self.field_bg = field_bind_group(field_layout, device, &self.field_uni, &self.element_buf);
-        self.material_bgs.clear();
+        self.material_bg = None;
         self.fg_bg = None;
     }
 }
@@ -1398,25 +1446,15 @@ impl GlassRenderer {
             region[2] as f32 / pp,
             region[3] as f32 / pp,
         ];
-        // One capture with a full mip chain per distinct member capture
-        // scale (§4.1).
-        let mut scales: Vec<f32> = Vec::new();
-        for e in &group.members {
-            let sc = e.recipe.capture_scale;
-            if scales.iter().all(|v| (*v - sc).abs() > 1e-4) {
-                scales.push(sc);
-            }
-        }
-        // The captures read the composite's mips, which must show the
+        // The group's one capture with a full mip chain (§4.1), at the
+        // members' shared capture scale (§5.6).
+        let scale = group.capture_scale();
+        // The capture reads the composite's mips, which must show the
         // backdrop as it stands now — including every group drawn before
         // this one — just as the material's direct read of level 0 does.
-        // Only the levels the captures' first steps sample are rebuilt.
+        // Only the levels the capture's first step samples are rebuilt.
         let max_src_lod = (self.composite_mip_views.len() - 1) as f32;
-        let top = scales
-            .iter()
-            .map(|&scale| capture_source_lod(scene, region_pt, scale, max_src_lod).ceil() as u32)
-            .max()
-            .expect("a non-empty group has a capture scale");
+        let top = capture_source_lod(scene, region_pt, scale, max_src_lod).ceil() as u32;
         self.generate_composite_mips(encoder, region, top);
         let g = self.groups[gi].get_or_insert_with(|| {
             GroupGpu::new(device, &self.field_layout, region, group.members.len())
@@ -1446,54 +1484,57 @@ impl GlassRenderer {
             }),
         );
 
-        if g.capture_scales != scales {
-            g.captures.clear();
-            g.material_bgs.clear();
+        if g.capture
+            .as_ref()
+            .is_some_and(|(built, _)| built.to_bits() != scale.to_bits())
+        {
+            g.capture = None;
+            g.material_bg = None;
         }
-        g.capture_scales.clone_from(&scales);
-        while g.captures.len() < scales.len() {
-            let scale = scales[g.captures.len()];
-            g.captures.push(Self::build_capture(
-                device,
-                &self.capture_layout,
-                &self.sampler,
-                scene,
-                region_pt,
+        let (_, cap) = g.capture.get_or_insert_with(|| {
+            (
                 scale,
-                max_src_lod,
-            ));
-        }
-        for cap in &mut g.captures {
-            if cap.src_bg.is_none() {
-                cap.src_bg = Some(Self::capture_bind_group(
+                Self::build_capture(
                     device,
                     &self.capture_layout,
                     &self.sampler,
-                    self.composite_view.as_ref().expect("targets"),
-                    &cap.params[0],
-                ));
-            }
-            for (step, target) in cap.targets.iter().enumerate() {
-                let bg = if step == 0 {
-                    cap.src_bg.as_ref().expect("src bg")
-                } else {
-                    &cap.chain_bgs[step - 1]
-                };
-                let pipe = if step == 0 {
-                    &self.blit
-                } else {
-                    &self.downsample
-                };
-                Self::fullscreen_pass(
-                    encoder,
-                    target,
-                    pipe,
-                    bg,
-                    wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
-                    None,
-                );
-            }
+                    scene,
+                    region_pt,
+                    scale,
+                    max_src_lod,
+                ),
+            )
+        });
+        if cap.src_bg.is_none() {
+            cap.src_bg = Some(Self::capture_bind_group(
+                device,
+                &self.capture_layout,
+                &self.sampler,
+                self.composite_view.as_ref().expect("targets"),
+                &cap.params[0],
+            ));
         }
+        for (step, target) in cap.targets.iter().enumerate() {
+            let bg = if step == 0 {
+                cap.src_bg.as_ref().expect("src bg")
+            } else {
+                &cap.chain_bgs[step - 1]
+            };
+            let pipe = if step == 0 {
+                &self.blit
+            } else {
+                &self.downsample
+            };
+            Self::fullscreen_pass(
+                encoder,
+                target,
+                pipe,
+                bg,
+                wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                None,
+            );
+        }
+        let (max_lod, texel_pt) = (cap.max_lod, cap.texel_pt);
 
         // Field pass over the region.
         Self::fullscreen_pass(
@@ -1505,100 +1546,68 @@ impl GlassRenderer {
             None,
         );
 
-        // Material passes into patch_a, one per distinct capture scale: a
-        // fragment samples the capture of its owning member's scale, and
-        // is discarded while another scale's pass runs. The patch holds
-        // the fully composited pixel for every region texel, so it is
-        // copied back verbatim.
+        // Material pass into patch_a. The patch holds the fully
+        // composited pixel for every region texel, so it is copied back
+        // verbatim.
         let recipes: Vec<GpuRecipe> = group
             .members
             .iter()
             .map(|e| GpuRecipe::from(&e.recipe))
             .collect();
         queue.write_buffer(&g.recipe_buf, 0, bytemuck::cast_slice(&recipes));
-
-        // One uniform buffer per distinct capture scale, created on
-        // demand and never cleared — 64 bytes, dependent on neither
-        // region nor member capacity, rewritten before every pass; only
-        // the bind groups are rebuilt on region or scale changes.
-        while g.material_unis.len() < scales.len() {
-            g.material_unis.push(create_buffer(
-                device,
-                "glass material uniforms",
-                size_of::<MaterialUniforms>() as u64,
-                wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            ));
+        queue.write_buffer(
+            &g.material_uni,
+            0,
+            bytemuck::bytes_of(&MaterialUniforms {
+                scene: [scene.size_pt[0], scene.size_pt[1], scene.px_per_pt, max_lod],
+                misc: [scene.display_peak, texel_pt[0], texel_pt[1], 0.0],
+                region: region_pt,
+                origin: [region[0] as f32, region[1] as f32, 0.0, 0.0],
+            }),
+        );
+        if g.material_bg.is_none() {
+            let (_, cap) = g.capture.as_ref().expect("built above");
+            g.material_bg = Some(device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: Some("glass material bind group"),
+                layout: &self.material_layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: g.material_uni.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: g.recipe_buf.as_entire_binding(),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::TextureView(&g.field_view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 3,
+                        resource: wgpu::BindingResource::TextureView(
+                            self.composite_view.as_ref().expect("targets"),
+                        ),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 4,
+                        resource: wgpu::BindingResource::TextureView(&cap.view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 5,
+                        resource: wgpu::BindingResource::Sampler(&self.sampler),
+                    },
+                ],
+            }));
         }
-        while g.material_bgs.len() < scales.len() {
-            let i = g.material_bgs.len();
-            g.material_bgs
-                .push(device.create_bind_group(&wgpu::BindGroupDescriptor {
-                    label: Some("glass material bind group"),
-                    layout: &self.material_layout,
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: g.material_unis[i].as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: g.recipe_buf.as_entire_binding(),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 2,
-                            resource: wgpu::BindingResource::TextureView(&g.field_view),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 3,
-                            resource: wgpu::BindingResource::TextureView(
-                                self.composite_view.as_ref().expect("targets"),
-                            ),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 4,
-                            resource: wgpu::BindingResource::TextureView(&g.captures[i].view),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 5,
-                            resource: wgpu::BindingResource::Sampler(&self.sampler),
-                        },
-                    ],
-                }));
-        }
-        for (i, scale) in scales.iter().enumerate() {
-            queue.write_buffer(
-                &g.material_unis[i],
-                0,
-                bytemuck::bytes_of(&MaterialUniforms {
-                    scene: [
-                        scene.size_pt[0],
-                        scene.size_pt[1],
-                        scene.px_per_pt,
-                        g.captures[i].max_lod,
-                    ],
-                    misc: [
-                        *scale,
-                        scene.display_peak,
-                        g.captures[i].texel_pt[0],
-                        g.captures[i].texel_pt[1],
-                    ],
-                    region: region_pt,
-                    origin: [region[0] as f32, region[1] as f32, 0.0, 0.0],
-                }),
-            );
-            Self::fullscreen_pass(
-                encoder,
-                &g.patch_a_view,
-                &self.material,
-                &g.material_bgs[i],
-                if i == 0 {
-                    wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT)
-                } else {
-                    wgpu::LoadOp::Load
-                },
-                None,
-            );
-        }
+        Self::fullscreen_pass(
+            encoder,
+            &g.patch_a_view,
+            &self.material,
+            g.material_bg.as_ref().expect("built above"),
+            wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+            None,
+        );
 
         // Foreground dispersion into patch_b, then the used patch is
         // copied back into the composite at the region origin.
@@ -1867,6 +1876,69 @@ mod tests {
                 BLUR_WGSL.contains(line.as_str()),
                 "blur.wgsl declares `{line}`"
             );
+        }
+    }
+
+    /// §5.6 on the measured mixed container: a 60 pt circle beside the
+    /// 300 × 200.33 pt card renders the card's recipe — its capture scale
+    /// among it — with the circle's primary lobe and first blur depth, in
+    /// either order, and each member keeps its own tint.
+    #[test]
+    fn container_members_share_the_container_recipe() {
+        use super::super::geometry::{Rect, Shape};
+        use super::super::recipe::{Appearance, Family, Tint, Translucency};
+        let element = |shape: Shape| {
+            let r = shape.rect;
+            Element {
+                shape,
+                recipe: Recipe::for_element(
+                    r.w,
+                    r.h,
+                    Family::Regular,
+                    Appearance::Dark,
+                    Translucency::default(),
+                ),
+            }
+        };
+        let card = element(Shape::rounded_rect(
+            Rect::new(51.0, 120.0, 300.0, 200.33),
+            40.0,
+            CornerCurve::Continuous,
+        ));
+        let mut circle = element(Shape::circle(201.0, 390.33, 30.0));
+        let tint = Tint {
+            rgb: [1.0; 3],
+            alpha: 0.3,
+        };
+        circle.recipe = circle.recipe.with_tint(tint);
+        let expected = Recipe::for_container(&card.recipe, &circle.recipe);
+        assert!((expected.capture_scale - 0.25).abs() < 1e-6);
+        assert!((expected.luminance_limit - card.recipe.luminance_limit).abs() < 1e-6);
+        assert!((expected.primary_shift + 30.0).abs() < 1e-4);
+        assert!((expected.primary_depth - 15.0).abs() < 1e-4);
+        assert!((expected.blur_depths[0] + 30.0).abs() < 1e-4);
+        for members in [vec![card, circle], vec![circle, card]] {
+            let group = Group::container(members, 30.0);
+            assert!((group.capture_scale() - 0.25).abs() < 1e-6);
+            for m in group.members() {
+                let own_tint = if m.shape == circle.shape {
+                    Some(tint)
+                } else {
+                    None
+                };
+                assert_eq!(m.recipe.tint, own_tint);
+                assert_eq!(
+                    Recipe {
+                        tint: None,
+                        ellipse_bend: expected.ellipse_bend,
+                        ..m.recipe
+                    },
+                    Recipe {
+                        tint: None,
+                        ..expected
+                    }
+                );
+            }
         }
     }
 }

@@ -10,7 +10,7 @@ highlights and shape-merging interaction.
   `Family::Regular` (frosted, appearance-dependent) and `Family::Clear`
   (nearly transparent, identical in both appearances) — and scale with the
   element's short side, the `Appearance` and a user `Translucency` setting.
-- `interaction` — press (a uniform ~1.24 bounds growth at full press), drag,
+- `interaction` — drag (the interactive material never grows on press or drag),
   corner morphing and neighbour attraction as `nami` signals publishing a
   `Binding<Group>`; interaction never changes the recipe.
 - `theme` — `Glass`, a `hydrolysis::Style` and `WidgetTheme`. Buttons and

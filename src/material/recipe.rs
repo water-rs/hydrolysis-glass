@@ -625,6 +625,24 @@ impl Recipe {
         self
     }
 
+    /// §5.6: the recipe a container's members render with, from the
+    /// recipes of its member with the largest `m` (`largest`) and the one
+    /// with the smallest (`smallest`): every value is the largest
+    /// member's — the capture scale among them — except the primary
+    /// shift, the primary depth and the first blur depth, which are the
+    /// smallest member's. **[measured]**
+    ///
+    /// The tint and the ellipse bend stay `largest`'s here; a container
+    /// gives each member its own (§2). **[chosen]**
+    #[must_use]
+    pub const fn for_container(largest: &Self, smallest: &Self) -> Self {
+        let mut r = *largest;
+        r.primary_shift = smallest.primary_shift;
+        r.primary_depth = smallest.primary_depth;
+        r.blur_depths[0] = smallest.blur_depths[0];
+        r
+    }
+
     /// §4.3: the piecewise blur gain `g(d)` of the depth profile.
     #[must_use]
     pub fn blur_gain(&self, d: f32) -> f32 {
