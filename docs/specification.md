@@ -652,6 +652,13 @@ uses red (230, 38, 38) and blue (26, 90, 230), encoded [chosen].
    one container, with the same two shapes standing alone at (51, 480) and
    (171, 720.33), on its own 402 × 874 pt scene at 3 px/pt. Black, grey 0.5,
    white and the split, in dark appearance at translucency 0.5.
+5. The **slider scene** (§8.3), on its own 402 × 874 pt scene at 3 px/pt,
+   over black, grey 0.5 and white, in dark and in light appearance: sliders
+   300 pt wide at values 0, 0.3, 0.5 and 1; a red-tinted and a disabled one
+   at 0.5; one at 0.5 with a speaker symbol at each end.
+6. The **slider sequence**: a 300 pt slider alone over black in dark
+   appearance at value 0.2, set to 0.8 at t = 0, rendered at t = 0, 0.05,
+   0.1, 0.2, 0.33 and 0.6 s.
 
 ### Observations
 
@@ -693,3 +700,186 @@ uses red (230, 38, 38) and blue (26, 90, 230), encoded [chosen].
   standalone circle's is sharp. Over white and grey it casts the card's soft
   shadow, where the standalone circle's fringe is a few levels deep at most.
   The card renders the same in the container and standing alone.
+- **Slider.** Every slider of the slider scene lays out 31 pt tall and as
+  wide as it is given, with a 6 pt capsule track across its full width,
+  centred vertically, and a white 37 × 24 pt knob centred on the track:
+  flush with the leading end at 0, its leading edge 79 pt in at 0.3, centred
+  at 0.5 and flush with the trailing end at 1. Left of the knob the track is
+  the tint, accent blue or red; right of it, 25 over black and 255 over
+  white in dark appearance, 0 and 230 in light. Over white and grey the knob
+  has a soft shadow, about 19 levels deep below its bottom edge on white and
+  14 above its top edge, gone 12 pt out; over black none shows. The disabled
+  slider is the plain one at half opacity, with a 128 knob over black. With
+  symbols, the symbols sit at the ends of the frame and the track runs from
+  25 to 264 pt between them.
+- **Slider motion.** In the slider sequence the knob's leading edge is
+  52.6 pt from the track's leading end at t = 0, then 84, 135, 199 and
+  213 pt at 0.05, 0.1, 0.2 and 0.33 s, past its end, and 210.4 pt at
+  0.6 s. The knob keeps its size and stays opaque white throughout.
+
+## 8. Controls
+
+A control is drawn from the glass elements of §2 to §5 and the chrome its
+section specifies: geometry, states and motion. Lengths are layout points at
+the default text size. Colours are encoded 8-bit sRGB as rendered on the
+observed display, and "over black" or "over white" names the backdrop behind
+the control. Unless a row says otherwise, observations are at translucency
+0.5.
+
+
+### 8.3 Slider
+
+A slider shows a value in a closed range as a position along a **track**:
+a **knob** sits at that position, and the part of the track before the
+knob is **filled** with the tint. At rest neither part is glass: the track
+and the knob are flat fills, and the knob casts a soft shadow. Glass
+appears only on the knob while a touch drags it (below).
+
+**Reference.** Geometry and motion were observed on the iOS 27.0
+simulator (an iPhone 16 Pro, 402 × 874 pt at 3 px/pt) and are tagged
+[measured: simulator] or [fitted: simulator]. No device capture was
+possible, so the colours and the shadow below are the simulator's
+rendering, tagged [chosen] until a device capture confirms them. Touch
+interaction was not observed at all.
+
+#### Geometry
+
+Let the frame be `W × 31` pt and `v` the value mapped to [0, 1] in the
+range.
+
+| Part | Size | Position |
+|---|---|---|
+| layout frame | the proposed width × 31 | — |
+| track | `W` × 6, capsule | across the full width, centred vertically |
+| knob | 37 × 24, capsule | centred on the track; its leading edge `v · (W − 37)` pt from the track's leading end |
+| fill | from the track's leading end to the knob's centre | under the knob |
+
+All values are [measured: simulator, within 1/3 pt; the track 5.84 pt by
+coverage, the knob's leading edge within 0.5 pt at `v` = 0, 0.3, 0.5 and
+1 on a 300 pt slider], except the fill's end, which the opaque knob hides
+[chosen: the knob's centre, so that no gap can open between the fill and
+the knob]. The slider takes the width it is given and has no intrinsic
+width; the height and the parts are the same at every control size,
+mini through extra large [measured: simulator].
+
+- **Corners.** The track and the knob are capsules, radius 3 and 12, with
+  continuous corners [chosen: the 1/3 pt sampling does not separate
+  circular from continuous corners].
+- **End symbols.** A slider with a minimum and a maximum value label
+  places them at the leading and the trailing end of the frame, centred
+  vertically on the track, drawn at the label text size in the label
+  colour, and runs the track between them with about 12 pt of space on
+  each side [measured: simulator, speaker symbols at 17 pt on a 300 pt
+  slider: the symbols ink 2.7 to 12.7 and 275 to 297.3 pt, the track runs
+  from 25 to 264 pt]. The 12 pt between each symbol's layout box and the
+  track is [chosen: the symbols' layout boxes were not observed].
+- **Steps.** A slider with a step draws no tick marks [measured:
+  simulator, a step of 0.25]; its value is rounded to the nearest step
+  [chosen: not observed during a drag].
+- **Direction.** In a right-to-left layout the slider is mirrored: the
+  minimum is at the right [chosen: not observed].
+- **Hit region.** The knob, extended to at least 44 × 44 pt about its
+  centre [chosen: touch hit-testing was not observed].
+
+#### Colours
+
+| Part | Dark appearance | Light appearance |
+|---|---|---|
+| knob | white, opaque | white, opaque |
+| fill | the tint, opaque | the tint, opaque |
+| unfilled track | white at alpha 0.098 over the backdrop | black at alpha 0.098 over the backdrop |
+| knob shadow | black, alpha 0.137, Gaussian σ = 5.2 pt, offset 1.2 pt down | the same |
+
+All entries are [chosen: the simulator's rendering, awaiting a device
+capture]. The tint defaults to the accent colour, (0, 145, 255) in dark
+appearance and (0, 136, 255) in light, and rendered the same over every
+backdrop [measured: simulator].
+
+- **Unfilled track.** Blends in encoded space [fitted: simulator, the blend
+  reproduces the rendered track over black, grey 0.5 and white within
+  1 level: 25, 140, 255 in dark appearance and 0, 115, 230 in light].
+- **Shadow.** The shadow is the knob's capsule, blurred by a Gaussian of
+  σ = 5.2 pt, moved 1.2 pt down, filled black at alpha 0.137 and drawn
+  under the knob over the track and the backdrop; it is the same in both
+  appearances [fitted: simulator, a separable Gaussian edge model through
+  the knob's centre reproduces the rendered shadow within 2.1 levels over
+  white and 1 level over grey 0.5 in both appearances: 241 at the knob's
+  top edge and 236 at its bottom edge over white].
+
+#### States
+
+| State | Track | Knob |
+|---|---|---|
+| enabled | fill and unfilled track as above | white, shadowed |
+| tinted | the tint replaces the fill colour only | unchanged |
+| disabled | as enabled, then the whole slider at opacity 0.5 | as enabled, at opacity 0.5 |
+| dragging | as at rest | grown glass lens (below) [chosen] |
+
+- **Tint.** Rendered red tint [chosen: simulator rendering]:
+  (255, 66, 69) in dark appearance and (255, 56, 60) in light.
+- **Disabled.** The enabled slider is composited over the backdrop at
+  opacity 0.5, symbols included [fitted: simulator, within 1 level: over
+  black the knob 128, the dark fill 0, 73, 128 and the dark unfilled track
+  13; over grey 0.5 the knob 192 and the light fill 64, 132, 192]. A
+  disabled slider does not respond to touches [chosen: not observed].
+- **Focus.** Not observed. An implementation that shows a focused state
+  states its own choice.
+
+#### Value motion
+
+The knob's drawn position follows a **display value** `u` instead of the
+value itself. When the value is changed from outside the slider, `u` moves
+to it by the **value spring**, on a unit mass:
+
+| Spring | Natural frequency ω0 | Damping ratio ζ | Stiffness ω0² | Damping 2ζω0 |
+|---|---|---|---|---|
+| value | 15.6 rad/s | 0.79 | 243 | 24.6 |
+
+[fitted: simulator, four changes of 0.6 of the range at 60 frames per
+second, up and down; every fit lies within ω0 15.5 to 15.7 rad/s and
+ζ 0.789 to 0.791, with a residual below 0.6 % of the travel.] From rest,
+`u` covers 20 % of the change after 0.05 s, 53 % after 0.1 s and 93 %
+after 0.2 s, overshoots by 1.8 % at 0.33 s and is within 0.5 % after
+0.5 s.
+
+- **The motion is the slider's own.** A value change made with an
+  animation moves the knob by the value spring whatever the animation
+  asks for: a change requested with a linear 1.5 s animation moved exactly
+  like one with the default animation. A change that explicitly disables
+  animation moves the knob in the next frame [measured: simulator].
+- **Fill.** The fill's end follows the knob's centre, so it moves with `u`
+  [chosen: hidden under the knob].
+- **Knob.** The knob keeps its size and stays opaque white during the
+  motion [measured: simulator, 37 × 24 within 1/3 pt in every frame].
+- **Start.** `u` starts at the value change [chosen: the observed motion
+  began 0.020 to 0.023 s after the change was made, which is the render
+  pipeline]. A change during the motion starts the spring from the current
+  `u` and its velocity [chosen: only changes from rest were observed].
+
+#### Touch
+
+Nothing in this subsection was observed: every value is [chosen],
+awaiting a touch capture. The values make the knob a glass lens while it
+is dragged, which is the part of the slider that shows the material.
+
+- **Press.** A touch that begins in the hit region drives a press
+  progress `p` toward 1 by a spring of ω0 = 28.2 rad/s and ζ = 0.65;
+  release or cancellation drives it toward 0 by a spring of
+  ω0 = 15.8 rad/s and ζ = 0.385 [chosen: the button's press and release
+  springs, §8.1, so that the controls respond alike]. A touch elsewhere on
+  the track does nothing.
+- **Lens.** While pressed, the knob scales about its centre by
+  `1 + 0.35·p`, to 50 × 32.4 pt held, and becomes a clear-family glass
+  element (§5.2) over the track: its white fill and its shadow are drawn
+  at opacity `1 − max(p, 0)` over the glass [chosen: a lens that shows the
+  track and the fill's end through the knob].
+- **Drag.** While pressed, the value follows the touch: it moves by the
+  touch's horizontal offset divided by `W − 37`, clamped to [0, 1] and
+  rounded to the step if there is one. `u` equals the value during the
+  drag, without the value spring, and the value is reported as it changes
+  [chosen].
+- **Release.** At release the value stays where the drag left it, `p`
+  returns to 0 and the knob shrinks back to 37 × 24 [chosen].
+- **Leaving the slider.** The drag continues wherever the touch goes,
+  vertically included, until release; it never cancels [chosen: a drag
+  that has started is the user's intent to set the value].
