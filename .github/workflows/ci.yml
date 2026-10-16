@@ -25,18 +25,20 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [pr-fxc]
+        variant: [pr-dxc19]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - name: Install DirectX Shader Compiler
-        if: matrix.variant != 'pr-fxc'
         uses: tracel-ai/github-actions/install-dxc@295f2fdbae5271f4f8ad56d634e4ff6a95daafc8
+        with:
+          dxc-release: v1.9.2609
+          dxc-filename: dxc_2026_09_29.zip
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: windows-latest
           save-if: false
-      - if: matrix.variant != 'pr' && matrix.variant != 'pr-fxc'
+      - if: matrix.variant != 'pr' && matrix.variant != 'pr-dxc19'
         shell: bash
         run: cp diag/variants/${{ matrix.variant }}/*.wgsl shaders/
       - uses: taiki-e/install-action@nextest
