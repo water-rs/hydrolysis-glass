@@ -51,6 +51,7 @@ use waterui::navigation::{NavigationView, Tab, Tabs};
 use waterui::text::text;
 use waterui::{AnyView, Binding, Color, View, ViewExt as _};
 use waterui_backend_core::widget::{WidgetInteractionState, WidgetTheme as _};
+use waterui_controls::slider::{Slider, slider};
 use waterui_controls::{ButtonStyle, ControlSize, button::button, toggle::toggle};
 
 /// The control size every button in this file takes: the size
@@ -722,4 +723,99 @@ fn a_tap_selects_and_a_press_lenses_the_thumb() {
         1,
         "a touch on the selected segment keeps it"
     );
+}
+
+/// `control` `width` pt wide and as tall as a slider (§8.3) with its
+/// top-left corner at `(x, y)`.
+fn placed(control: Slider, width: f32, x: f32, y: f32) -> impl View {
+    // `Slider::size` is the control size; the frame's is the view's.
+    waterui::ViewExt::size(control.hide_label(), width, 31.0).position_anchor(
+        waterui::layout::UnitPoint::TOP_LEADING,
+        x,
+        y,
+    )
+}
+
+/// A slider 300 pt wide bound to `value`.
+fn slider_at(value: &Binding<f64>, y: f32) -> impl View + use<> {
+    placed(slider("Volume", value), 300.0, 51.0, y)
+}
+
+/// §7 scene 10, the slider scene: 300 pt sliders at values 0, 0.3, 0.5 and
+/// 1, a disabled one at 0.5 and one at 0.5 with a label at each end, over
+/// black, grey 0.5 and white in dark and light appearance. The red-tinted
+/// slider needs a tint the `WidgetTheme` slider hooks do not carry.
+#[test]
+fn slider_scene() {
+    for backdrop in [Backdrop::Black, Backdrop::Grey, Backdrop::White] {
+        for (appearance, name) in [(Appearance::Dark, "dark"), (Appearance::Light, "light")] {
+            let mut app = GlassApp::mount(
+                move || {
+                    let at = |v: f64| Binding::container(v);
+                    absolute((
+                        backdrop_view(backdrop),
+                        slider_at(&at(0.0), 120.0),
+                        slider_at(&at(0.3), 200.0),
+                        slider_at(&at(0.5), 280.0),
+                        slider_at(&at(1.0), 360.0),
+                        placed(slider("Volume", &at(0.5)), 300.0, 51.0, 440.0).disabled(true),
+                        placed(
+                            slider("Volume", &at(0.5))
+                                .min_value_label("Lo")
+                                .max_value_label("Hi"),
+                            300.0,
+                            51.0,
+                            520.0,
+                        ),
+                    ))
+                },
+                theme(appearance),
+            );
+            app.export(&format!("slider_{}_{name}", backdrop.name()));
+        }
+    }
+}
+
+/// §7 scene 11, the slider sequence: a 300 pt slider alone over black in
+/// dark appearance at value 0.2, set to 0.8 at t = 0 and captured at 0,
+/// 0.05, 0.1, 0.2, 0.33 and 0.6 s.
+#[test]
+fn slider_sequence() {
+    let value = Binding::container(0.2f64);
+    let shown = value.clone();
+    let mut app = GlassApp::mount(
+        move || absolute((backdrop_view(Backdrop::Black), slider_at(&shown, 400.0))),
+        theme(Appearance::Dark),
+    );
+    app.settle();
+    value.set(0.8);
+    let mut clock = Duration::ZERO;
+    for (t_ms, name) in [
+        (17, "t0000"),
+        (50, "t0050"),
+        (100, "t0100"),
+        (200, "t0200"),
+        (330, "t0330"),
+        (600, "t0600"),
+    ] {
+        capture_at(&mut app, &mut clock, t_ms, &format!("slider_{name}"));
+    }
+}
+
+/// The knob of a pressed slider is a glass lens (§8.3, Touch): a 300 pt
+/// slider at 0.5 over a split backdrop, touched on its knob and held
+/// until the press has settled, exported for review.
+#[test]
+fn slider_lens_while_pressed() {
+    let value = Binding::container(0.5f64);
+    let mut app = GlassApp::mount(
+        move || absolute((backdrop_view(Backdrop::Split), slider_at(&value, 400.0))),
+        theme(Appearance::Dark),
+    );
+    app.settle();
+    // The knob's centre: the frame's middle at 0.5.
+    app.touch_down(201.0, 415.5);
+    app.advance(Duration::from_millis(600));
+    let image = app.capture_now();
+    assert!(image.save("slider_lens_pressed").is_file());
 }

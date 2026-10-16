@@ -314,46 +314,6 @@ pub fn radio_indicator(
     }
 }
 
-/// The slider track and its filled portion.
-pub fn slider_track(
-    palette: &Palette,
-    draw: &mut Recorder,
-    track: Rect,
-    fill: Rect,
-    state: WidgetInteractionState,
-) {
-    let mut a = palette.track;
-    let mut b = palette.accent;
-    if state.state.contains(InteractionState::DISABLED) {
-        a[3] *= 0.5;
-        b[3] *= 0.5;
-    }
-    draw.fill(rounded(track, capsule(track)), working(a));
-    draw.fill(rounded(fill, capsule(fill)), working(b));
-}
-
-/// The slider handle.
-pub fn slider_thumb(
-    palette: &Palette,
-    draw: &mut Recorder,
-    center: Point,
-    radius: f64,
-    state: WidgetInteractionState,
-) {
-    draw.shadow(
-        rounded(
-            Rect::from_center_size(center, (radius * 2.0, radius * 2.0)),
-            uniform(radius),
-        ),
-        Shadow::new(6.0, working([0.0, 0.0, 0.0, 0.24])).offset(Vec2::new(0.0, 2.0)),
-    );
-    let mut knob = palette.knob;
-    if state.state.contains(InteractionState::DISABLED) {
-        knob = over([0.5, 0.5, 0.5, 0.3], knob);
-    }
-    draw.fill(Circle::new(center, radius), working(knob));
-}
-
 /// The linear progress track, leaving `active_end..` at full track colour.
 pub fn progress_linear_track(
     palette: &Palette,

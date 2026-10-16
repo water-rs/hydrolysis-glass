@@ -20,6 +20,7 @@ use crate::material::recipe::{Appearance, Family, Recipe, Tint, Translucency};
 
 use super::button::{self, BorderShape, Kind, SizeGroup};
 use super::palette::{Palette, Rgba};
+use super::slider::Slider;
 
 /// Continuous corner radius of a sheet's exposed corners, pt.
 pub const SHEET_CORNER_RADIUS: f32 = 38.0;
@@ -39,6 +40,8 @@ pub enum Role {
     Sheet,
     /// A container that fuses its members.
     Container,
+    /// The knob of a pressed slider.
+    Slider,
 }
 
 /// One glass surface the theme placed.
@@ -231,6 +234,39 @@ fn grown(shape: Shape, p: f32) -> Shape {
         radii: shape.radii.map(|r| r * s),
         ..shape
     }
+}
+
+/// The glass lens a pressed slider's knob becomes (§8.3, Touch): a
+/// clear-family capsule over the track, grown about the knob's centre.
+///
+/// The recipe keeps the knob's idle `m`, as a pressed button's does
+/// (§5.5), so the capture class does not change while `p` springs.
+/// `None` while the slider is not pressed or is disabled.
+#[must_use]
+pub fn slider_lens(
+    palette: &Palette,
+    slider: &Slider,
+    translucency: Translucency,
+) -> Option<Surface> {
+    if !slider.is_lens() {
+        return None;
+    }
+    let capsule = |r: KRect| {
+        let r = rect(r);
+        Shape::rounded_rect(r, r.h * 0.5, CornerCurve::Continuous)
+    };
+    let mut e = element(
+        capsule(slider.idle_knob()),
+        Family::Clear,
+        palette.appearance,
+        translucency,
+    );
+    e.shape = capsule(slider.knob());
+    Some(Surface {
+        role: Role::Slider,
+        element: e,
+        wash: None,
+    })
 }
 
 /// A tab bar: a regular capsule spanning its bounds.
