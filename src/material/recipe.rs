@@ -131,8 +131,8 @@ pub fn lobe(d: f32, depth: f32, shift: f32) -> f32 {
     shift * (1.0 - (t * (2.0 - t)).sqrt())
 }
 
-/// §3: the mip level the haze (§4.4) and the ambient sample (§4.7) read
-/// for a radius of `b` capture texels, `max(0, log2(b < 2 ? 1 + b/2 : b))`.
+/// §3: the mip level the ambient sample (§4.7) reads for a radius of `b`
+/// capture texels, `max(0, log2(b < 2 ? 1 + b/2 : b))`.
 /// **[chosen]**
 #[must_use]
 pub fn level(b: f32) -> f32 {
@@ -167,19 +167,43 @@ pub const fn blur_sigma(b: f32) -> f32 {
     BLUR_SIGMA_PER_RADIUS * b.max(0.0)
 }
 
-/// How far, in capture texels, the §3 blurred read of radius `b` reaches.
+/// §4.4: the haze's Gaussian standard deviation per capture texel of haze
+/// radius.
+///
+/// The haze radius is its Gaussian's deviation. The §3 law would make the
+/// haze of radius 8 a deviation of 20 texels, which widens the large
+/// card's red | blue transition well past the observed one; at 1 the
+/// transition stays as close to it as the level read it replaces, and the
+/// read keeps the grid flat (§6). **[chosen]**
+pub const HAZE_SIGMA_PER_RADIUS: f32 = 1.0;
+
+/// §4.4: the standard deviation, in capture texels, of the haze of radius
+/// `r` capture texels.
+#[must_use]
+pub const fn haze_sigma(r: f32) -> f32 {
+    HAZE_SIGMA_PER_RADIUS * r.max(0.0)
+}
+
+/// How far, in capture texels, a blurred read of deviation `sigma`
+/// capture texels reaches.
 ///
 /// Past its sample point it reads [`BLUR_TAPS`] texels of the level
 /// above the one that keeps the deviation at most [`BLUR_LEVEL_SIGMA`] —
 /// at most `2σ / BLUR_LEVEL_SIGMA` capture texels each — and at least
 /// the level-0 grid's.
 #[must_use]
-pub const fn blur_reach(b: f32) -> f32 {
-    let sigma = blur_sigma(b);
+pub const fn sigma_reach(sigma: f32) -> f32 {
     if sigma <= 0.0 {
         return 0.0;
     }
     BLUR_TAPS as f32 * (2.0 * sigma / BLUR_LEVEL_SIGMA).max(1.0)
+}
+
+/// How far, in capture texels, the §3 blurred read of radius `b` reaches:
+/// [`sigma_reach`] of [`blur_sigma`].
+#[must_use]
+pub const fn blur_reach(b: f32) -> f32 {
+    sigma_reach(blur_sigma(b))
 }
 
 /// §3: the smooth step weighting the shadow terms; runs from 1 at
@@ -505,8 +529,8 @@ pub struct Recipe {
     /// `false` gates on `1 − Yg`, toward dark ones (dark appearance).
     /// **[fitted]**
     pub ambient_favours_light: bool,
-    /// §4.4: haze radius, capture texels; the taps' level and
-    /// offset use `level(radius)`. **[measured: 8 regular; the clear
+    /// §4.4: haze radius, capture texels; the haze is the Gaussian of
+    /// [`haze_sigma`] of it. **[measured: 8 regular; the clear
     /// family's translucency ramp is chosen]**
     pub haze_radius: f32,
     /// §4.4: haze weight of `min(C, F)`. **[measured translucency row,

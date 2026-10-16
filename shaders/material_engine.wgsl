@@ -130,8 +130,8 @@ fn glass_work_space(c: vec4<f32>) -> vec3<f32> {
     return srgb_encode_signed(P3_TO_SRGB * glass_unpremultiply(c));
 }
 
-// §3: the mip level the haze and the ambient sample read for a radius of
-// `b` capture texels.
+// §3: the mip level the ambient sample reads for a radius of `b` capture
+// texels.
 fn level_of_radius(b: f32) -> f32 {
     let x = select(b, 1.0 + b * 0.5, b < 2.0);
     return max(log2(x), 0.0);
@@ -279,8 +279,8 @@ fn glass_blur_read(at: vec2<f32>, div: f32, level: f32) -> vec4<f32> {
     return backdrop_sample_level((at * div + backdrop_origin) / backdrop_scale, level);
 }
 
-// §4.3: a tap blurred by a radius of `b` recipe capture texels; `k_tex`
-// carries the radius onto the bound capture's grid (see `tap`).
+// §4.3/§4.4: a tap blurred by a Gaussian of `sigma_recipe` recipe capture
+// texels; `k_tex` carries it onto the bound capture's grid (see `tap`).
 //
 // The reads run straight through, the same for every pixel: both levels
 // are read and mixed by the fraction, the sharp read is the grid at its
@@ -288,8 +288,8 @@ fn glass_blur_read(at: vec2<f32>, div: f32, level: f32) -> vec4<f32> {
 // looped over indexed arrays. With a loop or a branch on the pixel's own
 // values around these reads, D3D12's WARP device rendered wrong texels
 // and stalled for minutes; the branch on the recipe's rim mix does not.
-fn blurred_tap(q: vec2<f32>, b: f32, k_tex: f32) -> vec3<f32> {
-    let sigma = BLUR_SIGMA_PER_RADIUS * b * k_tex;
+fn blurred_tap(q: vec2<f32>, sigma_recipe: f32, k_tex: f32) -> vec3<f32> {
+    let sigma = sigma_recipe * k_tex;
     let t = blur_position(sigma, backdrop_levels - 1.0);
     let level = floor(t);
     let raw = mix(
@@ -324,22 +324,16 @@ fn glass_body(
     let o1 = lobe_at(d, params[0].y, params[0].x);
     var c = blurred_tap(
         p + n * (o1 * u),
-        params[1].w * blur_gain(params[2], params[3], d + o1),
+        BLUR_SIGMA_PER_RADIUS * params[1].w * blur_gain(params[2], params[3], d + o1),
         k_tex,
     );
 
-    // §4.4: the haze — two taps at the level of the haze radius,
-    // diagonally opposite by 0.25·lod capture texels per axis, averaged
-    // and unpremultiplied; runs before the rim-sample mix. The tap
-    // offset is a physical distance the recipe's grid fixes, so it is
-    // the recipe's lod over the recipe's scale — `px.scale` cancels out.
+    // §4.4: the haze — the capture at the pixel blurred by a Gaussian of
+    // the haze radius's deviation, in the working space; runs before the
+    // rim-sample mix.
     let radius = params[4].x;
     if radius > 0.0 {
-        let lod = level_of_radius(radius * k_tex);
-        let t = vec2<f32>(0.25 * level_of_radius(radius) / params[5].z);
-        let raw = 0.5 * (backdrop_sample_level(p + t, lod)
-            + backdrop_sample_level(p - t, lod));
-        let f = glass_work_space(raw);
+        let f = blurred_tap(p, HAZE_SIGMA_PER_RADIUS * radius, k_tex);
         let c1 = params[4].y * min(c, f)
             + params[4].z * max(c, f)
             + (1.0 - params[4].y - params[4].z) * c;
@@ -353,7 +347,7 @@ fn glass_body(
         let o2 = lobe_at(d, params[0].w, params[0].z);
         let s_rim = blurred_tap(
             p + n * (o2 * u),
-            params[1].w * blur_gain(params[2], params[3], d + o2),
+            BLUR_SIGMA_PER_RADIUS * params[1].w * blur_gain(params[2], params[3], d + o2),
             k_tex,
         );
         c = mix(c, s_rim, rim_weight);

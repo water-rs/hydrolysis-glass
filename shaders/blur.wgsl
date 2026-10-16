@@ -17,6 +17,9 @@
 // that splits the pair's weight. The folded grid is BLUR_PAIRS² reads
 // and the same sum.
 const BLUR_SIGMA_PER_RADIUS: f32 = 2.5;
+// §4.4: the haze's Gaussian deviation per capture texel of haze radius
+// [chosen].
+const HAZE_SIGMA_PER_RADIUS: f32 = 1.0;
 const BLUR_TAPS: i32 = 3;
 const BLUR_LEVEL_SIGMA: f32 = 1.5;
 const BLUR_PAIRS: i32 = BLUR_TAPS + 1;

@@ -19,7 +19,7 @@
 use super::geometry::{
     CONTINUOUS_EXPONENT, CornerCurve, Element, SMOOTHING_TO_TAU, STANDALONE_UNION_SMOOTHING,
 };
-use super::recipe::{Recipe, blur_reach, level};
+use super::recipe::{Recipe, blur_reach, haze_sigma, sigma_reach};
 use bytemuck::{Pod, Zeroable};
 use wgpu::util::DeviceExt;
 
@@ -214,7 +214,7 @@ struct CaptureParams {
 struct MaterialUniforms {
     /// Scene size pt, px per pt, the group capture's max lod.
     scene: [f32; 4],
-    /// The display peak, the capture texel's size in pt along x and y, -.
+    /// The display peak, -, -, -.
     misc: [f32; 4],
     /// Region the material pass renders, pt: min.xy, size.xy.
     region: [f32; 4],
@@ -554,9 +554,6 @@ struct Capture {
     /// All-mips view for the material pass.
     view: wgpu::TextureView,
     max_lod: f32,
-    /// One capture texel in pt along x and y: `region_pt` over the
-    /// capture's `ceil(region_pt · px_per_pt · scale)` texels per axis.
-    texel_pt: [f32; 2],
     /// One `CaptureParams` buffer per pass step: step 0 downsamples the
     /// composite into level 0, the rest box-reduce the previous level.
     params: Vec<wgpu::Buffer>,
@@ -610,8 +607,8 @@ struct GroupGpu {
 /// `1/(capture_scale · px_per_pt)` pt — the ambient sample's own radius
 /// for the ambient tap, the §3 Gaussian's tap grid
 /// (`blur_reach(blur_radius · max blur gain)`) for the refraction taps —
-/// and the haze taps (`haze_radius` +
-/// `0.25·level(haze_radius)` texels × `1/(capture_scale · px_per_pt)` pt).
+/// and the haze's Gaussian (`sigma_reach(haze_sigma(haze_radius))`
+/// texels × `1/(capture_scale · px_per_pt)` pt).
 ///
 /// `1/(capture_scale · px_per_pt)` bounds the level-0 texel (`region_pt` over
 /// `ceil(region_pt · px_per_pt · scale)` texels); mip texels can be slightly larger
@@ -637,9 +634,9 @@ fn group_region(group: &Group, scene: &Scene) -> [u32; 4] {
         let refraction_blur_pt =
             blur_reach(r.blur_radius * r.blur_gains.iter().copied().fold(0.0_f32, f32::max))
                 * texel_pt;
-        // §4.4's taps: the haze radius's footprint plus their
-        // ±0.25·level(radius) texel offset.
-        let haze_blur_pt = (0.25f32.mul_add(level(r.haze_radius), r.haze_radius)) * texel_pt;
+        // §4.4: the haze is a Gaussian of the haze radius's deviation at
+        // the pixel.
+        let haze_blur_pt = sigma_reach(haze_sigma(r.haze_radius)) * texel_pt;
         reach = reach
             .max(r.exterior_span)
             .max(2.0f32.mul_add(r.cast_falloff, off))
@@ -1170,7 +1167,7 @@ impl GlassRenderer {
             Self::fullscreen_pass(
                 encoder,
                 view,
-                &self.blit,
+                &self.downsample,
                 bg,
                 wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
                 Some([x[0], y[0], x[1] - x[0], y[1] - y[0]]),
@@ -1294,7 +1291,6 @@ impl GlassRenderer {
         Capture {
             view,
             max_lod: (levels - 1) as f32,
-            texel_pt: [region_pt[2] / size[0] as f32, region_pt[3] / size[1] as f32],
             params,
             targets,
             chain_bgs,
@@ -1534,7 +1530,7 @@ impl GlassRenderer {
                 None,
             );
         }
-        let (max_lod, texel_pt) = (cap.max_lod, cap.texel_pt);
+        let max_lod = cap.max_lod;
 
         // Field pass over the region.
         Self::fullscreen_pass(
@@ -1560,7 +1556,7 @@ impl GlassRenderer {
             0,
             bytemuck::bytes_of(&MaterialUniforms {
                 scene: [scene.size_pt[0], scene.size_pt[1], scene.px_per_pt, max_lod],
-                misc: [scene.display_peak, texel_pt[0], texel_pt[1], 0.0],
+                misc: [scene.display_peak, 0.0, 0.0, 0.0],
                 region: region_pt,
                 origin: [region[0] as f32, region[1] as f32, 0.0, 0.0],
             }),
@@ -1866,9 +1862,12 @@ mod tests {
     /// covers every tap the shaders take.
     #[test]
     fn shaders_declare_the_blur_law() {
-        use crate::material::recipe::{BLUR_LEVEL_SIGMA, BLUR_SIGMA_PER_RADIUS, BLUR_TAPS};
+        use crate::material::recipe::{
+            BLUR_LEVEL_SIGMA, BLUR_SIGMA_PER_RADIUS, BLUR_TAPS, HAZE_SIGMA_PER_RADIUS,
+        };
         for line in [
             format!("const BLUR_SIGMA_PER_RADIUS: f32 = {BLUR_SIGMA_PER_RADIUS:?};"),
+            format!("const HAZE_SIGMA_PER_RADIUS: f32 = {HAZE_SIGMA_PER_RADIUS:?};"),
             format!("const BLUR_TAPS: i32 = {BLUR_TAPS};"),
             format!("const BLUR_LEVEL_SIGMA: f32 = {BLUR_LEVEL_SIGMA:?};"),
         ] {
