@@ -139,12 +139,16 @@ pub fn level(b: f32) -> f32 {
     (if b < 2.0 { 1.0 + b / 2.0 } else { b }).log2().max(0.0)
 }
 
-/// §3: the Gaussian's standard deviation per capture texel of blur radius.
+/// §3: the Gaussian's standard deviation, pt, per unit of blur radius.
 ///
-/// A radius `b` blurs by `2.5·b` capture texels. **[fitted: the clear
-/// card at radii 0, 0.375 and 0.75 (§6); the regular family's radii up
-/// to 5 extend it — chosen]**
-pub const BLUR_SIGMA_PER_RADIUS: f32 = 2.5;
+/// A radius `b` blurs by `5/3·b` pt — `2.5·b` texels of the clear card's
+/// capture at scale 0.5 and 3 px/pt, where the law was fitted. The
+/// deviation is a length on the backdrop: the capture scale sets only the
+/// resolution the read realizes it at. **[fitted: the clear card at radii
+/// 0, 0.375 and 0.75 (§6); kept in pt at other capture scales, fitted on
+/// the black | white edge through the large card captured at 0.25 (§6);
+/// the regular family's radii up to 5 extend it — chosen]**
+pub const BLUR_SIGMA_PT_PER_RADIUS: f32 = 5.0 / 3.0;
 
 /// Half-width of the tap grid that realizes the §3 Gaussian.
 ///
@@ -160,50 +164,43 @@ pub const BLUR_TAPS: u8 = 3;
 /// **[chosen]**
 pub const BLUR_LEVEL_SIGMA: f32 = 1.5;
 
-/// §3: the standard deviation, in capture texels, of the Gaussian a blur
-/// radius of `b` capture texels makes.
+/// §3: the standard deviation, pt, of the Gaussian a blur radius of `b`
+/// makes.
 #[must_use]
 pub const fn blur_sigma(b: f32) -> f32 {
-    BLUR_SIGMA_PER_RADIUS * b.max(0.0)
+    BLUR_SIGMA_PT_PER_RADIUS * b.max(0.0)
 }
 
-/// §4.4: the haze's Gaussian standard deviation per capture texel of haze
+/// §4.4: the haze's Gaussian standard deviation, pt, per unit of haze
 /// radius.
 ///
-/// The haze radius is its Gaussian's deviation. The §3 law would make the
-/// haze of radius 8 a deviation of 20 texels, which widens the large
-/// card's red | blue transition well past the observed one; at 1 the
-/// transition stays as close to it as the level read it replaces, and the
-/// read keeps the grid flat (§6). **[chosen]**
-pub const HAZE_SIGMA_PER_RADIUS: f32 = 1.0;
+/// Like the §3 deviation it is a length on the backdrop, independent of
+/// the capture scale: at 2 pt per unit the haze of radius 8 reproduces
+/// the black | white edge through the 60 pt circle and the 160 × 80 pt
+/// capsule, captured at 0.5, and through the large card and the circle in
+/// its container, captured at 0.25 (§6). A deviation counted in capture
+/// texels halves on the finer capture and cannot fit both. **[fitted]**
+pub const HAZE_SIGMA_PT_PER_RADIUS: f32 = 2.0;
 
-/// §4.4: the standard deviation, in capture texels, of the haze of radius
-/// `r` capture texels.
+/// §4.4: the standard deviation, pt, of the haze of radius `r`.
 #[must_use]
 pub const fn haze_sigma(r: f32) -> f32 {
-    HAZE_SIGMA_PER_RADIUS * r.max(0.0)
+    HAZE_SIGMA_PT_PER_RADIUS * r.max(0.0)
 }
 
-/// How far, in capture texels, a blurred read of deviation `sigma`
-/// capture texels reaches.
+/// How far a blurred read of deviation `sigma` reaches on a capture whose
+/// level-0 texel is `texel` long, in the unit of both.
 ///
 /// Past its sample point it reads [`BLUR_TAPS`] texels of the level
-/// above the one that keeps the deviation at most [`BLUR_LEVEL_SIGMA`] —
-/// at most `2σ / BLUR_LEVEL_SIGMA` capture texels each — and at least
-/// the level-0 grid's.
+/// above the one that keeps the deviation at most [`BLUR_LEVEL_SIGMA`] of
+/// its texels — at most `2σ / BLUR_LEVEL_SIGMA` each — and at least the
+/// level-0 grid's.
 #[must_use]
-pub const fn sigma_reach(sigma: f32) -> f32 {
+pub const fn sigma_reach(sigma: f32, texel: f32) -> f32 {
     if sigma <= 0.0 {
         return 0.0;
     }
-    BLUR_TAPS as f32 * (2.0 * sigma / BLUR_LEVEL_SIGMA).max(1.0)
-}
-
-/// How far, in capture texels, the §3 blurred read of radius `b` reaches:
-/// [`sigma_reach`] of [`blur_sigma`].
-#[must_use]
-pub const fn blur_reach(b: f32) -> f32 {
-    sigma_reach(blur_sigma(b))
+    BLUR_TAPS as f32 * (2.0 * sigma / BLUR_LEVEL_SIGMA).max(texel)
 }
 
 /// §3: the smooth step weighting the shadow terms; runs from 1 at
@@ -507,8 +504,8 @@ pub struct Recipe {
     /// radius 0 a texel that is the mean of the device pixels it covers
     /// reproduces the clear card's interior (§4.1, §6)]**
     pub capture_scale: f32,
-    /// §4.3: base blur radius, capture texels; the samples blur by the
-    /// Gaussian of [`blur_sigma`] of it times the gain (§3). **[measured:
+    /// §4.3: base blur radius; the samples blur by the Gaussian of
+    /// [`blur_sigma`] (pt) of it times the gain (§3). **[measured:
     /// 5 regular, 0.75 clear; the clear family's translucency row is
     /// linear]**
     pub blur_radius: f32,
@@ -567,8 +564,8 @@ pub struct Recipe {
     /// `false` gates on `1 − Yg`, toward dark ones (dark appearance).
     /// **[fitted]**
     pub ambient_favours_light: bool,
-    /// §4.4: haze radius, capture texels; the haze is the Gaussian of
-    /// [`haze_sigma`] of it. **[measured: 8 regular; the clear
+    /// §4.4: haze radius; the haze is the Gaussian of [`haze_sigma`]
+    /// (pt) of it. **[measured: 8 regular; the clear
     /// family's translucency ramp is chosen]**
     pub haze_radius: f32,
     /// §4.4: haze weight of `min(C, F)`. **[measured translucency row,
@@ -711,7 +708,7 @@ impl Recipe {
         piecewise(&self.blur_depths, &self.blur_gains, d)
     }
 
-    /// §4.3: the effective blur radius at depth `d`, capture texels.
+    /// §4.3: the effective blur radius at depth `d`.
     #[must_use]
     pub fn blur_radius_at(&self, d: f32) -> f32 {
         self.blur_radius * self.blur_gain(d)
@@ -1386,13 +1383,17 @@ mod tests {
         assert!((level(4.0) - 2.0).abs() < 1e-6);
         // Small radii take the 1 + b/2 branch.
         assert!((level(1.0) - 1.5f32.log2()).abs() < 1e-6);
-        // §3 blur: σ = 2.5·b, the clear card's 0.75 at 1.875 texels; the
-        // read reaches the level-0 grid for small σ and 4σ above it.
+        // §3 blur: σ = 5/3·b pt, the clear card's 0.75 at 1.25 pt — 1.875
+        // texels of its 2/3 pt texel; the read reaches the level-0 grid
+        // for small σ and 4σ above it.
+        let texel = 2.0 / 3.0;
         assert_eq!(blur_sigma(0.0), 0.0);
-        assert!((blur_sigma(0.75) - 1.875).abs() < 1e-6);
-        assert_eq!(blur_reach(0.0), 0.0);
-        assert!((blur_reach(0.1) - 3.0).abs() < 1e-6);
-        assert!((blur_reach(5.0) - 50.0).abs() < 1e-5);
+        assert!((blur_sigma(0.75) - 1.25).abs() < 1e-6);
+        assert_eq!(sigma_reach(blur_sigma(0.0), texel), 0.0);
+        assert!((sigma_reach(blur_sigma(0.1), texel) - 2.0).abs() < 1e-6);
+        assert!((sigma_reach(blur_sigma(5.0), texel) - 100.0 / 3.0).abs() < 1e-4);
+        // §4.4 haze: σ = 2·r pt.
+        assert!((haze_sigma(8.0) - 16.0).abs() < 1e-6);
         // §3 falloff: 1 at −2, 0 at 2, 0.5 at 0.
         assert!((falloff(-2.0) - 1.0).abs() < 2e-3);
         assert!(falloff(2.0).abs() < 2e-3);

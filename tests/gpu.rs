@@ -94,6 +94,7 @@ fn mixed_container() {
         Backdrop::Grey,
         Backdrop::White,
         Backdrop::Split,
+        Backdrop::Edge,
     ] {
         h.export(
             backdrop,
@@ -101,6 +102,26 @@ fn mixed_container() {
             &format!("mixed_container_{}_dark", backdrop.name()),
         );
     }
+}
+
+#[test]
+fn capsule_over_edge() {
+    let mut h = Harness::new();
+    // §7, scene 7: a regular 160 × 80 pt capsule standing alone with its
+    // centre on the black | white edge — a capture at 0.5 with a nonzero
+    // interior blur, beside the mixed container's circle (0.5, none) and
+    // card (0.25).
+    let scene = Scene::new(
+        SCENE_PT,
+        PX_PER_PT,
+        vec![Group::single(element(
+            capsule(121.0, 397.0, 160.0, 80.0),
+            Family::Regular,
+            Appearance::Dark,
+            Translucency::default(),
+        ))],
+    );
+    h.export(Backdrop::Edge, &scene, "capsule_edge_dark");
 }
 
 #[test]

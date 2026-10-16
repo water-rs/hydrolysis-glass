@@ -36,7 +36,7 @@ struct Recipe {
 struct MaterialUniforms {
     // scene width pt, scene height pt, px per pt, capture max lod
     scene: vec4<f32>,
-    // display peak, -, -, -
+    // display peak, the capture's texels per pt, -, -
     misc: vec4<f32>,
     // region min pt, region size pt: the pass runs on a patch covering the
     // group's bounds plus reach, and the capture covers the same rect
@@ -138,9 +138,11 @@ fn blur_read(at: vec2<f32>, level: f32) -> vec4<f32> {
 }
 
 // §4.1/§4.3/§4.4: the shared capture at `q_pt`, blurred by a Gaussian of
-// `sigma` capture texels. The reads run straight through, like the
-// engine's `blurred_tap`.
-fn sample_blurred(q_pt: vec2<f32>, sigma: f32) -> vec4<f32> {
+// `sigma_pt` pt — `sigma_pt` times the capture's texels per pt in its
+// texels. The reads run straight through, like the engine's
+// `blurred_tap`.
+fn sample_blurred(q_pt: vec2<f32>, sigma_pt: f32) -> vec4<f32> {
+    let sigma = sigma_pt * uni.misc.y;
     let uv = (q_pt - uni.region.xy) / uni.region.zw;
     let t = blur_position(sigma, uni.scene.w);
     let level = floor(t);
@@ -259,7 +261,7 @@ fn glass_body(
     let o1 = lobe_at(d, r.shifts.y, r.shifts.x);
     var C = unpremultiply(sample_blurred(
         p + n * o1,
-        BLUR_SIGMA_PER_RADIUS * blur_radius_at(r, d + o1),
+        BLUR_SIGMA_PT_PER_RADIUS * blur_radius_at(r, d + o1),
     ));
 
     // §4.4: the haze — the capture at the pixel blurred by a Gaussian of
@@ -267,7 +269,7 @@ fn glass_body(
     // rim-sample mix.
     let radius = r.haze.x;
     if radius > 0.0 {
-        let F = unpremultiply(sample_blurred(p, HAZE_SIGMA_PER_RADIUS * radius));
+        let F = unpremultiply(sample_blurred(p, HAZE_SIGMA_PT_PER_RADIUS * radius));
         let c1 = r.haze.y * min(C, F)
             + r.haze.z * max(C, F)
             + (1.0 - r.haze.y - r.haze.z) * C;
@@ -280,7 +282,7 @@ fn glass_body(
         let o2 = lobe_at(d, r.shifts.w, r.shifts.z);
         let s_rim = unpremultiply(sample_blurred(
             p + n * o2,
-            BLUR_SIGMA_PER_RADIUS * blur_radius_at(r, d + o2),
+            BLUR_SIGMA_PT_PER_RADIUS * blur_radius_at(r, d + o2),
         ));
         let tw = sat((d - r.rim.x) / (r.rim.y - r.rim.x));
         C = mix(C, s_rim, r.rim.z * tw);
