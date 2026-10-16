@@ -1,89 +1,55 @@
+# diag/27-windows-hang only: never merged.
 name: CI
 
 on:
-  push:
-    branches: [dev, main]
   pull_request:
 
 permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: diag-${{ github.ref }}
   cancel-in-progress: true
 
 env:
   CARGO_INCREMENTAL: "0"
   CARGO_PROFILE_DEV_DEBUG: "0"
   CARGO_PROFILE_TEST_DEBUG: "0"
-  CARGO_TERM_COLOR: always
+  CARGO_TERM_COLOR: never
 
 jobs:
-  check:
-    name: Check / ${{ matrix.os }}
-    runs-on: ${{ matrix.os }}
+  diag:
+    name: Diag / ${{ matrix.variant }}
+    runs-on: windows-latest
+    timeout-minutes: 50
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        variant: [pr, engine-mip]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: clippy, rustfmt
-      - name: Install Linux dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libfontconfig1-dev libva-dev libpipewire-0.3-dev libegl-dev libgbm-dev libwayland-dev libxkbcommon-dev libvulkan-dev mesa-vulkan-drivers
       - name: Install DirectX Shader Compiler
-        if: runner.os == 'Windows'
         uses: tracel-ai/github-actions/install-dxc@295f2fdbae5271f4f8ad56d634e4ff6a95daafc8
       - uses: Swatinem/rust-cache@v2
-      - if: runner.os == 'Linux'
-        run: cargo fmt --all -- --check
-      - run: cargo clippy --locked --all-targets -- -D warnings
-      - uses: taiki-e/install-action@nextest
-      - run: cargo nextest run --locked
-      - run: cargo test --locked --doc
-
-  msrv:
-    name: MSRV
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      # The floor is whatever `Cargo.toml` declares, read here rather than
-      # written twice: a hardcoded version in CI drifts from the manifest and
-      # then gates a number nobody declared.
-      - name: Read rust-version from Cargo.toml
-        id: msrv
-        shell: bash
-        run: |
-          set -euo pipefail
-          version="$(sed -n 's/^rust-version = "\(.*\)"/\1/p' Cargo.toml)"
-          if [ -z "$version" ]; then
-            echo "::error::Cargo.toml declares no rust-version"
-            exit 1
-          fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          # Installing a toolchain is not building with it: the action only
-          # sets the rustup default, and this repository's
-          # `rust-toolchain.toml` overrides the default for every cargo
-          # invocation inside the checkout. `RUSTUP_TOOLCHAIN` is the one
-          # override that beats the file.
-          echo "RUSTUP_TOOLCHAIN=$version" >> "$GITHUB_ENV"
-      - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: ${{ steps.msrv.outputs.version }}
-      - name: Install Linux dependencies
+          shared-key: windows-latest
+          save-if: false
+      - if: matrix.variant == 'engine-mip'
+        shell: bash
+        run: cp diag/material_engine_dev.wgsl shaders/material_engine.wgsl
+      - uses: taiki-e/install-action@nextest
+      - name: Where dxcompiler.dll is
+        shell: pwsh
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libfontconfig1-dev libva-dev libpipewire-0.3-dev libegl-dev libgbm-dev libwayland-dev libxkbcommon-dev libvulkan-dev mesa-vulkan-drivers
-      - uses: Swatinem/rust-cache@v2
-      # Proof in the log that the floor is what compiled, so a later change to
-      # the pin or the action cannot quietly make this a second stable run.
-      - name: Show the toolchain this job builds with
-        run: rustc --version && cargo --version
-      # The shipped artifact is what MSRV bounds: dev-dependencies may
-      # legitimately require newer, so check the package targets only.
-      - run: cargo check --locked
+          Get-Command dxcompiler.dll -ErrorAction SilentlyContinue | Format-List
+          Get-CimInstance Win32_VideoController | Format-List Name,DriverVersion,AdapterCompatibility
+          Get-CimInstance Win32_Processor | Format-List Name,NumberOfCores,NumberOfLogicalProcessors
+      - run: cargo nextest run --locked --no-run --test hydrolysis --test gpu
+      - name: Hydrolysis tests, one at a time
+        env:
+          RUST_LOG: warn,wgpu_hal=info,wgpu_core=warn,hydrolysis=info
+        run: cargo nextest run --locked --test hydrolysis --no-fail-fast -j 1 --no-capture
+      - name: Standalone tests, one at a time
+        if: always()
+        run: cargo nextest run --locked --test gpu --no-fail-fast -j 1

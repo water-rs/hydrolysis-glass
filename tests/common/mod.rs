@@ -465,6 +465,7 @@ pub struct GlassApp {
     /// The virtual clock the pump advances, so a scene's animations
     /// resolve deterministically rather than on wall time.
     at: Instant,
+    frames: u32,
 }
 
 impl GlassApp {
@@ -487,6 +488,8 @@ impl GlassApp {
     )]
     pub fn sized(view: impl View + Clone + 'static, glass: Glass, size_pt: [f32; 2]) -> Self {
         let content = AnyViewBuilder::new(move || AnyView::new(view.clone()));
+        let started = Instant::now();
+        tracing::warn!("diag: mount begins");
         let runtime = HeadlessRuntime::new_for_tests(
             Environment::new(),
             content,
@@ -495,16 +498,29 @@ impl GlassApp {
             glass,
         )
         .with_scale_factor(f64::from(PX_PER_PT));
+        tracing::warn!(ms = started.elapsed().as_millis(), "diag: mounted");
         Self {
             runtime,
             at: Instant::now(),
+            frames: 0,
         }
     }
 
     /// Pumps one frame, capturing it when `capture`.
     fn pump(&mut self, capture: bool) -> Option<HeadlessSnapshot> {
         self.at += VIRTUAL_FRAME;
-        self.runtime.pump_at(capture, self.at).snapshot
+        self.frames += 1;
+        let started = Instant::now();
+        tracing::warn!(frame = self.frames, capture, "diag: pump begins");
+        let snapshot = self.runtime.pump_at(capture, self.at).snapshot;
+        tracing::warn!(
+            frame = self.frames,
+            capture,
+            ms = started.elapsed().as_millis(),
+            settled = self.runtime.is_settled(),
+            "diag: pump ends"
+        );
+        snapshot
     }
 
     /// Pumps until the runtime reports quiescence.
