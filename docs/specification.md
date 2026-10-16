@@ -103,8 +103,8 @@ specification extends the law to them [chosen]. Reading the capture's mip
 chain at the level of `b` instead keeps up to 2.3 times the measured
 contrast at `b = 0.75` (§6).
 
-The haze (§4.4) and the ambient sample (§4.7) read the capture at the level
-of their radius on its mip chain of 2 × 2 means [chosen]:
+The ambient sample (§4.7) reads the capture at the level of its radius on
+its mip chain of 2 × 2 means [chosen]:
 
 ```
 level(b) = max(0, log2(b < 2 ? 1 + b/2 : b))
@@ -172,9 +172,14 @@ consecutive depths make a step [chosen].
 ### 4.4 Haze
 
 The primary sample is joined by the **haze** `F`, a blurred estimate of the
-backdrop: two samples at the level `L` of the **haze radius**, offset
-diagonally in opposite directions by `0.25·L` capture texels on each axis,
-averaged and unpremultiplied. Then [chosen]:
+backdrop: the capture at the pixel, blurred by a Gaussian whose standard
+deviation in capture texels is the **haze radius**, and unpremultiplied
+[chosen]. The §3 law would give the radius 8 of §5.1 a deviation of 20
+texels, which widens the large card's red | blue transition well past the
+observed one; at a deviation of 8 the transition is as close to the
+observation as with a read of the level of the radius. That level read is
+not used: the 2 × 2 means at level 3 alias the grid's 24 px period into a
+32 pt ripple through the large card (§6). Then [chosen]:
 
 ```
 C1 = a · min(C, F) + b · max(C, F) + (1 − a − b) · C
@@ -586,6 +591,21 @@ along a row, at translucency 0, 0.25 and 0.5 (blur radius 0, 0.375, 0.75).
 
 The last column reads the capture's mip chain at `level(b)` instead; at
 radius 0.75 it keeps 1.7 to 2.3 times the measured contrast.
+
+**Large regular card over the grid** (§4.1, §4.4; dark and light appearance,
+translucency 0.5): the luma standard deviation along the card's centre row,
+`x` from 20 pt inside either end. The grid is not visible through the card,
+and the observed card is flat.
+
+| Appearance | Model | Measured |
+|---|---|---|
+| dark | 0.00 | 0.00 |
+| light | 0.00 | 0.00 |
+
+A capture texel that weights the device pixels under it unequally (§4.1)
+gives 0.63 dark and 0.90 light, a bowl across the whole card; a haze read
+at the level of its radius (§4.4) leaves a 32 pt ripple of 0.26 dark and
+0.48 light.
 
 ## 7. Verification scenes
 
