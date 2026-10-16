@@ -17,6 +17,7 @@ pub mod chrome;
 pub mod materials;
 pub mod palette;
 pub mod surfaces;
+pub mod switch;
 
 use core::time::Duration;
 
@@ -397,12 +398,19 @@ impl WidgetTheme for Glass {
     fn toggle_metrics(&self, style: ToggleStyle) -> ToggleMetrics {
         match style {
             ToggleStyle::Checkbox => ToggleMetrics::new(22.0, 22.0, 10.0),
-            _ => ToggleMetrics::new(51.0, 31.0, 12.0),
+            // The frame is 61 x 28 at every control size (§8.2); the track
+            // overhangs it and takes no layout space. The specification
+            // gives no gap between a label and the track, so none is kept.
+            _ => ToggleMetrics::new(
+                f64::from(switch::FRAME[0]),
+                f64::from(switch::FRAME[1]),
+                0.0,
+            ),
         }
     }
 
     fn toggle_value_animation(&self) -> Animation {
-        Animation::ease_out(PRESS_DURATION)
+        switch::TOGGLE_SPRING.animation()
     }
 
     fn draw_toggle_switch(
@@ -410,28 +418,18 @@ impl WidgetTheme for Glass {
         draw: &mut Recorder,
         bounds: Rect,
         progress: f32,
-        _selected: bool,
+        selected: bool,
         state: WidgetInteractionState,
     ) {
-        chrome::toggle_switch(&self.palette, draw, bounds, progress, state);
-    }
-
-    fn draw_toggle_switch_state_layer(
-        &self,
-        draw: &mut Recorder,
-        bounds: Rect,
-        _progress: f32,
-        _selected: bool,
-        state: WidgetInteractionState,
-    ) {
-        let r = bounds.height() * 0.5;
-        chrome::state_layer(
-            &self.palette,
-            draw,
-            bounds,
-            RoundedRectRadii::from_single_radius(r),
-            state,
-        );
+        let switch = switch::Switch {
+            appearance: self.palette.appearance,
+            tint: None,
+            progress,
+            selected,
+            press: surfaces::press_progress(state, self.interaction_motion().pressed_opacity),
+            enabled: !state.state.contains(InteractionState::DISABLED),
+        };
+        switch::record(draw, surfaces::rect(bounds), &switch, self.translucency);
     }
 
     fn draw_toggle_checkbox(
