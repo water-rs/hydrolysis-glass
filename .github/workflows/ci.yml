@@ -25,20 +25,26 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [probe]
+        variant: [pr-fxc]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - name: Install DirectX Shader Compiler
+        if: matrix.variant != 'pr-fxc'
         uses: tracel-ai/github-actions/install-dxc@295f2fdbae5271f4f8ad56d634e4ff6a95daafc8
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: windows-latest
           save-if: false
-      - if: matrix.variant != 'pr'
+      - if: matrix.variant != 'pr' && matrix.variant != 'pr-fxc'
         shell: bash
         run: cp diag/variants/${{ matrix.variant }}/*.wgsl shaders/
       - uses: taiki-e/install-action@nextest
+      - name: Visible DXC
+        shell: pwsh
+        run: |
+          Get-Command dxcompiler.dll -ErrorAction SilentlyContinue | Format-List Source
+          Write-Output "diag: dxc lookup done"
       - run: cargo nextest run --locked --no-run --test hydrolysis
       - name: Engine tests, one at a time
         env:
