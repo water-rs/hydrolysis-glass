@@ -51,7 +51,7 @@ use waterui::navigation::{NavigationView, Tab, Tabs};
 use waterui::text::text;
 use waterui::{AnyView, Binding, Color, View, ViewExt as _};
 use waterui_backend_core::widget::{WidgetInteractionState, WidgetTheme as _};
-use waterui_controls::{ButtonStyle, ControlSize, button::button};
+use waterui_controls::{ButtonStyle, ControlSize, button::button, toggle::toggle};
 
 /// The control size every button in this file takes: the size
 /// `draw_button_chrome` resolves the surface at, so the standalone
@@ -413,7 +413,7 @@ fn text_button(
     size: ControlSize,
     x: f32,
     y: f32,
-) -> impl View + use<> {
+) -> impl View {
     button(label).style(style).size(size).position_anchor(
         waterui::layout::UnitPoint::TOP_LEADING,
         x,
@@ -485,28 +485,109 @@ fn press_sequence() {
     let centre = (AT[0] + 33.0, AT[1] + 17.165);
     let mut clock = Duration::ZERO;
     app.touch_down(centre.0, centre.1);
-    capture_at(&mut app, &mut clock, "press", 17, "t0000");
-    capture_at(&mut app, &mut clock, "press", 147, "t0147");
-    capture_at(&mut app, &mut clock, "press", 500, "t0500");
+    capture_at(&mut app, &mut clock, 17, "press_t0000");
+    capture_at(&mut app, &mut clock, 147, "press_t0147");
+    capture_at(&mut app, &mut clock, 500, "press_t0500");
     app.advance(Duration::from_millis(1000).saturating_sub(clock));
     clock = Duration::from_millis(1000);
     app.touch_up(centre.0, centre.1);
-    capture_at(&mut app, &mut clock, "press", 1215, "t1215");
-    capture_at(&mut app, &mut clock, "press", 1430, "t1430");
-    capture_at(&mut app, &mut clock, "press", 2000, "t2000");
+    capture_at(&mut app, &mut clock, 1215, "press_t1215");
+    capture_at(&mut app, &mut clock, 1430, "press_t1430");
+    capture_at(&mut app, &mut clock, 2000, "press_t2000");
 }
 
-/// Advances the mounted app to `t_ms` since the start of the sequence and
-/// exports that frame as `<scene>_<name>`; the capturing pump itself takes
-/// the last frame of the interval.
-fn capture_at(app: &mut GlassApp, clock: &mut Duration, scene: &str, t_ms: u64, name: &str) {
+/// Advances the mounted app to `t_ms` since the touch and exports that
+/// frame; the capturing pump itself takes the last frame of the interval.
+fn capture_at(app: &mut GlassApp, clock: &mut Duration, t_ms: u64, name: &str) {
     const FRAME: Duration = Duration::from_micros(16_667);
     let target = Duration::from_millis(t_ms);
     app.advance(target.saturating_sub(*clock + FRAME));
     let image = app.capture_now();
     *clock = target;
-    let path = image.save(&format!("{scene}_{name}"));
-    assert!(path.is_file(), "{scene}_{name}: PNG written");
+    let path = image.save(name);
+    assert!(path.is_file(), "{name}: PNG written");
+}
+
+/// §7, scene 8: the switch scene, the part a view tree can express through
+/// the theme's hooks. Over black, grey 0.5 and white in both appearances:
+/// an off and an on switch, a disabled off and a disabled on switch, and a
+/// "Label" switch 300 pt wide. The tinted switches need a tint the
+/// `WidgetTheme` toggle hooks do not carry.
+#[test]
+fn switch_scene() {
+    for backdrop in [Backdrop::Black, Backdrop::Grey, Backdrop::White] {
+        for (appearance, name) in [(Appearance::Dark, "dark"), (Appearance::Light, "light")] {
+            let mut app = GlassApp::mount(
+                move || {
+                    absolute((
+                        backdrop_view(backdrop),
+                        toggle("", &Binding::bool(false))
+                            .switch()
+                            .hide_label()
+                            .position_anchor(waterui::layout::UnitPoint::TOP_LEADING, 60.0, 100.0),
+                        toggle("", &Binding::bool(true))
+                            .switch()
+                            .hide_label()
+                            .position_anchor(waterui::layout::UnitPoint::TOP_LEADING, 200.0, 100.0),
+                        toggle("", &Binding::bool(false))
+                            .switch()
+                            .hide_label()
+                            .disabled(true)
+                            .position_anchor(waterui::layout::UnitPoint::TOP_LEADING, 60.0, 200.0),
+                        toggle("", &Binding::bool(true))
+                            .switch()
+                            .hide_label()
+                            .disabled(true)
+                            .position_anchor(waterui::layout::UnitPoint::TOP_LEADING, 200.0, 200.0),
+                        toggle("Label", &Binding::bool(true))
+                            .switch()
+                            .width(300.0)
+                            .position_anchor(waterui::layout::UnitPoint::TOP_LEADING, 51.0, 300.0),
+                    ))
+                },
+                theme(appearance),
+            );
+            app.export(&format!("switch_{}_{name}", backdrop.name()));
+        }
+    }
+}
+
+/// §7, scene 9: the toggle sequence. An off switch alone over black in
+/// dark appearance, switched on at t = 0 and off at t = 1 s, captured at
+/// 0, 0.05, 0.1, 0.15, 0.3, 1.1 and 1.5 s.
+#[test]
+fn toggle_sequence() {
+    const AT: [f32; 2] = [170.0, 400.0];
+    let value = Binding::bool(false);
+    let mut app = GlassApp::mount(
+        {
+            let value = value.clone();
+            move || {
+                absolute((
+                    backdrop_view(Backdrop::Black),
+                    toggle("", &value).switch().hide_label().position_anchor(
+                        waterui::layout::UnitPoint::TOP_LEADING,
+                        AT[0],
+                        AT[1],
+                    ),
+                ))
+            }
+        },
+        theme(Appearance::Dark),
+    );
+    app.settle();
+    let mut clock = Duration::ZERO;
+    value.set(true);
+    capture_at(&mut app, &mut clock, 17, "toggle_t0000");
+    capture_at(&mut app, &mut clock, 50, "toggle_t0050");
+    capture_at(&mut app, &mut clock, 100, "toggle_t0100");
+    capture_at(&mut app, &mut clock, 150, "toggle_t0150");
+    capture_at(&mut app, &mut clock, 300, "toggle_t0300");
+    app.advance(Duration::from_millis(1000).saturating_sub(clock));
+    clock = Duration::from_millis(1000);
+    value.set(false);
+    capture_at(&mut app, &mut clock, 1100, "toggle_t1100");
+    capture_at(&mut app, &mut clock, 1500, "toggle_t1500");
 }
 
 /// A 300 pt segmented picker of `labels` with its top-left corner at
@@ -604,7 +685,7 @@ fn selection_sequence() {
         (380, "t0380"),
         (600, "t0600"),
     ] {
-        capture_at(&mut app, &mut clock, "selection", t_ms, name);
+        capture_at(&mut app, &mut clock, t_ms, &format!("selection_{name}"));
     }
 }
 
@@ -633,7 +714,7 @@ fn a_tap_selects_and_a_press_lenses_the_thumb() {
     // The press, on the now selected segment.
     app.touch_down(201.0, 46.0);
     let mut clock = Duration::ZERO;
-    capture_at(&mut app, &mut clock, "segmented_press", 500, "dark");
+    capture_at(&mut app, &mut clock, 500, "segmented_press_dark");
     app.touch_up(201.0, 46.0);
     app.settle();
     assert_eq!(
