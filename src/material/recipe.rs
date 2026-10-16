@@ -131,11 +131,55 @@ pub fn lobe(d: f32, depth: f32, shift: f32) -> f32 {
     shift * (1.0 - (t * (2.0 - t)).sqrt())
 }
 
-/// §3: the mip level a blur radius of `b` capture texels selects,
-/// `max(0, log2(b < 2 ? 1 + b/2 : b))`. **[chosen]**
+/// §3: the mip level the haze (§4.4) and the ambient sample (§4.7) read
+/// for a radius of `b` capture texels, `max(0, log2(b < 2 ? 1 + b/2 : b))`.
+/// **[chosen]**
 #[must_use]
 pub fn level(b: f32) -> f32 {
     (if b < 2.0 { 1.0 + b / 2.0 } else { b }).log2().max(0.0)
+}
+
+/// §3: the Gaussian's standard deviation per capture texel of blur radius.
+///
+/// A radius `b` blurs by `2.5·b` capture texels. **[fitted: the clear
+/// card at radii 0, 0.375 and 0.75 (§6); the regular family's radii up
+/// to 5 extend it — chosen]**
+pub const BLUR_SIGMA_PER_RADIUS: f32 = 2.5;
+
+/// Half-width of the tap grid that realizes the §3 Gaussian.
+///
+/// It counts texels of the mip level the grid reads; the shaders read
+/// the grid folded into `(BLUR_TAPS + 1)²` bilinear reads that split each
+/// adjacent texel pair's weight, which reach no farther. **[chosen]**
+pub const BLUR_TAPS: u8 = 3;
+
+/// The most deviation the §3 tap grid makes, in texels of its level.
+///
+/// The read climbs to the level whose texel keeps the Gaussian's
+/// remaining deviation at most this, and blends with the level above.
+/// **[chosen]**
+pub const BLUR_LEVEL_SIGMA: f32 = 1.5;
+
+/// §3: the standard deviation, in capture texels, of the Gaussian a blur
+/// radius of `b` capture texels makes.
+#[must_use]
+pub const fn blur_sigma(b: f32) -> f32 {
+    BLUR_SIGMA_PER_RADIUS * b.max(0.0)
+}
+
+/// How far, in capture texels, the §3 blurred read of radius `b` reaches.
+///
+/// Past its sample point it reads [`BLUR_TAPS`] texels of the level
+/// above the one that keeps the deviation at most [`BLUR_LEVEL_SIGMA`] —
+/// at most `2σ / BLUR_LEVEL_SIGMA` capture texels each — and at least
+/// the level-0 grid's.
+#[must_use]
+pub const fn blur_reach(b: f32) -> f32 {
+    let sigma = blur_sigma(b);
+    if sigma <= 0.0 {
+        return 0.0;
+    }
+    BLUR_TAPS as f32 * (2.0 * sigma / BLUR_LEVEL_SIGMA).max(1.0)
 }
 
 /// §3: the smooth step weighting the shadow terms; runs from 1 at
@@ -397,12 +441,14 @@ pub struct Recipe {
     /// texels per axis, so one capture texel is `region_pt / capture_size`
     /// pt per axis — at most `1 / (capture_scale · px_per_pt)` pt.
     /// **[measured rows; the m-split at 140 and the translucency
-    /// interpolation are chosen. The device-pixel base is chosen: §4.1 does
-    /// not state it, and it keeps the 8 pt grid countable through the clear
-    /// card (§7, Frost) where a point base erases it]**
+    /// interpolation are chosen. The device-pixel base is fitted: at blur
+    /// radius 0 a texel that is the mean of the device pixels it covers
+    /// reproduces the clear card's interior (§4.1, §6)]**
     pub capture_scale: f32,
-    /// §4.3: base blur radius, capture texels. **[measured: 5 regular; the
-    /// clear family's translucency row is linear]**
+    /// §4.3: base blur radius, capture texels; the samples blur by the
+    /// Gaussian of [`blur_sigma`] of it times the gain (§3). **[measured:
+    /// 5 regular, 0.75 clear; the clear family's translucency row is
+    /// linear]**
     pub blur_radius: f32,
     /// §4.3: blur depths `d0..d3`, pt. **[fitted / measured: (−0.5·m, −1, 0, 0)]**
     pub blur_depths: [f32; 4],
@@ -1278,6 +1324,13 @@ mod tests {
         assert!((level(4.0) - 2.0).abs() < 1e-6);
         // Small radii take the 1 + b/2 branch.
         assert!((level(1.0) - 1.5f32.log2()).abs() < 1e-6);
+        // §3 blur: σ = 2.5·b, the clear card's 0.75 at 1.875 texels; the
+        // read reaches the level-0 grid for small σ and 4σ above it.
+        assert_eq!(blur_sigma(0.0), 0.0);
+        assert!((blur_sigma(0.75) - 1.875).abs() < 1e-6);
+        assert_eq!(blur_reach(0.0), 0.0);
+        assert!((blur_reach(0.1) - 3.0).abs() < 1e-6);
+        assert!((blur_reach(5.0) - 50.0).abs() < 1e-5);
         // §3 falloff: 1 at −2, 0 at 2, 0.5 at 0.
         assert!((falloff(-2.0) - 1.0).abs() < 2e-3);
         assert!(falloff(2.0).abs() < 2e-3);

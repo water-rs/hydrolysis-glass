@@ -95,8 +95,16 @@ The displacement is the full `shift` at the silhouette, where the profile has
 a vertical tangent, and falls to 0 with zero slope at `depth` inside it. A
 negative shift pulls the sample inward, which magnifies.
 
-A blur radius `b` in capture texels selects a level of the capture's mip chain
-[chosen]:
+A blur radius `b` in capture texels blurs the capture by a Gaussian of
+standard deviation `σ = 2.5·b` texels [fitted: the clear card at `b` = 0,
+0.375 and 0.75 over the grid and the grid over the split, §6]. The law is
+fitted for `b ≤ 0.75`; the regular family's radii reach 5, and this
+specification extends the law to them [chosen]. Reading the capture's mip
+chain at the level of `b` instead keeps up to 2.3 times the measured
+contrast at `b = 0.75` (§6).
+
+The haze (§4.4) and the ambient sample (§4.7) read the capture at the level
+of their radius on its mip chain of 2 × 2 means [chosen]:
 
 ```
 level(b) = max(0, log2(b < 2 ? 1 + b/2 : b))
@@ -117,10 +125,13 @@ the pixel, `C` the working colour (encoded, unpremultiplied).
 ### 4.1 Capture
 
 The backdrop under the element's bounds plus the reach of its samples is
-captured at the element's **capture scale** and mip-mapped. All samples below
-read this capture at a displaced point and a level (§3). A container is
-captured once, under the union of its members' bounds, at the capture scale of
-its recipe (§5.6).
+captured at the element's **capture scale** and mip-mapped. A capture texel
+is the mean of the device pixels it covers [fitted: at blur radius 0 the
+model reproduces the clear card's interior over the grid over the split
+within 0.3 levels, §6]. All samples below read this capture at a displaced
+point, blurred by a radius or at a level (§3). A container is captured once,
+under the union of its members' bounds, at the capture scale of its recipe
+(§5.6).
 
 ### 4.2 Refraction
 
@@ -146,10 +157,11 @@ is open.
 
 ### 4.3 Depth-dependent blur
 
-Each sample's blur radius is `blur radius · g(d')`, where `d' = d + lobe(…)` is
-the sample's refracted depth and `g` interpolates the **blur gains**
-`g0…g3` linearly between the **blur depths** `d0…d3`, keeping `g0` below
-`d0` and `g3` above `d3`; equal consecutive depths make a step [chosen].
+The primary and rim samples are blurred (§3) by the radius
+`blur radius · g(d')`, where `d' = d + lobe(…)` is the sample's refracted
+depth and `g` interpolates the **blur gains** `g0…g3` linearly between the
+**blur depths** `d0…d3`, keeping `g0` below `d0` and `g3` above `d3`; equal
+consecutive depths make a step [chosen].
 
 ### 4.4 Haze
 
@@ -551,6 +563,24 @@ backdrop):
 
 Values `a / b` are the two observed displays.
 
+**Blur through the clear card** (§3, §4.1, §4.3; the model applied to the
+captured bare backdrop, rows of the card's interior where refraction does
+not reach, `x` from 20 pt inside either end): the luma standard deviation
+along a row, at translucency 0, 0.25 and 0.5 (blur radius 0, 0.375, 0.75).
+
+| Backdrop, row | Radius | Model | Measured | Level read (§3) |
+|---|---|---|---|---|
+| grid over the split, centre row | 0 | 18.69 | 18.72 | 18.69 |
+| grid over the split, centre row | 0.375 | 11.80 | 12.28 | 16.52 |
+| grid over the split, 2.7 pt below centre | 0.375 | 13.14 | 12.87 | 16.93 |
+| grid over the split, centre row | 0.75 | 8.49 | 8.65 | 14.82 |
+| grid over the split, 2.7 pt below centre | 0.75 | 9.84 | 9.77 | 15.59 |
+| grid, 1 pt below a line (the centre row) | 0.75 | 12.42 | 12.06 | 23.51 |
+| grid, midway between lines | 0.75 | 8.19 | 8.54 | 19.68 |
+
+The last column reads the capture's mip chain at `level(b)` instead; at
+radius 0.75 it keeps 1.7 to 2.3 times the measured contrast.
+
 ## 7. Verification scenes
 
 An implementation renders these scenes offscreen and the results are reviewed
@@ -601,7 +631,10 @@ uses red (230, 38, 38) and blue (26, 90, 230), encoded [chosen].
 
 - **Frost.** Through the large regular card the grid is not visible; through
   the clear card it is, at the same pitch as outside, with the lines bent in
-  the last few points before the edge.
+  the last few points before the edge, and softened: each line spreads over
+  about 4 pt, and a row midway between two lines varies with a luma standard
+  deviation of 8.5, against about 25 at translucency 0 [measured, over the
+  observed grid, whose lines are 2 px at luma 40].
 - **Appearance.** Over black, the regular card's interior is dark grey in
   dark appearance (32) and light grey in light (136); the clear card is dark
   grey (32) in both. Over white, dark regular is mid grey (122) and light
