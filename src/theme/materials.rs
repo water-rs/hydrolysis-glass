@@ -304,7 +304,7 @@ pub fn effect(element: &Element) -> MaterialEffect {
         rect.w,
         rect.h,
         r.ellipse_bend,
-        f32::from(r.tint.is_some()),
+        crate::material::recipe::Tint::flag(r.tint),
     ];
     debug_assert_eq!(
         uniforms.len(),

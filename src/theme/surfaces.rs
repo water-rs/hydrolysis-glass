@@ -128,7 +128,7 @@ fn element(
 }
 
 const fn tinted(mut e: Element, rgb: [f32; 3], alpha: f32) -> Element {
-    e.recipe = e.recipe.with_tint(Tint { rgb, alpha });
+    e.recipe = e.recipe.with_tint(Tint::flat(rgb, alpha));
     e
 }
 

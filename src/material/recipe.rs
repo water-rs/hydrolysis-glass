@@ -368,6 +368,10 @@ pub struct Tint {
     pub rgb: [f32; 3],
     /// The effective composited opacity of the tint layers.
     pub alpha: f32,
+    /// Whether the §4.13 edge gradient follows the flat fill. A flat tint
+    /// (the button's fill, §8.1) goes under the §4.12 highlight instead of
+    /// over it, so the rim stays visible on the fill.
+    pub edge_gradient: bool,
 }
 
 impl Tint {
@@ -378,6 +382,29 @@ impl Tint {
         Self {
             rgb,
             alpha: TINT_EFFECTIVE_ALPHA * opacity,
+            edge_gradient: true,
+        }
+    }
+
+    /// A flat fill of `alpha` effective opacity out to the silhouette, with
+    /// no edge gradient, under the highlight.
+    #[must_use]
+    pub const fn flat(rgb: [f32; 3], alpha: f32) -> Self {
+        Self {
+            rgb,
+            alpha,
+            edge_gradient: false,
+        }
+    }
+
+    /// The shader flag of an optional tint: 0 none, 1 flat fill plus edge
+    /// gradient over the highlight, 2 flat fill under the highlight.
+    #[must_use]
+    pub const fn flag(tint: Option<Self>) -> f32 {
+        match tint {
+            None => 0.0,
+            Some(t) if t.edge_gradient => 1.0,
+            Some(_) => 2.0,
         }
     }
 }
@@ -1388,6 +1415,7 @@ mod tests {
         let r = regular(80.0, Appearance::Dark).with_tint(Tint {
             rgb: [1.0; 3],
             alpha: 0.3,
+            edge_gradient: true,
         });
         let t = r.tint.expect("tinted");
         assert_eq!(t.rgb, [1.0; 3]);

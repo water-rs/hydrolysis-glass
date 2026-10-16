@@ -406,8 +406,10 @@ fn tint_layers(r: Recipe, outc: vec3<f32>, d: f32, cov: f32) -> vec3<f32> {
     }
     let a_flat = r.tint.a * cov;
     var c = r.tint.rgb * a_flat + outc * (1.0 - a_flat);
+    // A flat tint (flag 2, §8.1) takes no edge gradient.
+    let edge = step(r.hl_bb.w, 1.5);
     let t = sat(-d / 10.0);
-    let a_rim = r.tint.a * (1.0 - ease_cubic(t)) * cov;
+    let a_rim = edge * r.tint.a * (1.0 - ease_cubic(t)) * cov;
     let gain = 0.2 + 0.8 * luma(c);
     c = r.tint.rgb * gain * a_rim + c * (1.0 - a_rim);
     return c;
@@ -448,9 +450,11 @@ fn material_fragment(v: FullscreenOut) -> @location(0) vec4<f32> {
         // §4.11: the per-channel ceiling, then the display peak.
         C = clamp(C, vec3<f32>(0.0), vec3<f32>(min(r.cast_b.z, uni.misc.x)));
         // §4.12: the highlight sibling.
-        C = highlight(r, C, f.d, n, cov);
-        // §4.13: the tint siblings.
-        C = tint_layers(r, C, f.d, cov);
+        // §4.13: the tint siblings; a flat tint (§8.1) lies under the
+        // highlight, every other tint over it.
+        let over = tint_layers(r, highlight(r, C, f.d, n, cov), f.d, cov);
+        let under = highlight(r, tint_layers(r, C, f.d, cov), f.d, n, cov);
+        C = select(over, under, r.hl_bb.w > 1.5);
         let interior = vec4<f32>(C, 1.0);
         let shadow = vec4<f32>(0.0, 0.0, 0.0, cast_alpha);
         let res = mix(shadow, interior, cov);

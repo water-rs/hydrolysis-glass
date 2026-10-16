@@ -40,7 +40,7 @@
 //   p12 cast/highlight  cast density, cast gain, channel ceiling, hl aperture
 //   p13 tint            straight r, g, b, effective alpha
 //   p14 cast/rect       cast shift x, cast shift y, member rect x, member rect y
-//   p15 rect/bend       member rect w, member rect h, ellipse bend, has tint
+//   p15 rect/bend       member rect w, member rect h, ellipse bend, tint flag (0 none, 1 gradient, 2 flat)
 //
 // Distances the recipe calls pt arrive through `px.sdf`/`px.scale`;
 // capture radii are recipe capture-texel counts, scaled onto the bound
@@ -463,8 +463,10 @@ fn tint_layers(c: vec3<f32>, tint: vec4<f32>, has_tint: f32, d: f32, cov: f32) -
     }
     let a_flat = tint.a * cov;
     var outc = tint.rgb * a_flat + c * (1.0 - a_flat);
+    // A flat tint (flag 2, §8.1) takes no edge gradient.
+    let edge = step(has_tint, 1.5);
     let t = gsat(-d / 10.0);
-    let a_rim = tint.a * (1.0 - ease_cubic(t)) * cov;
+    let a_rim = edge * tint.a * (1.0 - ease_cubic(t)) * cov;
     let gain = 0.2 + 0.8 * luma(outc);
     outc = tint.rgb * gain * a_rim + outc * (1.0 - a_rim);
     return outc;
@@ -517,9 +519,11 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
     // §4.11: the per-channel ceiling; display headroom is the target's.
     c = clamp(c, vec3<f32>(0.0), vec3<f32>(params[12].z));
     // §4.12: the highlight sibling.
-    c = highlight(c, d, n, cov, params[12].w);
-    // §4.13: the tint siblings.
-    c = tint_layers(c, params[13], params[15].w, d, cov);
+    // §4.13: the tint siblings; a flat tint (§8.1) lies under the
+    // highlight, every other tint over it.
+    let over = tint_layers(highlight(c, d, n, cov, params[12].w), params[13], params[15].w, d, cov);
+    let under = highlight(tint_layers(c, params[13], params[15].w, d, cov), d, n, cov, params[12].w);
+    c = select(over, under, params[15].w > 1.5);
 
     // The standalone's `res = mix(shadow, interior, cov)` is the
     // premultiplied `(c·cov, a)` in encoded space. The member composite
