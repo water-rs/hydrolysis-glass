@@ -512,10 +512,15 @@ impl GlassApp {
         self.frames += 1;
         let started = Instant::now();
         tracing::warn!(frame = self.frames, capture, "diag: pump begins");
-        let snapshot = self.runtime.pump_at(capture, self.at).snapshot;
+        let result = self.runtime.pump_at(capture, self.at);
+        let phases = result.profile.phases;
+        let snapshot = result.snapshot;
         tracing::warn!(
             frame = self.frames,
             capture,
+            render_ms = phases.render.as_millis(),
+            present_ms = phases.present.as_millis(),
+            rebuild_ms = phases.rebuild.as_millis(),
             ms = started.elapsed().as_millis(),
             settled = self.runtime.is_settled(),
             "diag: pump ends"

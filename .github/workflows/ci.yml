@@ -25,7 +25,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [pr, engine-mip]
+        variant: [pr, rimskip, engine-mip]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -34,10 +34,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: windows-latest
-          save-if: false
+          save-if: ${{ matrix.variant == 'pr' }}
       - if: matrix.variant == 'engine-mip'
         shell: bash
         run: cp diag/material_engine_dev.wgsl shaders/material_engine.wgsl
+      - if: matrix.variant == 'rimskip'
+        shell: bash
+        run: cp diag/rimskip/material.wgsl diag/rimskip/material_engine.wgsl shaders/
       - uses: taiki-e/install-action@nextest
       - name: Where dxcompiler.dll is
         shell: pwsh
@@ -53,3 +56,10 @@ jobs:
       - name: Standalone tests, one at a time
         if: always()
         run: cargo nextest run --locked --test gpu --no-fail-fast -j 1
+      - name: Upload the rendered frames
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-${{ matrix.variant }}
+          path: target/verification/*.png
+          retention-days: 3
