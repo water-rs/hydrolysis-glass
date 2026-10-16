@@ -327,7 +327,7 @@ impl From<&Recipe> for GpuRecipe {
                 h.glow_gain,
                 h.glow_width,
                 h.glow_aperture,
-                flag(r.tint.is_some()),
+                super::recipe::Tint::flag(r.tint),
             ],
             hl_first: h.first_colour,
             hl_second: h.second_colour,
@@ -1908,6 +1908,7 @@ mod tests {
         let tint = Tint {
             rgb: [1.0; 3],
             alpha: 0.3,
+            edge_gradient: true,
         };
         circle.recipe = circle.recipe.with_tint(tint);
         let expected = Recipe::for_container(&card.recipe, &circle.recipe);

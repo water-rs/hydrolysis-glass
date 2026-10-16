@@ -482,14 +482,8 @@ geometry on press or drag: a 200 × 80 pt tinted element, a
 kept a growth of 1.000 through a press and through a drag [measured]. Any press
 feedback of the material that is not geometry is unchanged.
 
-Growth belongs to the glass button control style. While pressed, the button
-scales uniformly about its centre to 1.25 times its idle size, in both axes
-and with its radii, and keeps its idle recipe. It keeps that scale through a
-drag that started on it (drags of 20 and 80 pt) and returns to its idle size
-after release [measured]. The 66 × 34 pt button held 1.244 and 1.247, peaking
-near 1.26. The uniform factor 1.25 is fitted to the observed 1.24 to 1.26
-[chosen]. That the growth does not depend on the button's size or tint is
-[chosen]; only the 66 × 34 pt button was observed.
+Growth belongs to the button control, not to the material: §8.1 specifies it.
+The grown button keeps its idle recipe [measured].
 
 ### 5.6 Containers
 
@@ -652,6 +646,17 @@ uses red (230, 38, 38) and blue (26, 90, 230), encoded [chosen].
    one container, with the same two shapes standing alone at (51, 480) and
    (171, 720.33), on its own 402 × 874 pt scene at 3 px/pt. Black, grey 0.5,
    white and the split, in dark appearance at translucency 0.5.
+5. The **button scene** (§8.1), on its own 402 × 874 pt scene at 3 px/pt,
+   over black and over white, in dark and in light appearance at
+   translucency 0.5. One row per size group (mini, regular, large) holding a
+   "Glass" text button, an icon-only button and an icon-and-title button;
+   then, at the regular size, a prominent button, a disabled glass button, a
+   disabled prominent button, a red-tinted glass and a red-tinted prominent
+   button, a rounded-rectangle and a circle button, a two-line "Two line /
+   label" button and a "Glass" button 322 pt wide.
+6. The **press sequence**: the regular "Glass" glass button alone over black
+   in dark appearance, touched at its centre at t = 0 and released at
+   t = 1 s, rendered at t = 0, 0.147, 0.5, 1.215, 1.43 and 2 s.
 
 ### Observations
 
@@ -693,3 +698,236 @@ uses red (230, 38, 38) and blue (26, 90, 230), encoded [chosen].
   standalone circle's is sharp. Over white and grey it casts the card's soft
   shadow, where the standalone circle's fringe is a few levels deep at most.
   The card renders the same in the container and standing alone.
+- **Button.** Every button of the button scene has the frame of the §8.1
+  tables, and its glass fills that frame exactly. Text buttons are capsules,
+  the two-line one included; the rounded-rectangle button has small corners
+  (6.9 pt) and the circle button is round. Over black, glass buttons are dark
+  grey with a white label in dark appearance (32) and mid grey with a black
+  label in light (132); the prominent button is solid accent blue with a
+  white label, the red-tinted glass button has a red label and the
+  red-tinted prominent button a red fill. Disabled labels are faint: over
+  black, 82 on 32 in dark and 57 on 132 in light. Over white in dark, the
+  prominent blue is visibly lighter than over black (32, 156, 248 against
+  3, 145, 252).
+- **Press.** In the press sequence the button is 1.263 times its idle size
+  at 0.147 s, 1.245 times at 0.5 s, 0.932 times at 1.215 s and back to its
+  idle size at 2 s. While pressed its interior is lighter at the centre than
+  at the ends (about 98 against 73) and uniform from top to bottom; at
+  1.215 s it carries no wash. The label scales with the button and stays
+  white.
+
+## 8. Controls
+
+A control is drawn from the glass elements of §2 to §5 and the chrome its
+section specifies: geometry, states and motion. Lengths are layout points at
+the default text size. Colours are encoded 8-bit sRGB as rendered on the
+observed display, and "over black" or "over white" names the backdrop behind
+the control. Unless a row says otherwise, observations are at translucency
+0.5.
+
+### 8.1 Button
+
+A button is one standalone, interactive glass element of the regular family
+(§5.1): its shape is the button's border shape, and its label is the
+element's content (§2, item 5). A button is of one of two **kinds**:
+
+- **Glass**: the glass body with the label drawn on it.
+- **Prominent**: the glass body filled with the button's tint, with a white
+  label.
+
+The tint defaults to the accent colour, (0, 145, 255) in dark appearance and
+(0, 136, 255) in light [measured].
+
+#### Geometry
+
+The button's frame is its label's layout size plus the insets of its size
+group, and the glass fills that frame exactly: no part of the chrome reaches
+outside it apart from the material's own cast shadow [measured: the drawn
+silhouette matches the frame within 0.17 pt for every observed button].
+
+| Size group | Label text | Line height | Horizontal inset | Vertical inset | Height, one text line |
+|---|---|---|---|---|---|
+| mini, small | 15 pt, regular weight | 18 | 10 | 5 | 28 |
+| regular | 17 pt, regular weight | 20.33 | 12 | 7 | 34.33 |
+| large, extra large | 17 pt, regular weight | 20.33 | 20 | 15 | 50.33 |
+
+All values are measured. Mini and small are identical, and so are large and
+extra large. The label text is identified by its ink: "Glass" inks
+36 × 11.33 pt in the 28 pt button and 40.33 × 13 pt in the others, as plain
+15 pt and 17 pt text do.
+
+Observed frames (width × height) [measured]:
+
+| Content | mini, small | regular | large, extra large |
+|---|---|---|---|
+| "Glass" | 57.67 × 28 | 66 × 34.33 | 82 × 50.33 |
+| "Continue" | 82 × 28 | 92.67 × 34.33 | 108.67 × 50.33 |
+| a filled star symbol | 39.33 × 28.33 | 46 × 34.67 | 62 × 50.67 |
+| the symbol, then "Glass" | 85 × 28.62 | 96 × 35 | 112 × 51 |
+
+- **Label placement.** The content is centred in the frame on both axes. A
+  multi-line label is centre-aligned and the frame grows by its lines: the
+  two-line regular "Two line / label" button is 86.33 × 56.33 pt. A button
+  given a larger width keeps its label centred [measured].
+- **Symbols.** A symbol is drawn at the label's text size, in the label's
+  colour, with the same insets [measured]. An icon-and-title label places
+  the symbol first, then 8 pt, then the title, centred vertically on each
+  other [fitted: at both text sizes the content width is the symbol's layout
+  width, 22 pt at 17 pt and 19.33 pt at 15 pt, plus 8 plus the title's].
+- **Shape.** The default shape is a capsule whose radius is half the frame's
+  height, for every size and for multi-line labels [measured: fitted corner
+  radius equal to half the height within 0.17 pt, 28.17 for the two-line
+  button]. Its corners are continuous, like the material's capsules [chosen:
+  a circular fit leaves a residual of 0.2 to 0.6 pt, which does not
+  separate circular from continuous corners]. A rounded-rectangle shape
+  without a radius has radius 4.8 (mini, small), 6.9 (regular) and 8.9
+  (large, extra large); with a radius it uses that radius [measured,
+  circular fit: a requested 4 drew 3.8 to 4.2]. A circle shape replaces the horizontal inset by the vertical
+  one and draws a circle of diameter `min(width, height)` centred in the
+  frame: the regular star button is 36 × 34.67 pt with a 34.67 pt circle
+  [measured].
+- **Hit region.** The frame, extended to at least 44 × 44 pt about its centre
+  [chosen: touch hit-testing was not observed; 44 pt is a comfortable
+  minimum touch target and keeps the 28 pt buttons reachable].
+
+#### Glass body
+
+The body is an ordinary element of the regular family: it uses the recipe
+of §5.1 at its own `m`, the frame's height for every button above [chosen:
+the measured interiors below are those §5.1 gives at `m ≤ 60`, and §7
+expects about 185 over white in dark appearance]. At `m` = 28, below §5.1's
+measured range, the recipe of `m ≤ 60` applies [measured: the mini button's
+interior over black equals the regular one's, 31 in dark appearance].
+Measured interiors of the regular glass button:
+
+| Appearance | Over black | Over white |
+|---|---|---|
+| dark | 32 | 184 |
+| light | 132 | 252 |
+
+#### States
+
+| State | Glass kind | Prominent kind |
+|---|---|---|
+| enabled | label white in dark appearance, black in light | fill: the tint; label white |
+| tinted | label in the tint colour | fill: the tint; label white |
+| disabled | body unchanged; label dimmed | fill: grey; label dimmed |
+| pressed | growth and wash (below) | growth and wash (below) [chosen] |
+
+All entries are measured except the pressed prominent button, which was not
+observed and is chosen to move as the glass kind does.
+
+- **Dimmed label.** A disabled label is the colour beneath it plus 50 levels
+  per channel in dark appearance and minus 75 levels in light, clamped
+  [measured: the same offsets over black and white, on the glass body and
+  on the disabled prominent fill: 32 → 82 and 184 → 234 in dark,
+  132 → 57 and 252 → 177 in light].
+- **Disabled prominent fill.** The tint is dropped: the fill is
+  `mix(body, g, k)` with `g = 0.60, k = 0.20` in dark appearance and
+  `g = 0.55, k = 0.25` in light [fitted to the fills 56 and 178 over black
+  and white in dark, 134 and 224 in light].
+- **Disabled presses.** A disabled button does not respond to touches
+  [chosen: not observed].
+- **Prominent fill.** Rendered fills over the four combinations [measured]:
+
+  | Tint (its colour, dark / light) | Dark, over black | Dark, over white | Light, over black | Light, over white |
+  |---|---|---|---|---|
+  | accent (0, 145, 255) / (0, 136, 255) | 3, 145, 252 | 32, 156, 248 | 3, 106, 205 | 4, 136, 252 |
+  | red (255, 67, 69) / (255, 56, 61) | 252, 66, 69 | 251, 101, 104 | 226, 25, 29 | 252, 56, 61 |
+  | green (48, 210, 88) / (52, 199, 90) | 50, 209, 89 | 74, 210, 108 | 38, 159, 69 | 54, 198, 91 |
+  | grey (143, 143, 149) | 143, 142, 149 | 158, 157, 162 | 111, 110, 117 | 142, 141, 148 |
+  | encoded grey 0.5 (128) | 97 | 144 | 128 | 165 |
+  | black | 0 | 0 | 0 | 15 |
+
+  The fill follows the backdrop: the accent, red, green and grey tints
+  render their own colour over black in dark appearance and over white in
+  light, and shift toward the backdrop otherwise; the plain grey 0.5 shifts
+  by about 0.3 of the distance to the glass body in every case. This
+  specification draws the fill as the tint layer of §4.13 over the glass
+  body at full strength [chosen: it reproduces the two matching cases and
+  is within 50 levels of the others; the law of the shift is the open
+  strength of §4.13], without the §4.13 edge gradient: no darkening toward
+  the fill's edge was observed [measured], so the fill is flat out to the
+  silhouette. The §4.12 rim highlight remains faintly visible at the top
+  and bottom edges of the fill, about 8 levels above it [measured].
+- **Tinted glass label.** The label takes the tint colour [measured:
+  rendered red labels 238, 94, 99 and 252, 195, 197 over black and white in
+  dark appearance, 174, 30, 37 and 222, 69, 76 in light]. Like the fill it
+  shifts with the backdrop; this specification draws it in the tint colour
+  [chosen: same open law as the prominent fill].
+- **Focus.** Not observed: the reference device has no keyboard focus. An
+  implementation that shows a focused state states its own choice.
+
+#### Press motion
+
+A **press progress** `p` drives the pressed state: 0 at rest, 1 pressed. A
+touch that begins in the hit region drives `p` toward 1 by the **press
+spring**. Release or cancellation drives it toward 0 by the **release
+spring**. Each spring starts from the current `p` and its velocity [chosen:
+only a full press from rest and a release from a settled press were
+observed]. `p` starts at the touch event [chosen: the observed motion began
+0.05 s after touch-down and 0.02 to 0.03 s after touch-up, which is input and
+display latency, not part of the control].
+
+Both springs act on a unit mass [fitted: three captures of the regular
+button at 48 frames per second, width and height fitted separately; every fit
+lies within 1.5 rad/s and 0.03 of these values, with a residual below 1.1 %
+of the motion's amplitude]:
+
+| Spring | Natural frequency ω0 | Damping ratio ζ | Stiffness ω0² | Damping 2ζω0 | Period 2π/ω0 |
+|---|---|---|---|---|---|
+| press | 28.2 rad/s | 0.65 | 795 | 36.7 | 0.223 s |
+| release | 15.8 rad/s | 0.385 | 250 | 12.2 | 0.398 s |
+
+From rest, the press spring peaks at `p` = 1.07 at 0.147 s and is within 2 %
+of 1 after 0.23 s. From a settled press, the release spring reaches −0.27 at
+0.215 s and +0.07 at 0.43 s, and is within 2 % of 0 after 0.66 s.
+
+- **Growth.** The whole button (silhouette, radii and label) scales
+  uniformly about the frame's centre by `s = 1 + 0.245·p` [measured: the
+  regular "Glass" button held 1.2444 in width and 1.2468 in height in three
+  captures, peaked at 1.263 and fell to 0.932 after release, as the springs
+  give]. The recipe keeps the idle `m` (§5.5). Only the regular 66 × 34.33 pt
+  button was observed: the same factor at every size and for both kinds is
+  [chosen].
+- **Wash.** While pressed, a white wash lies over the glass body, below the
+  label, composited in encoded space with alpha
+
+  ```
+  a = max(p, 0) · 0.30 · (1 − 0.37·u²),   u = min(|x − x_touch| / (w/2), 1)
+  ```
+
+  where `x` is the pixel's horizontal position, `x_touch` the touch point's
+  and `w` the current, grown width; the wash does not vary vertically
+  [measured: the regular button pressed at its centre over black in dark
+  appearance went from 31 to 98 at the centre and 73 at the ends, uniform
+  within 1 level from top to bottom; fitted: during the press the wash
+  follows `p` within 2.7 % of its amplitude, overshoot included]. That the
+  wash is centred on the touch point, and not on the frame, is [chosen: only
+  centre presses were observed]. During release the wash follows `p` and
+  vanishes while `p` is negative [chosen: the release was not captured for
+  the wash]. The label keeps its colour while pressed [measured].
+- **Drag.** A touch that moves while pressed keeps `p` at 1 and stretches
+  the button toward the touch, keeping its area [measured: horizontal drags
+  of 20 and 80 pt]:
+
+  | Drag distance | Centre offset toward the touch | Length along the drag | Length across |
+  |---|---|---|---|
+  | 20 pt | 0.17 pt | ×1.0027 | ×0.9985 |
+  | 80 pt | 1.31 pt | ×1.0154 | ×0.9864 |
+
+  The factors are relative to the grown size. Between 0 and 80 pt the
+  offset and the factors interpolate linearly through these rows, beyond
+  80 pt they stay at the 80 pt row, and they apply along any direction
+  [chosen]. They follow the touch through the press spring and return with
+  the release spring on release [measured: the centre and the aspect
+  returned with the release motion].
+- **Leaving the button.** The press held while the touch was 39 pt outside
+  the grown silhouette [measured: an 80 pt drag]. The press stays active, and
+  a release fires the button's action, while the touch is within 70 pt of
+  the hit region; farther out the press cancels: `p` returns by the release
+  spring and no action fires [chosen: neither the cancel distance nor the
+  action was observed].
+- **Setting.** The motion and the wash were observed with the translucency
+  setting the device then had, which read 0 before and after; that they do
+  not depend on the setting or the appearance is [chosen].

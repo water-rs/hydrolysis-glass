@@ -1,6 +1,8 @@
 //! Shared harness for the §7 verification-scene exports.
 
-use hydrolysis::{HeadlessRuntime, HeadlessSnapshot, OutputAlpha};
+use hydrolysis::{
+    HeadlessRuntime, HeadlessSnapshot, InputEvent, OutputAlpha, PointerButton, PointerKind,
+};
 use hydrolysis_glass::material::geometry::{CornerCurve, Rect, Shape};
 use hydrolysis_glass::material::gpu::{COMPOSITE_FORMAT, f32_to_half, read_texture};
 use hydrolysis_glass::material::recipe::Translucency;
@@ -396,10 +398,9 @@ pub fn verification_groups(
     let mut e3 = reg(capsule(101.0, 380.0, 200.0, 80.0));
     e3.recipe = e3
         .recipe
-        .with_tint(hydrolysis_glass::material::recipe::Tint {
-            rgb: [1.0; 3],
-            alpha: 0.3,
-        });
+        .with_tint(hydrolysis_glass::material::recipe::Tint::declared(
+            [1.0; 3], 0.3,
+        ));
     vec![
         Group::single(reg(rounded(51.0, 51.67, 300.0, 200.33, 40.0))),
         Group::single(clr(rounded(51.0, 276.0, 300.0, 80.0, 30.0))),
@@ -523,6 +524,49 @@ impl GlassApp {
         panic!("the mounted glass scene did not settle");
     }
 
+    /// Puts a finger down at `(x, y)` pt.
+    pub fn touch_down(&mut self, x: f32, y: f32) {
+        self.runtime.push_input_event(InputEvent::PointerDown {
+            id: 1,
+            kind: PointerKind::Touch,
+            x,
+            y,
+            button: PointerButton::Primary,
+        });
+    }
+
+    /// Lifts the finger at `(x, y)` pt.
+    pub fn touch_up(&mut self, x: f32, y: f32) {
+        self.runtime.push_input_event(InputEvent::PointerUp {
+            id: 1,
+            kind: PointerKind::Touch,
+            x,
+            y,
+            button: PointerButton::Primary,
+        });
+    }
+
+    /// Advances virtual time by `duration`, pumping a frame per
+    /// [`VIRTUAL_FRAME`] without reading any back.
+    pub fn advance(&mut self, duration: Duration) {
+        let end = self.at + duration;
+        while self.at + VIRTUAL_FRAME <= end {
+            self.pump(false);
+        }
+    }
+
+    /// Reads the frame at the current virtual time back, without
+    /// settling the scene's motion first.
+    ///
+    /// # Panics
+    /// When the capturing pump produces no frame.
+    pub fn capture_now(&mut self) -> Image {
+        let snapshot = self
+            .pump(true)
+            .expect("a capturing pump reads a frame back");
+        Self::image_of(&snapshot)
+    }
+
     /// Settles the scene and reads its frame back.
     ///
     /// The snapshot is RGBA8 in the surface's straight-alpha sRGB
@@ -538,6 +582,10 @@ impl GlassApp {
         let snapshot = self
             .pump(true)
             .expect("a capturing pump reads a frame back");
+        Self::image_of(&snapshot)
+    }
+
+    fn image_of(snapshot: &HeadlessSnapshot) -> Image {
         assert_eq!(
             snapshot.output_alpha,
             OutputAlpha::Straight,

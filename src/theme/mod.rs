@@ -12,6 +12,7 @@
 //! badges, lists, tables, dividers and opaque menus — is recorded through the
 //! `Recorder` in [`chrome`].
 
+pub mod button;
 pub mod chrome;
 pub mod materials;
 pub mod palette;
@@ -28,7 +29,7 @@ use waterui::animation::Animation;
 use waterui::color::{Color, ColorScheme};
 use waterui::interaction::InteractionState;
 use waterui::reactive::Signal as _;
-use waterui::text::font::{Font, Footnote, Subheadline};
+use waterui::text::font::{Body, Font, FontWeight, Footnote};
 use waterui::theme::{ColorSettings, FontSettings, Theme, installed_color_scheme};
 use waterui_backend_core::widget::{
     BadgeMetrics, ButtonMetrics, DividerMetrics, InputFieldMetrics, InteractionMotion,
@@ -129,26 +130,33 @@ impl Glass {
     }
 
     /// The glass surface of a button as the theme would place it, or `None`
-    /// for a style that draws no chrome.
+    /// for a style that draws no chrome. `bounds` is the button's frame.
     #[must_use]
     pub fn button_surface(
         &self,
         bounds: Rect,
         style: ButtonStyle,
         size: ControlSize,
-        icon_only: bool,
         state: WidgetInteractionState,
     ) -> Option<Surface> {
-        let press = surfaces::press_amount(state, self.interaction_motion().pressed_opacity);
-        surfaces::button(
+        let kind = surfaces::button_kind(style)?;
+        let spec = surfaces::ButtonSpec {
+            enabled: !state.state.contains(InteractionState::DISABLED),
+            ..surfaces::ButtonSpec::new(kind, button::SizeGroup::of(size))
+        };
+        let press = surfaces::Press {
+            progress: surfaces::press_progress(state, self.interaction_motion().pressed_opacity),
+            // The renderer hands the chrome the touch in window space; the
+            // press is centred on the frame until it is local.
+            touch_x: None,
+        };
+        Some(surfaces::button(
             &self.palette,
             bounds,
-            style,
-            size,
-            icon_only,
+            &spec,
             press,
             self.translucency,
-        )
+        ))
     }
 
     /// The glass surface of a tab bar.
@@ -198,6 +206,9 @@ impl Default for Glass {
 /// `MaterialScope` the host gives the recording.
 fn record_standalone(recorder: &mut Recorder, surface: &Surface) {
     materials::record(recorder, &surface.element, false);
+    if let Some(wash) = &surface.wash {
+        materials::record_wash(recorder, wash);
+    }
 }
 
 impl Style for Glass {
@@ -242,10 +253,13 @@ impl WidgetTheme for Glass {
             hover_exit: Animation::ease_out(PRESS_DURATION),
             focus_enter: Animation::ease_out(PRESS_DURATION),
             focus_exit: Animation::ease_out(PRESS_DURATION),
-            press_fade_in: Animation::ease_out(PRESS_DURATION),
-            press_fade_out: Animation::ease_out(PRESS_DURATION),
+            // The glass button's press progress is the newest press wave's
+            // opacity, so the wave's fade-in and fade-out are the press
+            // and release springs of §8.1, and a release starts at once.
+            press_fade_in: button::Spring::PRESS.animation(),
+            press_fade_out: button::Spring::RELEASE.animation(),
             press_grow: Animation::ease_out(PRESS_DURATION),
-            minimum_press_duration: PRESS_DURATION,
+            minimum_press_duration: Duration::ZERO,
             touch_delay: Duration::ZERO,
         }
     }
@@ -278,23 +292,20 @@ impl WidgetTheme for Glass {
     }
 
     fn button_metrics(&self, _style: ButtonStyle, size: ControlSize) -> ButtonMetrics {
-        match size {
-            ControlSize::ExtraSmall => ButtonMetrics::new(10.0, 4.0, 28.0, 28.0),
-            ControlSize::Small => ButtonMetrics::new(14.0, 7.0, 34.3, 34.3),
-            ControlSize::Medium => ButtonMetrics::new(20.0, 11.0, 44.0, 44.0),
-            ControlSize::Large => ButtonMetrics::new(24.0, 14.0, 55.7, 55.7),
-            _ => ButtonMetrics::new(28.0, 16.0, 60.0, 60.0),
-        }
+        // The frame is the label plus the size group's insets and nothing
+        // more (§8.1), so the metrics carry no minimum size.
+        let m = button::SizeGroup::of(size).metrics();
+        ButtonMetrics::new(f64::from(m.inset_x), f64::from(m.inset_y), 0.0, 0.0)
     }
 
     fn icon_button_metrics(&self, style: ButtonStyle, size: ControlSize) -> ButtonMetrics {
-        let well = self.button_metrics(style, size).min_height;
-        ButtonMetrics::new(0.0, 0.0, well, well)
+        // A symbol takes the same insets as a title (§8.1).
+        self.button_metrics(style, size)
     }
 
     fn button_label_color(&self, style: ButtonStyle, disabled: bool) -> Option<Color> {
         let p = &self.palette;
-        let c = if surfaces::button_is_prominent(style) {
+        let c = if surfaces::button_kind(style) == Some(button::Kind::Prominent) {
             p.accent_foreground
         } else if matches!(style, ButtonStyle::Link) {
             p.accent
@@ -312,7 +323,16 @@ impl WidgetTheme for Glass {
     }
 
     fn button_label_font(&self, _style: ButtonStyle) -> Option<Font> {
-        Some(Font::from(Subheadline))
+        // 17 pt regular on a 20.33 pt line: the regular and large size
+        // groups' label (§8.1). The hook carries no control size, so the
+        // compact groups' 15 pt label is not selectable here.
+        let m = button::SizeGroup::Regular.metrics();
+        Some(
+            Font::from(Body)
+                .size(m.text_size)
+                .weight(FontWeight::Normal)
+                .line_height(m.line_height),
+        )
     }
 
     fn register_backdrop_shaders(&self, registry: &mut MaterialRegistry) {
@@ -324,21 +344,14 @@ impl WidgetTheme for Glass {
         draw: &mut Recorder,
         bounds: Rect,
         style: ButtonStyle,
-        icon_only: bool,
+        _icon_only: bool,
         state: WidgetInteractionState,
     ) {
-        let press = surfaces::press_amount(state, self.interaction_motion().pressed_opacity);
-        // `surfaces::button`'s size argument only informs a style's chrome
-        // metrics, which the button's layout already resolved into `bounds`.
-        if let Some(surface) = surfaces::button(
-            &self.palette,
-            bounds,
-            style,
-            ControlSize::Medium,
-            icon_only,
-            press,
-            self.translucency,
-        ) {
+        // An icon-only button is laid out at its own frame (the metrics
+        // carry no minimum), so its chrome fills `bounds` like any other.
+        // The capsule the hook can express needs no control size; the
+        // size group only picks a rounded rectangle's default radius.
+        if let Some(surface) = self.button_surface(bounds, style, ControlSize::Medium, state) {
             record_standalone(draw, &surface);
         }
     }
@@ -348,19 +361,17 @@ impl WidgetTheme for Glass {
         draw: &mut Recorder,
         bounds: Rect,
         style: ButtonStyle,
-        icon_only: bool,
+        _icon_only: bool,
         state: WidgetInteractionState,
     ) {
-        if surfaces::button_is_glass(style) {
+        if surfaces::button_kind(style).is_some() {
             return;
         }
-        let shape = surfaces::button_shape(surfaces::rect(bounds), icon_only);
-        let r = f64::from(shape.radii[0]);
         chrome::state_layer(
             &self.palette,
             draw,
             bounds,
-            RoundedRectRadii::from_single_radius(r),
+            RoundedRectRadii::from_single_radius(bounds.height() * 0.5),
             state,
         );
     }
@@ -1064,7 +1075,6 @@ mod tests {
                 b,
                 ButtonStyle::Plain,
                 ControlSize::Small,
-                false,
                 WidgetInteractionState::NONE
             )
             .is_none()
@@ -1074,7 +1084,6 @@ mod tests {
                 b,
                 ButtonStyle::Glass,
                 ControlSize::Small,
-                false,
                 WidgetInteractionState::NONE
             )
             .is_some()
@@ -1123,7 +1132,6 @@ mod tests {
                 Rect::new(0.0, 0.0, 100.0, 40.0),
                 ButtonStyle::Glass,
                 ControlSize::Medium,
-                false,
                 WidgetInteractionState::NONE,
             )
             .expect("glass surface");

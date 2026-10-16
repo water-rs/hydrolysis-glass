@@ -38,9 +38,9 @@
 //   p10 ambient/contour ambient grade chroma, contour density, shift, softness
 //   p11 contour/border  contour width, contour clip, border aperture, cast falloff
 //   p12 cast/highlight  cast density, cast gain, channel ceiling, hl aperture
-//   p13 tint            straight r, g, b, declared alpha
+//   p13 tint            straight r, g, b, effective alpha
 //   p14 cast/rect       cast shift x, cast shift y, member rect x, member rect y
-//   p15 rect/bend       member rect w, member rect h, ellipse bend, has tint
+//   p15 rect/bend       member rect w, member rect h, ellipse bend, tint flag (0 none, 1 gradient, 2 flat)
 //
 // Distances the recipe calls pt arrive through `px.sdf`/`px.scale`;
 // capture radii are recipe capture-texel counts, scaled onto the bound
@@ -54,7 +54,6 @@
 const PI: f32 = 3.141592653589793;
 const EPS_ALPHA: f32 = 1e-4;
 const HIGHLIGHT_BAND: f32 = 1.33;
-const TINT_EFFECTIVE: f32 = 0.4;
 
 // The recipe's constant block, asserted by `theme::materials::uniforms`:
 // `Highlight::for_size` shares every term but the aperture, and the
@@ -413,11 +412,10 @@ fn glass_body(
 
 // The §4.12 two-light rim highlight plus the glow term — a second band
 // of the same form at the glow multipliers. All terms but the aperture
-// are the recipe's shared constants (see the header).
-fn highlight(c: vec3<f32>, d: f32, n: vec2<f32>, cov: f32, aperture: f32) -> vec3<f32> {
-    if d >= 0.5 {
-        return c;
-    }
+// are the recipe's shared constants (see the header). This is the light
+// the bands add, and `w` is 1 where the highlight applies (`d < 0.5`);
+// `add_highlight` lays it over a colour.
+fn highlight_light(d: f32, n: vec2<f32>, cov: f32, aperture: f32) -> vec4<f32> {
     let cs = cos(0.5 * aperture);
     let cs2 = cos(0.5 * aperture * HL_GLOW_APERTURE);
     let band_h = HIGHLIGHT_BAND;
@@ -442,27 +440,37 @@ fn highlight(c: vec3<f32>, d: f32, n: vec2<f32>, cov: f32, aperture: f32) -> vec
         c_narrow += colour.rgb * colour.a * gains[i] * 2.0 * lobe;
         c_broad += colour.rgb * colour.a * gains[i] * HL_GLOW_GAIN * 2.0 * lobe2;
     }
-    // The highlight adds to the accumulated colour under it; its gain
-    // follows that colour's luma [chosen: keeps the current form].
+    return vec4<f32>(c_narrow * band_narrow + c_broad * band_glow, select(0.0, 1.0, d < 0.5));
+}
+
+// The highlight `light` (`highlight_light`) added to the accumulated
+// colour under it; its gain follows that colour's luma [chosen: keeps
+// the current form].
+fn add_highlight(c: vec3<f32>, light: vec4<f32>) -> vec3<f32> {
     let gain = 0.2 + 0.8 * luma(c);
-    return min(c + (c_narrow * band_narrow + c_broad * band_glow) * gain, vec3<f32>(1.0));
+    return select(c, min(c + light.rgb * gain, vec3<f32>(1.0)), light.w > 0.5);
 }
 
 // §4.13: the tint layers — a fill of the shape, then an edge gradient at
 // full strength from −1 to 0 pt that eases off to zero 10 pt inward. The
-// effective alpha is 0.4 × declared [chosen], and the gradient's gain
-// follows the luma beneath it [chosen: keeps the current form].
-fn tint_layers(c: vec3<f32>, tint: vec4<f32>, has_tint: f32, d: f32, cov: f32) -> vec3<f32> {
-    if has_tint < 0.5 || cov <= 0.0 {
-        return c;
-    }
-    let a_flat = TINT_EFFECTIVE * tint.a * cov;
-    var outc = tint.rgb * a_flat + c * (1.0 - a_flat);
+// tint's alpha is the effective one (the recipe's `Tint::declared`), and the
+// gradient's gain follows the luma beneath it [chosen: keeps the current form].
+// These are the fill's and the gradient's alphas, 0 without a tint or
+// coverage; `add_tint` lays them over a colour.
+fn tint_alphas(tint_a: f32, has_tint: f32, d: f32, cov: f32) -> vec2<f32> {
+    let a_flat = tint_a * cov;
+    // A flat tint (flag 2, §8.1) takes no edge gradient.
+    let edge = step(has_tint, 1.5);
     let t = gsat(-d / 10.0);
-    let a_rim = TINT_EFFECTIVE * tint.a * (1.0 - ease_cubic(t)) * cov;
+    let a_rim = edge * tint_a * (1.0 - ease_cubic(t)) * cov;
+    return select(vec2<f32>(0.0), vec2<f32>(a_flat, a_rim), has_tint >= 0.5 && cov > 0.0);
+}
+
+// The tint `rgb` laid over `c` at the alphas `a` (`tint_alphas`).
+fn add_tint(c: vec3<f32>, rgb: vec3<f32>, a: vec2<f32>) -> vec3<f32> {
+    let outc = rgb * a.x + c * (1.0 - a.x);
     let gain = 0.2 + 0.8 * luma(outc);
-    outc = tint.rgb * gain * a_rim + outc * (1.0 - a_rim);
-    return outc;
+    return rgb * gain * a.y + outc * (1.0 - a.y);
 }
 
 // The entry the group pass calls. Returns premultiplied colour in the
@@ -512,9 +520,16 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
     // §4.11: the per-channel ceiling; display headroom is the target's.
     c = clamp(c, vec3<f32>(0.0), vec3<f32>(params[12].z));
     // §4.12: the highlight sibling.
-    c = highlight(c, d, n, cov, params[12].w);
-    // §4.13: the tint siblings.
-    c = tint_layers(c, params[13], params[15].w, d, cov);
+    // §4.13: the tint siblings; a flat tint (§8.1) lies under the
+    // highlight, every other tint over it. Each layer is computed once
+    // and only laid over twice: evaluating the layers' loops and branches
+    // once per order made D3D12's WARP device render wrong texels and
+    // stall.
+    let light = highlight_light(d, n, cov, params[12].w);
+    let tint = tint_alphas(params[13].a, params[15].w, d, cov);
+    let over = add_tint(add_highlight(c, light), params[13].rgb, tint);
+    let under = add_highlight(add_tint(c, params[13].rgb, tint), light);
+    c = select(over, under, params[15].w > 1.5);
 
     // The standalone's `res = mix(shadow, interior, cov)` is the
     // premultiplied `(c·cov, a)` in encoded space. The member composite
