@@ -350,11 +350,9 @@ fn shadow_profile(q: f32) -> f32 {
 
 // The §4.12 two-light rim highlight plus the glow term — a second band of
 // the same form at the glow multipliers [chosen: §4.12 leaves the term's
-// form open].
-fn highlight(r: Recipe, outc: vec3<f32>, d: f32, n: vec2<f32>, cov: f32) -> vec3<f32> {
-    if d >= 0.5 {
-        return outc;
-    }
+// form open]. This is the light the bands add, and `w` is 1 where the
+// highlight applies (`d < 0.5`); `add_highlight` lays it over a colour.
+fn highlight_light(r: Recipe, d: f32, n: vec2<f32>, cov: f32) -> vec4<f32> {
     let aperture = r.hl_a.w;
     let cs = cos(0.5 * aperture);
     let cs2 = cos(0.5 * aperture * r.hl_bb.z);
@@ -381,10 +379,15 @@ fn highlight(r: Recipe, outc: vec3<f32>, d: f32, n: vec2<f32>, cov: f32) -> vec3
         c_narrow += colour.rgb * colour.a * gains[i] * 2.0 * lobe;
         c_broad += colour.rgb * colour.a * gains[i] * r.hl_bb.x * 2.0 * lobe2;
     }
-    // The highlight adds to the accumulated colour under it; its gain
-    // follows that colour's luma [chosen: keeps the current form].
+    return vec4<f32>(c_narrow * band.x + c_broad * band.y, select(0.0, 1.0, d < 0.5));
+}
+
+// The highlight `light` (`highlight_light`) added to the accumulated
+// colour under it; its gain follows that colour's luma [chosen: keeps
+// the current form].
+fn add_highlight(outc: vec3<f32>, light: vec4<f32>) -> vec3<f32> {
     let gain = 0.2 + 0.8 * luma(outc);
-    return min(outc + (c_narrow * band.x + c_broad * band.y) * gain, vec3<f32>(1.0));
+    return select(outc, min(outc + light.rgb * gain, vec3<f32>(1.0)), light.w > 0.5);
 }
 
 // §4.13: the tint layers — a fill of the shape, then an edge gradient at
@@ -393,19 +396,22 @@ fn highlight(r: Recipe, outc: vec3<f32>, d: f32, n: vec2<f32>, cov: f32) -> vec3
 // [chosen]. The tint's alpha is the effective one (§4.13's
 // composite strength is the recipe's, `Tint::declared`), and the gradient's gain follows the luma
 // beneath it [chosen: keeps the current form].
-fn tint_layers(r: Recipe, outc: vec3<f32>, d: f32, cov: f32) -> vec3<f32> {
-    if r.hl_bb.w < 0.5 || cov <= 0.0 {
-        return outc;
-    }
+// These are the fill's and the gradient's alphas, 0 without a tint or
+// coverage; `add_tint` lays them over a colour.
+fn tint_alphas(r: Recipe, d: f32, cov: f32) -> vec2<f32> {
     let a_flat = r.tint.a * cov;
-    var c = r.tint.rgb * a_flat + outc * (1.0 - a_flat);
     // A flat tint (flag 2, §8.1) takes no edge gradient.
     let edge = step(r.hl_bb.w, 1.5);
     let t = sat(-d / 10.0);
     let a_rim = edge * r.tint.a * (1.0 - ease_cubic(t)) * cov;
+    return select(vec2<f32>(0.0), vec2<f32>(a_flat, a_rim), r.hl_bb.w >= 0.5 && cov > 0.0);
+}
+
+// The tint `rgb` laid over `outc` at the alphas `a` (`tint_alphas`).
+fn add_tint(outc: vec3<f32>, rgb: vec3<f32>, a: vec2<f32>) -> vec3<f32> {
+    let c = rgb * a.x + outc * (1.0 - a.x);
     let gain = 0.2 + 0.8 * luma(c);
-    c = r.tint.rgb * gain * a_rim + c * (1.0 - a_rim);
-    return c;
+    return rgb * gain * a.y + c * (1.0 - a.y);
 }
 
 // ---------------------------------------------------------------- entry ---
@@ -445,8 +451,12 @@ fn material_fragment(v: FullscreenOut) -> @location(0) vec4<f32> {
         // §4.12: the highlight sibling.
         // §4.13: the tint siblings; a flat tint (§8.1) lies under the
         // highlight, every other tint over it.
-        let over = tint_layers(r, highlight(r, C, f.d, n, cov), f.d, cov);
-        let under = highlight(r, tint_layers(r, C, f.d, cov), f.d, n, cov);
+        // Each layer is computed once and laid over in either order, as
+        // the engine's `backdrop_effect` does.
+        let light = highlight_light(r, f.d, n, cov);
+        let tint = tint_alphas(r, f.d, cov);
+        let over = add_tint(add_highlight(C, light), r.tint.rgb, tint);
+        let under = add_highlight(add_tint(C, r.tint.rgb, tint), light);
         C = select(over, under, r.hl_bb.w > 1.5);
         let interior = vec4<f32>(C, 1.0);
         let shadow = vec4<f32>(0.0, 0.0, 0.0, cast_alpha);
