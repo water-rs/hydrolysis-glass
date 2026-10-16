@@ -284,10 +284,10 @@ fn glass_blur_read(at: vec2<f32>, div: f32, level: f32) -> vec4<f32> {
 //
 // The reads run straight through, the same for every pixel: both levels
 // are read and mixed by the fraction, the sharp read is the grid at its
-// least deviation (blur.wgsl), the grid is unrolled rather than looped
-// over indexed arrays, and the rim sample is taken whatever its weight.
-// With a branch or a loop around these reads, D3D12's WARP device
-// rendered wrong texels and stalled for minutes.
+// least deviation (blur.wgsl), and the grid is unrolled rather than
+// looped over indexed arrays. With a loop or a branch on the pixel's own
+// values around these reads, D3D12's WARP device rendered wrong texels
+// and stalled for minutes; the branch on the recipe's rim mix does not.
 fn blurred_tap(q: vec2<f32>, b: f32, k_tex: f32) -> vec3<f32> {
     let sigma = BLUR_SIGMA_PER_RADIUS * b * k_tex;
     let t = blur_position(sigma, backdrop_levels - 1.0);
@@ -346,15 +346,18 @@ fn glass_body(
         c = mix(c1, f, params[4].w);
     }
 
-    // §4.2: the rim sample and the rim-ramp mix.
-    let rim_weight = params[1].z * gsat((d - params[1].x) / (params[1].y - params[1].x));
-    let o2 = lobe_at(d, params[0].w, params[0].z);
-    let s_rim = blurred_tap(
-        p + n * (o2 * u),
-        params[1].w * blur_gain(params[2], params[3], d + o2),
-        k_tex,
-    );
-    c = mix(c, s_rim, rim_weight);
+    // §4.2: the rim sample and the rim-ramp mix; a rim mix of 0 takes no
+    // sample.
+    if params[1].z > 0.0 {
+        let rim_weight = params[1].z * gsat((d - params[1].x) / (params[1].y - params[1].x));
+        let o2 = lobe_at(d, params[0].w, params[0].z);
+        let s_rim = blurred_tap(
+            p + n * (o2 * u),
+            params[1].w * blur_gain(params[2], params[3], d + o2),
+            k_tex,
+        );
+        c = mix(c, s_rim, rim_weight);
+    }
 
     // §4.5: the luminance limit [fitted].
     let lum = dot(LUMA_LIMIT_W, c);

@@ -285,11 +285,14 @@ fn glass_body(
         C = mix(c1, F, r.haze.w);
     }
 
-    // §4.2: the rim sample and the rim-ramp mix.
-    let o2 = lobe_at(d, r.shifts.w, r.shifts.z);
-    let s_rim = unpremultiply(sample_blurred(p + n * o2, blur_radius_at(r, d + o2)));
-    let tw = sat((d - r.rim.x) / (r.rim.y - r.rim.x));
-    C = mix(C, s_rim, r.rim.z * tw);
+    // §4.2: the rim sample and the rim-ramp mix; a rim mix of 0 takes no
+    // sample.
+    if r.rim.z > 0.0 {
+        let o2 = lobe_at(d, r.shifts.w, r.shifts.z);
+        let s_rim = unpremultiply(sample_blurred(p + n * o2, blur_radius_at(r, d + o2)));
+        let tw = sat((d - r.rim.x) / (r.rim.y - r.rim.x));
+        C = mix(C, s_rim, r.rim.z * tw);
+    }
 
     // §4.5: the luminance limit [fitted].
     let lum = dot(LUMA_LIMIT_W, C);
