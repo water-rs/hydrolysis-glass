@@ -25,7 +25,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [branchless, branchless-loops]
+        variant: [final, final-guard]
         rep: [1, 2]
     steps:
       - uses: actions/checkout@v4
