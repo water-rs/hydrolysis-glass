@@ -1,11 +1,8 @@
 // The glass body plus its sibling layers (edge highlight, tint).
 //
 // Inputs: the group's field texture, the backdrop composite, the group's
-// capture (a full mip chain at this pass's capture scale) and one recipe
-// per member. Output: the backdrop with the composited glass.
-//
-// The pass runs once per distinct capture scale in the group; a fragment
-// whose owning member uses another scale is discarded.
+// capture (a full mip chain at the members' shared capture scale) and one
+// recipe per member. Output: the backdrop with the composited glass.
 //
 // Colour math runs on premultiplied sRGB-encoded values (the specification's
 // compositing space), unpremultiplied around the colour operations.
@@ -16,7 +13,7 @@ struct Recipe {
     blur_depths: vec4<f32>,   // d0..d3
     blur_gains: vec4<f32>,    // g0..g3
     haze: vec4<f32>,          // radius, min weight, max weight, mix
-    limit_grade: vec4<f32>,   // luminance limit, grade mix, capture scale, -
+    limit_grade: vec4<f32>,   // luminance limit, grade mix, -, -
     grade: vec4<f32>,         // floor, ceiling, chroma, -
     wash: vec4<f32>,          // straight rgb, wash alpha
     ambient: vec4<f32>,       // shift, depth, blur radius, strength
@@ -39,8 +36,7 @@ struct Recipe {
 struct MaterialUniforms {
     // scene width pt, scene height pt, px per pt, capture max lod
     scene: vec4<f32>,
-    // this pass's capture scale, display peak, capture texel size pt
-    // (x, y)
+    // display peak, capture texel size pt (x, y), -
     misc: vec4<f32>,
     // region min pt, region size pt: the pass runs on a patch covering the
     // group's bounds plus reach, and the capture covers the same rect
@@ -216,7 +212,7 @@ fn glass_body(
     let radius = r.haze.x;
     if radius > 0.0 {
         let lod = level_of_radius(radius);
-        let t = 0.25 * lod * uni.misc.zw;
+        let t = 0.25 * lod * uni.misc.yz;
         let F = unpremultiply(
             0.5 * (sample_capture_level(p + t, lod)
                 + sample_capture_level(p - t, lod)),
@@ -366,12 +362,6 @@ fn material_fragment(v: FullscreenOut) -> @location(0) vec4<f32> {
     let cov = sat(0.5 - f.d / fw);
     let backdrop = sample_backdrop(p);
 
-    // This pass draws the members captured at its scale; other members'
-    // pixels keep what their own pass wrote.
-    if abs(r.limit_grade.z - uni.misc.x) > 1e-4 {
-        discard;
-    }
-
     // §4.10: the cast shadow — plain black, no backdrop sample, at the
     // shifted field.
     let f_s = load_field((p - r.cast_a.xy) * uni.scene.z);
@@ -392,7 +382,7 @@ fn material_fragment(v: FullscreenOut) -> @location(0) vec4<f32> {
         let n = f.n / max(length(f.n), 1e-4);
         var C = glass_body(r, p, f.d, n, cov, uni.scene.z);
         // §4.11: the per-channel ceiling, then the display peak.
-        C = clamp(C, vec3<f32>(0.0), vec3<f32>(min(r.cast_b.z, uni.misc.y)));
+        C = clamp(C, vec3<f32>(0.0), vec3<f32>(min(r.cast_b.z, uni.misc.x)));
         // §4.12: the highlight sibling.
         C = highlight(r, C, f.d, n, cov);
         // §4.13: the tint siblings.

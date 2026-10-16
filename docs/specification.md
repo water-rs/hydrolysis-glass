@@ -75,10 +75,12 @@ shape is open.
 
 Elements in a **container** share one backdrop capture and one field: the
 union of the members' fields, joined smoothly over a smoothing distance of
-30 pt. A standalone element's smoothing is 8 pt. Both are measured. Inside the
-union, each pixel takes the recipe of the member whose own field is smallest
-there [chosen]. Gaps of 16 pt between container members stay open at rest, and
-members brought together merge into one continuous shape [measured].
+30 pt. A standalone element's smoothing is 8 pt. Both are measured. All
+members render with one recipe, the container recipe of §5.6 [measured].
+Inside the union, each pixel takes the tint and the ellipse bend of the member
+whose own field is smallest there [chosen]. Gaps of 16 pt between container
+members stay open at rest, and members brought together merge into one
+continuous shape [measured].
 
 ## 3. Lobe profile and blur level
 
@@ -116,7 +118,9 @@ the pixel, `C` the working colour (encoded, unpremultiplied).
 
 The backdrop under the element's bounds plus the reach of its samples is
 captured at the element's **capture scale** and mip-mapped. All samples below
-read this capture at a displaced point and a level (§3).
+read this capture at a displaced point and a level (§3). A container is
+captured once, under the union of its members' bounds, at the capture scale of
+its recipe (§5.6).
 
 ### 4.2 Refraction
 
@@ -464,6 +468,51 @@ near 1.26. The uniform factor 1.25 is fitted to the observed 1.24 to 1.26
 [chosen]. That the growth does not depend on the button's size or tint is
 [chosen]; only the 66 × 34 pt button was observed.
 
+### 5.6 Containers
+
+The members of a container render with one recipe, the **container recipe**,
+built from the recipes they would have standing alone. *Largest* and
+*smallest* are the members with the largest and the smallest `m`:
+
+| Parameter | Value | Tag |
+|---|---|---|
+| capture scale | the largest member's | measured |
+| primary shift, primary depth, blur depth 0 | the smallest member's | measured |
+| every other value of §5.1 | the largest member's | measured |
+
+Because the capture scale never grows with `m`, the container's capture scale
+is the smallest among its members' recipes. The members' order does not
+matter, and the container's own bounds are not a size driver [measured].
+
+Observed on device (dark appearance, translucency 0.5), as interior means of
+the centre half of each member's frame. Each 60 pt circle is measured
+standing alone and as a member of the container named in its row:
+
+| Circle's container | Backdrop | Circle alone | Circle in container | Largest member, alone / in container |
+|---|---|---|---|---|
+| with a 300 × 200.33 pt card (radius 40), 40 pt below it | white | 186.3 | 122.5 | 122.7 / 122.7 |
+| | grey 0.5 | 134.7 | 116.6 | 117.1 / 117.1 |
+| | black | 31.5 | 31.5 | 31.5 / 31.5 |
+| with a 160 × 80 pt capsule, 50 pt beside it | white | 186.4 | 160.4 | 160.5 / 160.5 |
+| | grey 0.5 | 134.8 | 127.5 | 127.7 / 127.7 |
+| with a second 60 pt circle, the two spanning 200 × 200 pt | white | 186.4 | 186.4 | — |
+
+Over a vertical black | white edge through the circle's centre, the circle
+beside the card steps from 84 to 136 within 2 pt when it stands alone; in the
+container its interior ramps over about 13 pt, as the card's does, and it
+casts the card's shadow. The card and the capsule render the same in their
+containers as alone, to within 1 level. The container with the card captures
+at 0.25 and the circle alone at 0.5; the containers with the capsule or a
+second circle capture at 0.5. In both mixed containers the primary shift and
+depth are −30 and 15, the circle's, where the card alone has −60 and 20 and
+the capsule −40 and 20; listing the circle first or last changes nothing.
+
+In both mixed containers the member with the largest `m` is also the largest
+by area, so whether the larger member is chosen by `m` or by area is open.
+Only regular containers were observed: a clear container, one mixing the two
+families, or one with tinted and untinted members has not been, and which tint
+each member draws is chosen (§2).
+
 ## 6. Model checks
 
 The model above, with the §5 recipes, against measured pixels. Shadow
@@ -542,6 +591,11 @@ uses red (230, 38, 38) and blue (26, 90, 230), encoded [chosen].
 1. Every backdrop in dark and in light appearance at translucency 0.5.
 2. White in dark and light at translucency 0 and 1.
 3. The container with its circles moved together until they touch, at rest.
+4. The **mixed container**: a regular 300 × 200.33 pt rounded rectangle
+   (radius 40) at (51, 120) and a regular 60 pt circle at (171, 360.33) in
+   one container, with the same two shapes standing alone at (51, 480) and
+   (171, 720.33), on its own 402 × 874 pt scene at 3 px/pt. Black, grey 0.5,
+   white and the split, in dark appearance at translucency 0.5.
 
 ### Observations
 
@@ -573,3 +627,10 @@ uses red (230, 38, 38) and blue (26, 90, 230), encoded [chosen].
   higher and they have no ambient pickup.
 - **Union.** The container's circles stay separate at 16 pt; brought
   together they merge into one shape with no seam or hole.
+- **Mixed container.** The circle in the container renders the card's
+  recipe: over white its interior is mid grey like the card's (122), where the
+  standalone circle is lighter (186), and over grey 117 against 135. Over the
+  split it shows the card's soft transition from red to blue, where the
+  standalone circle's is sharp. Over white and grey it casts the card's soft
+  shadow, where the standalone circle's fringe is a few levels deep at most.
+  The card renders the same in the container and standing alone.

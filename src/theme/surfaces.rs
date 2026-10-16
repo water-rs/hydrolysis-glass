@@ -267,7 +267,8 @@ pub fn container(palette: &Palette, bounds: KRect, translucency: Translucency) -
 }
 
 /// Fuses surfaces into one group: container smoothing when any member is a
-/// container, standalone smoothing otherwise.
+/// container, standalone smoothing otherwise. The members share the
+/// container recipe (§5.6, [`Group::container`]).
 #[must_use]
 pub fn group(surfaces: Vec<Surface>) -> Group {
     let smoothing = if surfaces.iter().any(|s| s.role == Role::Container) {
@@ -275,10 +276,7 @@ pub fn group(surfaces: Vec<Surface>) -> Group {
     } else {
         STANDALONE_UNION_SMOOTHING
     };
-    Group {
-        members: surfaces.into_iter().map(|s| s.element).collect(),
-        smoothing,
-    }
+    Group::container(surfaces.into_iter().map(|s| s.element).collect(), smoothing)
 }
 
 #[cfg(test)]
@@ -426,12 +424,12 @@ mod tests {
                 Translucency::default(),
             ),
         ]);
-        assert_eq!(g.smoothing, CONTAINER_UNION_SMOOTHING);
+        assert_eq!(g.smoothing(), CONTAINER_UNION_SMOOTHING);
         let g = group(vec![toolbar(
             &P,
             KRect::new(0.0, 0.0, 300.0, 50.0),
             Translucency::default(),
         )]);
-        assert_eq!(g.smoothing, STANDALONE_UNION_SMOOTHING);
+        assert_eq!(g.smoothing(), STANDALONE_UNION_SMOOTHING);
     }
 }
