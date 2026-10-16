@@ -293,13 +293,13 @@ impl Interactive {
             let before = self.group();
             self.step();
             let after = self.group();
-            let moved = before.members.iter().zip(&after.members).any(|(a, b)| {
+            let moved = before.members().iter().zip(after.members()).any(|(a, b)| {
                 (a.shape.rect.x - b.shape.rect.x).abs() > epsilon
                     || (a.shape.rect.y - b.shape.rect.y).abs() > epsilon
                     || (a.shape.rect.w - b.shape.rect.w).abs() > epsilon
                     || (a.shape.radii[0] - b.shape.radii[0]).abs() > epsilon
                     || (a.recipe.cast_density - b.recipe.cast_density).abs() > epsilon
-            }) || (before.smoothing - after.smoothing).abs() > epsilon;
+            }) || (before.smoothing() - after.smoothing()).abs() > epsilon;
             if !moved {
                 return frame + 1;
             }
@@ -367,7 +367,8 @@ mod tests {
             "offset after 10 frames: {off}"
         );
         g.settle(1e-4, 200);
-        let dragged = &g.group().members[1];
+        let group = g.group();
+        let dragged = &group.members()[1];
         assert!(
             (dragged.shape.rect.w - 60.0).abs() < 1e-4
                 && (dragged.shape.rect.h - 60.0).abs() < 1e-4,
@@ -398,10 +399,10 @@ mod tests {
         g.members[1].controls.drag.set(Some([8.0, 0.0]));
         g.settle(1e-4, 400);
         let group = g.group();
-        let field = UnionField::new(&group.members, group.smoothing);
+        let field = UnionField::new(group.members(), group.smoothing());
         // Midpoint of the (pulled) right gap.
-        let right = group.members[2].shape.rect;
-        let mid = group.members[1].shape.rect;
+        let right = group.members()[2].shape.rect;
+        let mid = group.members()[1].shape.rect;
         let x = (mid.x + mid.w + right.x) * 0.5;
         assert!(
             field.sample([x, 30.0]).distance < 0.0,
@@ -409,7 +410,7 @@ mod tests {
         );
         // A member sitting farther away than the attraction radius keeps its
         // gap open.
-        let far = group.members[3].shape.rect;
+        let far = group.members()[3].shape.rect;
         let x_far = (right.x + right.w + far.x) * 0.5;
         assert!(
             field.sample([x_far, 30.0]).distance > 0.0,
@@ -441,12 +442,12 @@ mod tests {
         let mut last = 40.0;
         for _ in 0..30 {
             g.step();
-            let r = g.group().members[0].shape.radii[0];
+            let r = g.group().members()[0].shape.radii[0];
             assert!(r < last && r >= 12.0);
             last = r;
         }
         g.settle(1e-4, 200);
-        assert!((g.group().members[0].shape.radii[0] - 12.0).abs() < 1e-2);
+        assert!((g.group().members()[0].shape.radii[0] - 12.0).abs() < 1e-2);
     }
 
     #[test]
@@ -464,6 +465,6 @@ mod tests {
         let frame = g.frame();
         g.members[0].controls.drag.set(Some([8.0, 0.0]));
         g.step();
-        assert!(frame.snapshot().members[0].shape.rect.x > 0.0);
+        assert!(frame.snapshot().members()[0].shape.rect.x > 0.0);
     }
 }
