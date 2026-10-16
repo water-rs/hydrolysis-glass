@@ -16,6 +16,7 @@ pub mod button;
 pub mod chrome;
 pub mod materials;
 pub mod palette;
+pub mod slider;
 pub mod surfaces;
 
 use core::time::Duration;
@@ -157,6 +158,26 @@ impl Glass {
             press,
             self.translucency,
         ))
+    }
+
+    /// The slider the renderer's track and fill rectangles place (§8.3):
+    /// the knob travels `travel` and the fill ends at `fill`'s trailing
+    /// edge.
+    #[must_use]
+    pub fn slider(
+        &self,
+        travel: Rect,
+        fill: Rect,
+        state: WidgetInteractionState,
+    ) -> slider::Slider {
+        slider::Slider::new(
+            travel,
+            fill,
+            self.palette.appearance,
+            slider::default_tint(self.palette.appearance),
+            !state.state.contains(InteractionState::DISABLED),
+            surfaces::press_progress(state, self.interaction_motion().pressed_opacity),
+        )
     }
 
     /// The glass surface of a tab bar.
@@ -696,9 +717,14 @@ impl WidgetTheme for Glass {
     }
 
     fn slider_metrics(&self, _size: ControlSize) -> SliderMetrics {
-        SliderMetrics::new(0.0, 8.0, 8.0, 120.0, 4.0, 28.0, 28.0)
+        slider::metrics()
     }
 
+    /// Records the whole slider (§8.3): the specification composites the
+    /// track, the fill, the knob's shadow and the knob as one layer, which
+    /// a disabled slider fades at half opacity, so the knob is part of
+    /// this record. It is placed where the renderer places the thumb: at
+    /// the fill's trailing edge on the track's centre line.
     fn draw_slider_track(
         &self,
         draw: &mut Recorder,
@@ -707,29 +733,20 @@ impl WidgetTheme for Glass {
         _size: ControlSize,
         state: WidgetInteractionState,
     ) {
-        chrome::slider_track(&self.palette, draw, track_rect, fill_rect, state);
+        let slider = self.slider(track_rect, fill_rect, state);
+        let lens = surfaces::slider_lens(&self.palette, &slider, self.translucency);
+        materials::record_slider(draw, &slider, lens.as_ref().map(|s| &s.element));
     }
 
+    /// The knob is recorded with the track by [`Self::draw_slider_track`].
     fn draw_slider_thumb(
         &self,
-        draw: &mut Recorder,
-        center: Point,
-        radius: f64,
+        _draw: &mut Recorder,
+        _center: Point,
+        _radius: f64,
         _size: ControlSize,
-        state: WidgetInteractionState,
+        _state: WidgetInteractionState,
     ) {
-        chrome::slider_thumb(&self.palette, draw, center, radius, state);
-    }
-
-    fn draw_slider_thumb_state_layer(
-        &self,
-        draw: &mut Recorder,
-        center: Point,
-        radius: f64,
-        _size: ControlSize,
-        state: WidgetInteractionState,
-    ) {
-        chrome::circular_state_layer(&self.palette, draw, center, radius * 1.4, state);
     }
 
     fn slider_value_indicator_metrics(&self) -> SliderValueIndicatorMetrics {

@@ -32,10 +32,10 @@
 //!   capture and one field; a single-member union degenerates to the
 //!   member's own field.
 
-use cherenkov::kurbo::{Rect as KRect, RoundedRect, RoundedRectRadii};
+use cherenkov::kurbo::{Rect as KRect, RoundedRect, RoundedRectRadii, Vec2};
 use cherenkov::{
     BlendSpace, ContinuousRect, Draw as _, Fixed, Group, Interpolation, LinearGradient, Recorder,
-    ShapeData,
+    Shadow, ShapeData,
 };
 use cherenkov_record::{
     BackdropShaderSource, CaptureClass, CaptureLevels, CaptureScale, MaterialCapture,
@@ -50,6 +50,7 @@ use crate::material::geometry::{
 use crate::material::recipe::{Recipe, blur_sigma, haze_sigma, sigma_reach};
 
 use super::palette::{Rgba, working};
+use super::slider::{self, Slider};
 use super::surfaces::Wash;
 
 /// The key the glass `backdrop_effect` shader registers under: the one
@@ -397,4 +398,64 @@ pub fn record_wash(recorder: &mut Recorder, wash: &Wash) {
         Group::new().blend_space(BlendSpace::SrgbEncoded),
         |recorder| recorder.fill(Fixed(shape_data(&wash.shape)), gradient),
     );
+}
+
+/// The continuous capsule of a rectangle, as the engine's analytic shape.
+fn capsule_data(rect: KRect) -> ShapeData {
+    shape_data(&Shape::rounded_rect(
+        super::surfaces::rect(rect),
+        super::surfaces::rect(rect).h * 0.5,
+        CornerCurve::Continuous,
+    ))
+}
+
+/// The track, its fill and the knob's shadow of `slider`, composited in
+/// encoded space (§8.3, Colours).
+fn record_slider_track(recorder: &mut Recorder, slider: &Slider) {
+    recorder.fill(
+        Fixed(capsule_data(slider.track)),
+        working(slider::unfilled_track(slider.appearance)),
+    );
+    recorder.fill(Fixed(capsule_data(slider.fill())), working(slider.tint));
+    let alpha = slider::SHADOW_ALPHA * slider.flat_opacity();
+    if alpha > 0.0 {
+        recorder.shadow(
+            Fixed(capsule_data(slider.knob())),
+            Shadow::new(slider::SHADOW_SIGMA, working([0.0, 0.0, 0.0, alpha]))
+                .offset(Vec2::new(0.0, slider::SHADOW_OFFSET)),
+        );
+    }
+}
+
+/// The knob's white fill at the opacity the lens leaves it.
+fn record_slider_knob(recorder: &mut Recorder, slider: &Slider) {
+    let alpha = slider.flat_opacity();
+    if alpha > 0.0 {
+        recorder.fill(
+            Fixed(capsule_data(slider.knob())),
+            working([1.0, 1.0, 1.0, alpha]),
+        );
+    }
+}
+
+/// Records a slider (§8.3) in encoded space.
+///
+/// The track, the fill, the knob's shadow and the knob form one group at
+/// the slider's opacity. A pressed slider's knob is the glass `lens` between
+/// the shadow and the white fill, which fade out as the lens takes over.
+///
+/// # Panics
+/// With a lens, as [`record`] does.
+pub fn record_slider(recorder: &mut Recorder, slider: &Slider, lens: Option<&Element>) {
+    let encoded = Group::new().blend_space(BlendSpace::SrgbEncoded);
+    if let Some(lens) = lens {
+        recorder.group(encoded, |r| record_slider_track(r, slider));
+        record(recorder, lens, false);
+        recorder.group(encoded, |r| record_slider_knob(r, slider));
+    } else {
+        recorder.group(encoded.opacity(slider.opacity()), |r| {
+            record_slider_track(r, slider);
+            record_slider_knob(r, slider);
+        });
+    }
 }
