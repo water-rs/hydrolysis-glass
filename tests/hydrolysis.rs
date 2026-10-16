@@ -41,6 +41,7 @@ mod common;
 use common::*;
 use hydrolysis_glass::material::geometry::STANDALONE_UNION_SMOOTHING;
 use hydrolysis_glass::{Appearance, Element, Glass, Group, Scene};
+use std::time::Duration;
 use waterui::color::Srgb;
 use waterui::layout::stack::hstack;
 use waterui::layout::{PositionExt as _, absolute};
@@ -58,7 +59,7 @@ const SIZE: ControlSize = ControlSize::Medium;
 /// A glass-styled button with its top-left corner at `(x, y)`, at the
 /// size its own metrics give it.
 ///
-/// The label is empty, so the button is the metrics' square well: this
+/// The label is empty, so the button is the metrics' insets alone: this
 /// scene is about the chrome, and a glyph run over it would be compared
 /// against a standalone surface that has none. Nothing frames the button
 /// — a `Frame` would centre the intrinsic size inside it, which puts the
@@ -70,15 +71,16 @@ fn glass_button(x: f32, y: f32) -> impl View {
         .position_anchor(waterui::layout::UnitPoint::TOP_LEADING, x, y)
 }
 
-/// The frame [`glass_button`] lays out at `(x, y)`: the metrics' minimum
-/// square, since the empty label asks for nothing wider.
+/// The frame [`glass_button`] lays out at `(x, y)`: the metrics' insets on
+/// both sides of an empty label (§8.1: the frame is the label plus the
+/// insets).
 #[allow(
     clippy::cast_possible_truncation,
     reason = "the metrics are small positive point sizes"
 )]
 fn button_rect(glass: &Glass, x: f32, y: f32) -> [f32; 4] {
     let m = glass.button_metrics(ButtonStyle::Glass, SIZE);
-    [x, y, m.min_width as f32, m.min_height as f32]
+    [x, y, (2.0 * m.padding_x) as f32, (2.0 * m.padding_y) as f32]
 }
 
 /// The §7 backdrop as a view, for the backdrops a view tree can express
@@ -100,6 +102,7 @@ fn backdrop_view(backdrop: Backdrop) -> AnyView {
             ))
             .spacing(0.0),
         ),
+        Backdrop::Edge => AnyView::new(hstack((solid(0.0), solid(1.0))).spacing(0.0)),
         Backdrop::Grid | Backdrop::GridOverSplit => {
             panic!("a grid backdrop is reviewed on the standalone exports, not through a view tree")
         }
@@ -133,7 +136,6 @@ fn button_element(appearance: Appearance, rect: [f32; 4]) -> Element {
             kurbo_rect(rect),
             ButtonStyle::Glass,
             SIZE,
-            false,
             WidgetInteractionState::NONE,
         )
         .expect("a glass button carries a surface")
@@ -398,4 +400,107 @@ fn app_chrome(backdrop: Backdrop) -> impl View {
             }),
         ],
     )
+}
+
+/// A glass or prominent text button of `size` with its top-left corner at
+/// `(x, y)`.
+fn text_button(
+    label: &'static str,
+    style: ButtonStyle,
+    size: ControlSize,
+    x: f32,
+    y: f32,
+) -> impl View {
+    button(label).style(style).size(size).position_anchor(
+        waterui::layout::UnitPoint::TOP_LEADING,
+        x,
+        y,
+    )
+}
+
+/// §7 scene 5, the part a view tree can express through the theme's
+/// hooks: a "Glass" text button per size group and a prominent button,
+/// over black and white in both appearances, labels drawn by the backend.
+/// The disabled, tinted, shaped, icon and two-line variants need inputs
+/// the `WidgetTheme` hooks do not carry and are exported by `tests/gpu.rs`.
+#[test]
+fn button_scene_with_labels() {
+    for backdrop in [Backdrop::Black, Backdrop::White] {
+        for (appearance, name) in [(Appearance::Dark, "dark"), (Appearance::Light, "light")] {
+            let mut app = GlassApp::mount(
+                move || {
+                    absolute((
+                        backdrop_view(backdrop),
+                        text_button("Glass", ButtonStyle::Glass, ControlSize::Small, 40.0, 100.0),
+                        text_button(
+                            "Glass",
+                            ButtonStyle::Glass,
+                            ControlSize::Medium,
+                            40.0,
+                            160.0,
+                        ),
+                        text_button("Glass", ButtonStyle::Glass, ControlSize::Large, 40.0, 220.0),
+                        text_button(
+                            "Continue",
+                            ButtonStyle::GlassProminent,
+                            ControlSize::Medium,
+                            40.0,
+                            300.0,
+                        ),
+                    ))
+                },
+                theme(appearance),
+            );
+            app.export(&format!("button_scene_{}_{name}_labels", backdrop.name()));
+        }
+    }
+}
+
+/// §7 scene 6: the regular "Glass" button alone over black in dark
+/// appearance, touched at its centre at t = 0 and released at t = 1 s,
+/// captured at 0, 0.147, 0.5, 1.215, 1.43 and 2 s.
+#[test]
+fn press_sequence() {
+    const AT: [f32; 2] = [168.0, 400.0];
+    let mut app = GlassApp::mount(
+        move || {
+            absolute((
+                backdrop_view(Backdrop::Black),
+                text_button(
+                    "Glass",
+                    ButtonStyle::Glass,
+                    ControlSize::Medium,
+                    AT[0],
+                    AT[1],
+                ),
+            ))
+        },
+        theme(Appearance::Dark),
+    );
+    app.settle();
+    // The frame the idle button lays out at: 66 x 34.33 pt.
+    let centre = (AT[0] + 33.0, AT[1] + 17.165);
+    let mut clock = Duration::ZERO;
+    app.touch_down(centre.0, centre.1);
+    capture_at(&mut app, &mut clock, 17, "t0000");
+    capture_at(&mut app, &mut clock, 147, "t0147");
+    capture_at(&mut app, &mut clock, 500, "t0500");
+    app.advance(Duration::from_millis(1000).saturating_sub(clock));
+    clock = Duration::from_millis(1000);
+    app.touch_up(centre.0, centre.1);
+    capture_at(&mut app, &mut clock, 1215, "t1215");
+    capture_at(&mut app, &mut clock, 1430, "t1430");
+    capture_at(&mut app, &mut clock, 2000, "t2000");
+}
+
+/// Advances the mounted app to `t_ms` since the touch and exports that
+/// frame; the capturing pump itself takes the last frame of the interval.
+fn capture_at(app: &mut GlassApp, clock: &mut Duration, t_ms: u64, name: &str) {
+    const FRAME: Duration = Duration::from_micros(16_667);
+    let target = Duration::from_millis(t_ms);
+    app.advance(target.saturating_sub(*clock + FRAME));
+    let image = app.capture_now();
+    *clock = target;
+    let path = image.save(&format!("press_{name}"));
+    assert!(path.is_file(), "press_{name}: PNG written");
 }

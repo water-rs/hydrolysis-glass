@@ -1,7 +1,8 @@
-// §3: the blur a radius of `b` capture texels makes — the capture
-// convolved with a Gaussian of standard deviation
-// `BLUR_SIGMA_PER_RADIUS · b` texels [fitted]. Shared by the standalone
-// and the engine material shaders, each of which reads its own capture.
+// §3: the blur a radius of `b` makes — the capture convolved with a
+// Gaussian of standard deviation `BLUR_SIGMA_PT_PER_RADIUS · b` pt
+// [fitted], whatever the capture scale; each shader carries it onto its
+// capture's texels. Shared by the standalone and the engine material
+// shaders, each of which reads its own capture.
 //
 // It is realized on the capture's 2×2 box pyramid [chosen]: on a level
 // whose texel leaves at most `BLUR_LEVEL_SIGMA` texels of deviation, a
@@ -16,10 +17,10 @@
 // and each adjacent pair of those is one bilinear read at the position
 // that splits the pair's weight. The folded grid is BLUR_PAIRS² reads
 // and the same sum.
-const BLUR_SIGMA_PER_RADIUS: f32 = 2.5;
-// §4.4: the haze's Gaussian deviation per capture texel of haze radius
-// [chosen].
-const HAZE_SIGMA_PER_RADIUS: f32 = 1.0;
+const BLUR_SIGMA_PT_PER_RADIUS: f32 = 1.6666666;
+// §4.4: the haze's Gaussian deviation, pt, per unit of haze radius
+// [fitted].
+const HAZE_SIGMA_PT_PER_RADIUS: f32 = 2.0;
 const BLUR_TAPS: i32 = 3;
 const BLUR_LEVEL_SIGMA: f32 = 1.5;
 const BLUR_PAIRS: i32 = BLUR_TAPS + 1;
