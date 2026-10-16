@@ -47,7 +47,7 @@ use crate::material::geometry::{
     CONTAINER_UNION_SMOOTHING, CONTINUOUS_EXPONENT, CornerCurve, Element, SMOOTHING_TO_UNION_K,
     STANDALONE_UNION_SMOOTHING, Shape,
 };
-use crate::material::recipe::{Recipe, blur_reach};
+use crate::material::recipe::{Recipe, blur_reach, haze_sigma, sigma_reach};
 
 use super::palette::{Rgba, working};
 use super::surfaces::Wash;
@@ -70,7 +70,7 @@ const STANDALONE_CLASS_BASE: u32 = 0x100;
 const CONTAINER_CLASS_BASE: u32 = 0x200;
 
 /// How many pyramid levels the glass captures keep: the recipe's largest
-/// reads (the ambient pickup's blur and the haze taps) clamp against the
+/// reads (the ambient pickup's blur and the haze's) clamp against the
 /// deepest level, so the classes take the engine's maximum.
 const LEVELS: u32 = CaptureLevels::MAX;
 
@@ -80,9 +80,11 @@ const LEVELS: u32 = CaptureLevels::MAX;
 /// (`0.35·m` at the measured-range bound `m = 200.33`, ≈70.1 pt) and the
 /// primary lobe (60 pt) plus the §3 blur's tap grid at the largest blur
 /// radius (5 capture texels at gain 1, [`blur_reach`] at the smallest
-/// class's 8 px texel) — plus the haze taps' `0.25 · lod` capture texels
-/// (≤14 px at that texel).
-const SHADER_REACH: f32 = (60.0 * 4.0 + blur_reach(5.0) * 8.0).max(0.35 * 200.33 * 4.0) + 14.0;
+/// class's 8 px texel) — and the haze's Gaussian at the pixel itself
+/// (radius 8, [`sigma_reach`] of [`haze_sigma`] at the same texel).
+const SHADER_REACH: f32 = (60.0 * 4.0 + blur_reach(5.0) * 8.0)
+    .max(0.35 * 200.33 * 4.0)
+    .max(sigma_reach(haze_sigma(8.0)) * 8.0);
 
 /// The blend distance `k` the engine's quadratic smooth minimum folds a
 /// container's member fields with, pt, and the one every standalone

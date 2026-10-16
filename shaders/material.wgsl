@@ -36,7 +36,7 @@ struct Recipe {
 struct MaterialUniforms {
     // scene width pt, scene height pt, px per pt, capture max lod
     scene: vec4<f32>,
-    // display peak, capture texel size pt (x, y), -
+    // display peak, -, -, -
     misc: vec4<f32>,
     // region min pt, region size pt: the pass runs on a patch covering the
     // group's bounds plus reach, and the capture covers the same rect
@@ -84,8 +84,8 @@ fn load_field(px: vec2<f32>) -> FieldSample {
 
 // ------------------------------------------------------------- sampling ---
 
-// §3: the mip level the haze and the ambient sample read for a radius of
-// `b` capture texels.
+// §3: the mip level the ambient sample reads for a radius of `b` capture
+// texels.
 fn level_of_radius(b: f32) -> f32 {
     let x = select(b, 1.0 + b * 0.5, b < 2.0);
     return max(log2(x), 0.0);
@@ -137,12 +137,11 @@ fn blur_read(at: vec2<f32>, level: f32) -> vec4<f32> {
     return textureSampleLevel(capture_tex, linear_sampler, at, level);
 }
 
-// §4.1/§4.3: the shared capture at `q_pt`, blurred by a radius of `b`
-// capture texels. The reads run straight through, like the engine's
-// `blurred_tap`.
-fn sample_blurred(q_pt: vec2<f32>, b: f32) -> vec4<f32> {
+// §4.1/§4.3/§4.4: the shared capture at `q_pt`, blurred by a Gaussian of
+// `sigma` capture texels. The reads run straight through, like the
+// engine's `blurred_tap`.
+fn sample_blurred(q_pt: vec2<f32>, sigma: f32) -> vec4<f32> {
     let uv = (q_pt - uni.region.xy) / uni.region.zw;
-    let sigma = BLUR_SIGMA_PER_RADIUS * b;
     let t = blur_position(sigma, uni.scene.w);
     let level = floor(t);
     return mix(
@@ -157,12 +156,6 @@ fn sample_capture(q_pt: vec2<f32>, b: f32) -> vec4<f32> {
     let uv = (q_pt - uni.region.xy) / uni.region.zw;
     let lod = clamp(level_of_radius(b), 0.0, uni.scene.w);
     return textureSampleLevel(capture_tex, linear_sampler, uv, lod);
-}
-
-// A capture sample at an explicit level (the §4.4 haze taps).
-fn sample_capture_level(q_pt: vec2<f32>, lod: f32) -> vec4<f32> {
-    let uv = (q_pt - uni.region.xy) / uni.region.zw;
-    return textureSampleLevel(capture_tex, linear_sampler, uv, clamp(lod, 0.0, uni.scene.w));
 }
 
 fn sample_backdrop(q_pt: vec2<f32>) -> vec4<f32> {
@@ -264,20 +257,17 @@ fn glass_body(
     // §4.2: the primary sample, refracted by the primary lobe and blurred at
     // its refracted depth.
     let o1 = lobe_at(d, r.shifts.y, r.shifts.x);
-    var C = unpremultiply(sample_blurred(p + n * o1, blur_radius_at(r, d + o1)));
+    var C = unpremultiply(sample_blurred(
+        p + n * o1,
+        BLUR_SIGMA_PER_RADIUS * blur_radius_at(r, d + o1),
+    ));
 
-    // §4.4: the haze — two taps at the level of the haze
-    // radius, diagonally opposite by 0.25·lod capture texels per axis
-    // (uni's per-axis texel size, pt), averaged and unpremultiplied; runs
-    // before the rim-sample mix.
+    // §4.4: the haze — the capture at the pixel blurred by a Gaussian of
+    // the haze radius's deviation, unpremultiplied; runs before the
+    // rim-sample mix.
     let radius = r.haze.x;
     if radius > 0.0 {
-        let lod = level_of_radius(radius);
-        let t = 0.25 * lod * uni.misc.yz;
-        let F = unpremultiply(
-            0.5 * (sample_capture_level(p + t, lod)
-                + sample_capture_level(p - t, lod)),
-        );
+        let F = unpremultiply(sample_blurred(p, HAZE_SIGMA_PER_RADIUS * radius));
         let c1 = r.haze.y * min(C, F)
             + r.haze.z * max(C, F)
             + (1.0 - r.haze.y - r.haze.z) * C;
@@ -288,7 +278,10 @@ fn glass_body(
     // sample.
     if r.rim.z > 0.0 {
         let o2 = lobe_at(d, r.shifts.w, r.shifts.z);
-        let s_rim = unpremultiply(sample_blurred(p + n * o2, blur_radius_at(r, d + o2)));
+        let s_rim = unpremultiply(sample_blurred(
+            p + n * o2,
+            BLUR_SIGMA_PER_RADIUS * blur_radius_at(r, d + o2),
+        ));
         let tw = sat((d - r.rim.x) / (r.rim.y - r.rim.x));
         C = mix(C, s_rim, r.rim.z * tw);
     }
