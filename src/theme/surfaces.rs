@@ -13,7 +13,6 @@ use waterui_backend_core::widget::WidgetInteractionState;
 use waterui_controls::ControlSize;
 use waterui_controls::button::ButtonStyle;
 
-use crate::interaction::press_shape;
 use crate::material::geometry::{
     CONTAINER_UNION_SMOOTHING, CornerCurve, Element, Rect, STANDALONE_UNION_SMOOTHING, Shape,
 };
@@ -31,6 +30,9 @@ pub const BUTTON_CORNER_RADIUS: f32 = 16.0;
 /// A button whose aspect is longer than this is a capsule; a squarer one keeps
 /// continuous corners so a tall icon well does not turn into a pill.
 pub const CAPSULE_ASPECT: f32 = 1.6;
+/// Bounds growth of a glass button at full press: `1 + 0.25·press` about its
+/// centre, uniform in both axes (spec §5.5). **[chosen]**
+pub const BUTTON_PRESS_SCALE: f32 = 0.25;
 /// Declared alpha of the accent tint folded into a prominent capsule.
 pub const PROMINENT_TINT_ALPHA: f32 = 0.9;
 
@@ -77,7 +79,7 @@ pub const fn rect(bounds: KRect) -> Rect {
 ///
 /// The renderer eases the state-layer opacity toward `pressed_opacity` while
 /// the pointer is down, so normalising it gives the animated press that scales
-/// the bounds by `1 + PRESS_SCALE·press`; a snapshot with no state-layer motion
+/// the bounds by `1 + BUTTON_PRESS_SCALE·press`; a snapshot with no state-layer motion
 /// falls back to the raw pressed flag.
 #[must_use]
 pub fn press_amount(state: WidgetInteractionState, pressed_opacity: f32) -> f32 {
@@ -112,21 +114,26 @@ pub const fn button_is_prominent(style: ButtonStyle) -> bool {
     )
 }
 
+/// A glass button while pressed: bounds grown `1 + BUTTON_PRESS_SCALE·press`
+/// about the centre with the radii scaled the same (spec §5.5). The growth
+/// belongs to the button style; the interactive material itself never grows.
+fn press_shape(shape: Shape, press: f32) -> Shape {
+    let grow = BUTTON_PRESS_SCALE.mul_add(press, 1.0);
+    Shape {
+        rect: shape.rect.scaled_about_center(grow),
+        radii: shape.radii.map(|r| r * grow),
+        ..shape
+    }
+}
+
 fn element(
     shape: Shape,
     family: Family,
     appearance: Appearance,
     translucency: Translucency,
-    press: f32,
 ) -> Element {
-    let rest = shape.rect;
-    let recipe = Recipe::for_element(rest.w, rest.h, family, appearance, translucency);
-    // A pressed element grows uniformly about its centre while keeping its
-    // idle recipe (spec §5.5).
-    Element {
-        shape: press_shape(shape, press),
-        recipe,
-    }
+    let recipe = Recipe::for_element(shape.rect.w, shape.rect.h, family, appearance, translucency);
+    Element { shape, recipe }
 }
 
 const fn tinted(mut e: Element, rgba: Rgba) -> Element {
@@ -171,15 +178,9 @@ pub fn button(
         return None;
     }
     let shape = button_shape(rect(bounds), icon_only);
-    let e = if button_is_prominent(style) {
+    let mut e = if button_is_prominent(style) {
         tinted(
-            element(
-                shape,
-                Family::Regular,
-                palette.appearance,
-                translucency,
-                press,
-            ),
+            element(shape, Family::Regular, palette.appearance, translucency),
             [
                 palette.accent[0],
                 palette.accent[1],
@@ -188,14 +189,11 @@ pub fn button(
             ],
         )
     } else {
-        element(
-            shape,
-            Family::Regular,
-            palette.appearance,
-            translucency,
-            press,
-        )
+        element(shape, Family::Regular, palette.appearance, translucency)
     };
+    // A pressed button grows uniformly about its centre while keeping its idle
+    // recipe (spec §5.5).
+    e.shape = press_shape(e.shape, press);
     Some(Surface {
         role: Role::Button,
         element: e,
@@ -212,7 +210,6 @@ pub fn tab_bar(palette: &Palette, bounds: KRect, translucency: Translucency) -> 
             Family::Regular,
             palette.appearance,
             translucency,
-            0.0,
         ),
     }
 }
@@ -227,7 +224,6 @@ pub fn toolbar(palette: &Palette, bounds: KRect, translucency: Translucency) -> 
             Family::Regular,
             palette.appearance,
             translucency,
-            0.0,
         ),
     }
 }
@@ -246,7 +242,6 @@ pub fn sheet(palette: &Palette, bounds: KRect, translucency: Translucency) -> Su
             Family::Regular,
             palette.appearance,
             translucency,
-            0.0,
         ),
     }
 }
@@ -267,7 +262,6 @@ pub fn container(palette: &Palette, bounds: KRect, translucency: Translucency) -
             Family::Regular,
             palette.appearance,
             translucency,
-            0.0,
         ),
     }
 }
@@ -386,8 +380,8 @@ mod tests {
             Translucency::default(),
         )
         .expect("glass");
-        assert!((down.element.shape.rect.w - 124.0).abs() < 1e-3);
-        assert!((down.element.shape.rect.h - 49.6).abs() < 1e-3);
+        assert!((down.element.shape.rect.w - 125.0).abs() < 1e-3);
+        assert!((down.element.shape.rect.h - 50.0).abs() < 1e-3);
         assert_eq!(
             down.element.shape.rect.center(),
             rest.element.shape.rect.center()
