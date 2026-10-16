@@ -88,9 +88,9 @@ pub const LUMA_GATE: [f32; 3] = [0.2125, 0.7153, 0.0721];
 /// **[chosen: the spec's unpremultiply has no ε]**
 pub const UNPREMULTIPLY_EPSILON: f32 = 1e-4;
 
-/// Effective-to-declared tint alpha ratio: the composite strength of the
-/// §4.13 tint layers is open; the layers composite at 0.4 × declared.
-/// **[chosen]**
+/// Effective-to-declared tint alpha ratio of a §4.13 tinted-glass element:
+/// the composite strength of the tint layers is open; they composite at
+/// 0.4 × the declared opacity. **[chosen]**
 pub const TINT_EFFECTIVE_ALPHA: f32 = 0.4;
 
 /// Width of the §4.12 highlight band, pt. **[chosen: keeps the current
@@ -366,9 +366,20 @@ pub fn grade_composite(
 pub struct Tint {
     /// Straight RGB, encoded.
     pub rgb: [f32; 3],
-    /// Declared alpha; the effective composited opacity is
-    /// [`TINT_EFFECTIVE_ALPHA`] times this.
+    /// The effective composited opacity of the tint layers.
     pub alpha: f32,
+}
+
+impl Tint {
+    /// The §4.13 tint of a tinted-glass element with the given declared
+    /// opacity: it composites at [`TINT_EFFECTIVE_ALPHA`] times that.
+    #[must_use]
+    pub fn declared(rgb: [f32; 3], opacity: f32) -> Self {
+        Self {
+            rgb,
+            alpha: TINT_EFFECTIVE_ALPHA * opacity,
+        }
+    }
 }
 
 /// Parameters of the §4.12 two-light rim highlight.

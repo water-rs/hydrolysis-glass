@@ -199,19 +199,11 @@ pub fn button(
             let tint = spec
                 .tint
                 .unwrap_or_else(|| button::default_tint(palette.appearance));
-            tinted(
-                body,
-                [tint[0], tint[1], tint[2]],
-                button::FULL_STRENGTH_TINT_ALPHA,
-            )
+            tinted(body, [tint[0], tint[1], tint[2]], 1.0)
         }
         (Kind::Prominent, false) => {
             let (grey, strength) = button::disabled_prominent_fill(palette.appearance);
-            tinted(
-                body,
-                [grey; 3],
-                strength / crate::material::recipe::TINT_EFFECTIVE_ALPHA,
-            )
+            tinted(body, [grey; 3], strength)
         }
     };
     // A pressed button grows uniformly about its centre; the recipe stays
@@ -377,7 +369,7 @@ mod tests {
         let s = surface(&spec(Kind::Prominent), Press::REST);
         let tint = s.element.recipe.tint.expect("tinted");
         assert_eq!(tint.rgb, [0.0, 136.0 / 255.0, 1.0]);
-        assert!((tint.alpha * crate::material::recipe::TINT_EFFECTIVE_ALPHA - 1.0).abs() < 1e-6);
+        assert_eq!(tint.alpha, 1.0);
         let red = ButtonSpec {
             tint: Some([1.0, 56.0 / 255.0, 61.0 / 255.0, 1.0]),
             ..spec(Kind::Prominent)
@@ -402,7 +394,7 @@ mod tests {
             .tint
             .expect("tinted");
         assert_eq!(tint.rgb, [0.55; 3]);
-        assert!((tint.alpha * crate::material::recipe::TINT_EFFECTIVE_ALPHA - 0.25).abs() < 1e-6);
+        assert_eq!(tint.alpha, 0.25);
         // A disabled glass button's body is unchanged.
         let glass = ButtonSpec {
             enabled: false,

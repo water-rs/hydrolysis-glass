@@ -9,7 +9,7 @@ use waterui::animation::Animation;
 use waterui_controls::ControlSize;
 
 use crate::material::geometry::{CornerCurve, Rect, Shape};
-use crate::material::recipe::{Appearance, TINT_EFFECTIVE_ALPHA};
+use crate::material::recipe::Appearance;
 
 use super::palette::Rgba;
 
@@ -250,11 +250,6 @@ pub const fn default_tint(appearance: Appearance) -> Rgba {
         Appearance::Light => [0.0, 136.0 / 255.0, 1.0, 1.0],
     }
 }
-
-/// Declared alpha of the tint layer that composites at full strength
-/// **[chosen]**: the layers composite at [`TINT_EFFECTIVE_ALPHA`] times
-/// the declared alpha.
-pub const FULL_STRENGTH_TINT_ALPHA: f32 = 1.0 / TINT_EFFECTIVE_ALPHA;
 
 /// The grey of a disabled prominent fill and how far the body moves toward
 /// it, `mix(body, g, k)` **[fitted]**.

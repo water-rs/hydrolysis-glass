@@ -398,10 +398,9 @@ pub fn verification_groups(
     let mut e3 = reg(capsule(101.0, 380.0, 200.0, 80.0));
     e3.recipe = e3
         .recipe
-        .with_tint(hydrolysis_glass::material::recipe::Tint {
-            rgb: [1.0; 3],
-            alpha: 0.3,
-        });
+        .with_tint(hydrolysis_glass::material::recipe::Tint::declared(
+            [1.0; 3], 0.3,
+        ));
     vec![
         Group::single(reg(rounded(51.0, 51.67, 300.0, 200.33, 40.0))),
         Group::single(clr(rounded(51.0, 276.0, 300.0, 80.0, 30.0))),

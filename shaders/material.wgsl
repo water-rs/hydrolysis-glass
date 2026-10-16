@@ -30,7 +30,7 @@ struct Recipe {
     hl_bb: vec4<f32>,         // glow gain, width, aperture, has tint
     hl_first: vec4<f32>,      // straight rgba
     hl_second: vec4<f32>,     // straight rgba
-    tint: vec4<f32>,          // straight rgb, declared alpha
+    tint: vec4<f32>,          // straight rgb, effective alpha
 }
 
 struct MaterialUniforms {
@@ -54,7 +54,6 @@ struct MaterialUniforms {
 
 const EPS_ALPHA: f32 = 1e-4;
 const HIGHLIGHT_BAND: f32 = 1.33;
-const TINT_EFFECTIVE: f32 = 0.4;
 
 const LUMA_LIMIT_W: vec3<f32> = vec3<f32>(0.2126, 0.7153, 0.0722);
 const LUMA_GATE_W: vec3<f32> = vec3<f32>(0.2125, 0.7153, 0.0721);
@@ -398,17 +397,17 @@ fn highlight(r: Recipe, outc: vec3<f32>, d: f32, n: vec2<f32>, cov: f32) -> vec3
 // §4.13: the tint layers — a fill of the shape, then an edge gradient at
 // full strength from −1 to 0 pt that eases off to zero 10 pt inward. The
 // measured stops (−1, 0, 10 pt) are read as distances measured inward
-// [chosen]. The effective alpha is 0.4 × declared [chosen: §4.13's
-// composite strength is open], and the gradient's gain follows the luma
+// [chosen]. The tint's alpha is the effective one (§4.13's
+// composite strength is the recipe's, `Tint::declared`), and the gradient's gain follows the luma
 // beneath it [chosen: keeps the current form].
 fn tint_layers(r: Recipe, outc: vec3<f32>, d: f32, cov: f32) -> vec3<f32> {
     if r.hl_bb.w < 0.5 || cov <= 0.0 {
         return outc;
     }
-    let a_flat = TINT_EFFECTIVE * r.tint.a * cov;
+    let a_flat = r.tint.a * cov;
     var c = r.tint.rgb * a_flat + outc * (1.0 - a_flat);
     let t = sat(-d / 10.0);
-    let a_rim = TINT_EFFECTIVE * r.tint.a * (1.0 - ease_cubic(t)) * cov;
+    let a_rim = r.tint.a * (1.0 - ease_cubic(t)) * cov;
     let gain = 0.2 + 0.8 * luma(c);
     c = r.tint.rgb * gain * a_rim + c * (1.0 - a_rim);
     return c;

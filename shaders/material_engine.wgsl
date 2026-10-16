@@ -38,7 +38,7 @@
 //   p10 ambient/contour ambient grade chroma, contour density, shift, softness
 //   p11 contour/border  contour width, contour clip, border aperture, cast falloff
 //   p12 cast/highlight  cast density, cast gain, channel ceiling, hl aperture
-//   p13 tint            straight r, g, b, declared alpha
+//   p13 tint            straight r, g, b, effective alpha
 //   p14 cast/rect       cast shift x, cast shift y, member rect x, member rect y
 //   p15 rect/bend       member rect w, member rect h, ellipse bend, has tint
 //
@@ -54,7 +54,6 @@
 const PI: f32 = 3.141592653589793;
 const EPS_ALPHA: f32 = 1e-4;
 const HIGHLIGHT_BAND: f32 = 1.33;
-const TINT_EFFECTIVE: f32 = 0.4;
 
 // The recipe's constant block, asserted by `theme::materials::uniforms`:
 // `Highlight::for_size` shares every term but the aperture, and the
@@ -456,16 +455,16 @@ fn highlight(c: vec3<f32>, d: f32, n: vec2<f32>, cov: f32, aperture: f32) -> vec
 
 // §4.13: the tint layers — a fill of the shape, then an edge gradient at
 // full strength from −1 to 0 pt that eases off to zero 10 pt inward. The
-// effective alpha is 0.4 × declared [chosen], and the gradient's gain
-// follows the luma beneath it [chosen: keeps the current form].
+// tint's alpha is the effective one (the recipe's `Tint::declared`), and the
+// gradient's gain follows the luma beneath it [chosen: keeps the current form].
 fn tint_layers(c: vec3<f32>, tint: vec4<f32>, has_tint: f32, d: f32, cov: f32) -> vec3<f32> {
     if has_tint < 0.5 || cov <= 0.0 {
         return c;
     }
-    let a_flat = TINT_EFFECTIVE * tint.a * cov;
+    let a_flat = tint.a * cov;
     var outc = tint.rgb * a_flat + c * (1.0 - a_flat);
     let t = gsat(-d / 10.0);
-    let a_rim = TINT_EFFECTIVE * tint.a * (1.0 - ease_cubic(t)) * cov;
+    let a_rim = tint.a * (1.0 - ease_cubic(t)) * cov;
     let gain = 0.2 + 0.8 * luma(outc);
     outc = tint.rgb * gain * a_rim + outc * (1.0 - a_rim);
     return outc;
