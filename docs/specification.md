@@ -652,6 +652,17 @@ uses red (230, 38, 38) and blue (26, 90, 230), encoded [chosen].
    one container, with the same two shapes standing alone at (51, 480) and
    (171, 720.33), on its own 402 × 874 pt scene at 3 px/pt. Black, grey 0.5,
    white and the split, in dark appearance at translucency 0.5.
+5. The **segmented scene** (§8.4), on its own 402 × 874 pt scene at
+   3 px/pt, over black, grey 0.5 and white, in dark and in light
+   appearance, each control 300 pt wide: "One | Two | Three" with the first
+   segment selected, at the regular and at the large size; "One | Two" with
+   the second selected; "A | Bb | Ccc | Dddd" with the third selected;
+   "Short | A much longer label" with the first selected; three symbol
+   segments; a red-tinted and a disabled "One | Two | Three".
+6. The **selection sequence**: a 300 pt "One | Two | Three" control alone
+   over black in dark appearance, its selection moved from the first to
+   the third segment at t = 0, rendered at t = 0, 0.05, 0.1, 0.2, 0.38 and
+   0.6 s.
 
 ### Observations
 
@@ -693,3 +704,182 @@ uses red (230, 38, 38) and blue (26, 90, 230), encoded [chosen].
   standalone circle's is sharp. Over white and grey it casts the card's soft
   shadow, where the standalone circle's fringe is a few levels deep at most.
   The card renders the same in the container and standing alone.
+- **Segmented control.** Each control of the segmented scene draws a
+  capsule container 32 pt tall (49 pt at the large size), 1 pt taller than
+  its frame, divided into equal segments whatever their labels, with no
+  separators. The selected segment has a capsule thumb 2 pt inside its
+  segment on every side, so the first of three is 96 × 28 pt at x = 2. The
+  container is 28, 28, 31 over black and 222, 222, 225 over white in dark
+  appearance, 14, 14, 15 and 238, 238, 239 in light; the thumb is 90, 90,
+  95 and 226, 226, 231 in dark and white in light. Labels are white in dark
+  and black in light, the selected one visibly heavier. The red tint
+  changes nothing, and the disabled control is the plain one at half
+  opacity, with labels of 128 over black in dark appearance.
+- **Selection.** In the selection sequence the thumb's centre is at 50 pt
+  from the container's leading edge at t = 0, then 89.5, 152, 229 and
+  251.3 pt at 0.05, 0.1, 0.2 and 0.38 s, just past its end, and 250 pt at
+  0.6 s; the thumb keeps its size throughout. "Three" is already in the
+  heavier weight, and "One" in the lighter, from the first frame after the
+  change.
+
+## 8. Controls
+
+A control is drawn from the glass elements of §2 to §5 and the chrome its
+section specifies: geometry, states and motion. Lengths are layout points at
+the default text size. Colours are encoded 8-bit sRGB as rendered on the
+observed display, and "over black" or "over white" names the backdrop behind
+the control. Unless a row says otherwise, observations are at translucency
+0.5.
+
+
+### 8.4 Segmented control
+
+A segmented control selects one of a few options laid out side by side:
+a capsule **container** divided into equal **segments**, each holding one
+option's label, and a capsule **thumb** under the selected segment. At
+rest no part is glass: the container and the thumb are flat fills, with
+no shadow and no rim. Glass appears only on the thumb while a touch drags
+it (below).
+
+**Reference.** Geometry and motion were observed on the iOS 27.0
+simulator (an iPhone 16 Pro, 402 × 874 pt at 3 px/pt) and are tagged
+[measured: simulator] or [fitted: simulator]. No device capture was
+possible, so the colours below are the simulator's rendering, tagged
+[chosen] until a device capture confirms them. Touch interaction was not
+observed at all.
+
+#### Geometry
+
+Let the frame be `W` wide with `n` segments.
+
+| Size group | Frame height | Container height | Thumb height |
+|---|---|---|---|
+| mini, small, regular | 31 | 32 | 28 |
+| large, extra large | 48 | 49 | 45 |
+
+All values are [measured: simulator, within 1/3 pt]. Mini, small and
+regular are identical, and so are large and extra large.
+
+- **Container.** A capsule `W` wide whose top edge is the frame's top edge;
+  it is 1 pt taller than the frame and overhangs its bottom edge by 1 pt,
+  which takes no layout space [measured: simulator]. The control takes the
+  width it is given.
+- **Segments.** The container is divided into `n` segments of width
+  `W / n`, whatever their labels: "Short" and "A much longer label" each
+  get half [measured: simulator, 2, 3 and 4 segments at 300 and 402 pt].
+  No separators are drawn between segments [measured: simulator].
+- **Thumb.** A capsule inset 2 pt on every side from the selected
+  segment: `W / n − 4` wide and the container's height minus 4 [measured:
+  simulator, within 0.05 pt horizontally].
+- **Labels.** Each label is centred in its segment on both axes, in 13 pt
+  text: regular weight when its segment is not selected and medium weight
+  when it is [measured: simulator, ink widths within 1/3 pt of the system
+  font's: "Two" 23.33 pt unselected and 24.33 pt selected]. The text size
+  is the same at the large size [measured: simulator]. A symbol label is
+  drawn at the size of 17 pt text, centred [measured: simulator, a filled
+  star inks 18.7 × 17.3 pt; chosen: the 17 pt size, matching that ink].
+- **Corners.** The container and the thumb are capsules with continuous
+  corners [chosen: the 1/3 pt sampling does not separate circular from
+  continuous corners].
+- **Direction.** In a right-to-left layout the segments are laid out from
+  the right [chosen: not observed].
+- **Hit region.** Each segment, extended vertically to at least 44 pt
+  about the container's centre [chosen: touch hit-testing was not
+  observed].
+
+#### Colours
+
+| Part | Dark appearance | Light appearance |
+|---|---|---|
+| container | (117, 117, 130) at alpha 0.239 over the backdrop | (115, 115, 123) at alpha 0.122 over the backdrop |
+| thumb | (235, 235, 245) at alpha 0.30 over the container | white, opaque |
+| labels, selected or not | white | black |
+
+All entries are [chosen: the simulator's rendering, awaiting a device
+capture]. Both translucent fills blend in encoded space [fitted:
+simulator, the blends reproduce the rendered colours over black, grey 0.5
+and white within 1 level: the dark container 28, 125, 222, the light
+container 14, 126, 238 and the dark thumb 90, 158, 226 in the red
+channel].
+
+#### States
+
+| State | Container and thumb | Labels |
+|---|---|---|
+| enabled | as above | as above |
+| tinted | unchanged: the tint has no effect | unchanged |
+| disabled | as enabled, then the whole control at opacity 0.5 | as enabled, at opacity 0.5 |
+| dragging | the thumb becomes a glass lens (below) [chosen] | as above |
+
+- **Tint.** A red tint left every pixel unchanged [measured: simulator].
+- **Disabled.** The enabled control is composited over the backdrop at
+  opacity 0.5, labels included [fitted: simulator, within 1 level: the
+  labels 128 over black in dark appearance and 127 over white in light;
+  the dark container's alpha halves to 0.122 and the dark thumb's
+  combined alpha from 0.467 to 0.235]. A disabled control does not respond
+  to touches [chosen: not observed].
+- **Focus.** Not observed. An implementation that shows a focused state
+  states its own choice.
+
+#### Selection motion
+
+The thumb's drawn position follows a **display position** `s`, the
+selected index as a real number; the thumb's leading edge is
+`s · W / n + 2`. When the selection changes, `s` moves to the new index by
+the **selection spring**, on a unit mass:
+
+| Spring | Natural frequency ω0 | Damping ratio ζ | Stiffness ω0² | Damping 2ζω0 |
+|---|---|---|---|---|
+| selection | 15.7 rad/s | 0.85 | 246 | 26.7 |
+
+[fitted: simulator, five changes of one and two segments at 60 frames per
+second, in both directions; every fit lies within ω0 15.71 to 15.73 rad/s
+and ζ 0.850 to 0.851, with a residual below 0.3 % of the travel. A sixth
+change, whose recording dropped five frames at the start, is left out.]
+From rest, `s` covers 20 % of the change after 0.05 s, 51 % after 0.1 s
+and 89 % after 0.2 s, overshoots by 0.6 % at 0.38 s and is within 0.1 %
+after 0.6 s.
+
+- **Every change animates.** A selection change moves the thumb by the
+  selection spring whether it was made with an animation, with a linear
+  1.5 s animation, or with animation explicitly disabled [measured:
+  simulator].
+- **Thumb.** The thumb keeps its size and colour during the motion
+  [measured: simulator, 28 pt tall and of constant width in every frame].
+- **Labels.** The labels switch weight at the change, in the first frame
+  after it, before the thumb has moved [measured: simulator].
+- **Start.** `s` starts at the selection change [chosen: the observed
+  motion began 0.019 to 0.032 s after the change was made, which is the
+  render pipeline]. A change during the motion starts the spring from the
+  current `s` and its velocity [chosen: only changes from rest were
+  observed].
+
+#### Touch
+
+Nothing in this subsection was observed: every value is [chosen],
+awaiting a touch capture. The values make the thumb a glass lens while it
+is dragged, which is the part of the control that shows the material.
+
+- **Tap.** A touch that ends in a segment's hit region without having
+  moved more than 10 pt selects that segment at touch-up, with the
+  selection motion above [chosen].
+- **Press.** A touch that begins on the selected segment drives a press
+  progress `p` toward 1 by a spring of ω0 = 28.2 rad/s and ζ = 0.65;
+  release or cancellation drives it toward 0 by a spring of
+  ω0 = 15.8 rad/s and ζ = 0.385 [chosen: the button's press and release
+  springs, §8.1, so that the controls respond alike].
+- **Lens.** While pressed, the thumb scales about its centre by
+  `1 + 0.15·p`, to about the container's height at the regular size and
+  7 pt into each neighbouring segment of a 300 pt, three-segment control,
+  and becomes a clear-family glass element (§5.2)
+  over the container and the labels: its fill is drawn at opacity
+  `1 − max(p, 0)` over the glass [chosen: a lens that shows the labels it
+  passes over, kept small enough to stay inside the neighbouring
+  segments].
+- **Drag.** While pressed, `s` follows the touch: it is the selected
+  index plus the touch's horizontal offset divided by `W / n`, clamped to
+  [0, n − 1]. At release the segment nearest to `s` becomes selected, and
+  `s` settles to it by the selection spring from its position and
+  velocity, while `p` returns to 0 [chosen].
+- **Leaving the control.** The drag continues wherever the touch goes
+  until release; it never cancels [chosen].
