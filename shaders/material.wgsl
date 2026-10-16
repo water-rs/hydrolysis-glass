@@ -89,10 +89,52 @@ fn load_field(px: vec2<f32>) -> FieldSample {
 
 // ------------------------------------------------------------- sampling ---
 
-// §3: the mip level a blur radius of `b` capture texels selects.
+// §3: the mip level the haze and the ambient sample read for a radius of
+// `b` capture texels.
 fn level_of_radius(b: f32) -> f32 {
     let x = select(b, 1.0 + b * 0.5, b < 2.0);
     return max(log2(x), 0.0);
+}
+
+// The §3 blur of `sigma` level-0 capture texels (blur.wgsl) read on
+// pyramid level `level` around `uv`.
+fn gaussian_at_level(uv: vec2<f32>, sigma: f32, level: f32) -> vec4<f32> {
+    let s = blur_deviation(sigma, level);
+    if s < 1e-4 {
+        return textureSampleLevel(capture_tex, linear_sampler, uv, level);
+    }
+    let size = vec2<f32>(textureDimensions(capture_tex, i32(level)));
+    // Texel centres sit at integers on this grid.
+    let p = uv * size - 0.5;
+    let base = floor(p);
+    let x = blur_axis(p.x - base.x, s);
+    let y = blur_axis(p.y - base.y, s);
+    var acc = vec4<f32>(0.0);
+    var total = 0.0;
+    for (var j = 0; j < BLUR_PAIRS; j += 1) {
+        for (var i = 0; i < BLUR_PAIRS; i += 1) {
+            let w = x.weight[i] * y.weight[j];
+            let at = (base + vec2<f32>(x.offset[i], y.offset[j]) + 0.5) / size;
+            acc += w * textureSampleLevel(capture_tex, linear_sampler, at, level);
+            total += w;
+        }
+    }
+    return acc / total;
+}
+
+// §4.1/§4.3: the shared capture at `q_pt`, blurred by a radius of `b`
+// capture texels.
+fn sample_blurred(q_pt: vec2<f32>, b: f32) -> vec4<f32> {
+    let uv = (q_pt - uni.region.xy) / uni.region.zw;
+    let sigma = BLUR_SIGMA_PER_RADIUS * b;
+    let t = blur_position(sigma, uni.scene.w);
+    let level = floor(t);
+    let a = gaussian_at_level(uv, sigma, level);
+    let f = t - level;
+    if f <= 0.0 {
+        return a;
+    }
+    return mix(a, gaussian_at_level(uv, sigma, level + 1.0), f);
 }
 
 // §4.1: the shared capture sampled at `level(b)`, never below 0.
@@ -207,7 +249,7 @@ fn glass_body(
     // §4.2: the primary sample, refracted by the primary lobe and blurred at
     // its refracted depth.
     let o1 = lobe_at(d, r.shifts.y, r.shifts.x);
-    var C = unpremultiply(sample_capture(p + n * o1, blur_radius_at(r, d + o1)));
+    var C = unpremultiply(sample_blurred(p + n * o1, blur_radius_at(r, d + o1)));
 
     // §4.4: the haze — two taps at the level of the haze
     // radius, diagonally opposite by 0.25·lod capture texels per axis
@@ -227,11 +269,14 @@ fn glass_body(
         C = mix(c1, F, r.haze.w);
     }
 
-    // §4.2: the rim sample and the rim-ramp mix.
-    let o2 = lobe_at(d, r.shifts.w, r.shifts.z);
-    let s_rim = unpremultiply(sample_capture(p + n * o2, blur_radius_at(r, d + o2)));
-    let tw = sat((d - r.rim.x) / (r.rim.y - r.rim.x));
-    C = mix(C, s_rim, r.rim.z * tw);
+    // §4.2: the rim sample and the rim-ramp mix; a rim mix of 0 takes no
+    // sample.
+    if r.rim.z > 0.0 {
+        let o2 = lobe_at(d, r.shifts.w, r.shifts.z);
+        let s_rim = unpremultiply(sample_blurred(p + n * o2, blur_radius_at(r, d + o2)));
+        let tw = sat((d - r.rim.x) / (r.rim.y - r.rim.x));
+        C = mix(C, s_rim, r.rim.z * tw);
+    }
 
     // §4.5: the luminance limit [fitted].
     let lum = dot(LUMA_LIMIT_W, C);

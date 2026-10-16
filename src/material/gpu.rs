@@ -19,7 +19,7 @@
 use super::geometry::{
     CONTINUOUS_EXPONENT, CornerCurve, Element, SMOOTHING_TO_TAU, STANDALONE_UNION_SMOOTHING,
 };
-use super::recipe::{Recipe, level};
+use super::recipe::{Recipe, blur_reach, level};
 use bytemuck::{Pod, Zeroable};
 use wgpu::util::DeviceExt;
 
@@ -288,6 +288,9 @@ const COMMON_WGSL: &str = include_str!("../../shaders/common.wgsl");
 const CAPTURE_WGSL: &str = include_str!("../../shaders/capture.wgsl");
 const FIELD_WGSL: &str = include_str!("../../shaders/field.wgsl");
 const MATERIAL_WGSL: &str = include_str!("../../shaders/material.wgsl");
+/// The §3 blur law both material shaders read: the standalone pass here,
+/// the engine shader through `theme::materials`.
+pub(crate) const BLUR_WGSL: &str = include_str!("../../shaders/blur.wgsl");
 const FOREGROUND_WGSL: &str = include_str!("../../shaders/foreground.wgsl");
 
 fn shader(device: &wgpu::Device, label: &str, body: &str) -> wgpu::ShaderModule {
@@ -559,10 +562,11 @@ struct GroupGpu {
 /// |cast_shift|`), the contour shade (`2·contour_shade_softness +
 /// contour_shade_shift + contour_shade_width`), the border
 /// (`|border_band_offset| + border_band_width`), the ambient and refraction lobes
-/// plus the blur footprint of the sample taken there (blur radius in
-/// capture texels × `1/(capture_scale · px_per_pt)` pt — the ambient sample's own radius
-/// for the ambient tap, `blur_radius · max blur gain` for the refraction
-/// taps), and the haze taps (`haze_radius` +
+/// plus the blur footprint of the sample taken there, in capture texels ×
+/// `1/(capture_scale · px_per_pt)` pt — the ambient sample's own radius
+/// for the ambient tap, the §3 Gaussian's tap grid
+/// (`blur_reach(blur_radius · max blur gain)`) for the refraction taps —
+/// and the haze taps (`haze_radius` +
 /// `0.25·level(haze_radius)` texels × `1/(capture_scale · px_per_pt)` pt).
 ///
 /// `1/(capture_scale · px_per_pt)` bounds the level-0 texel (`region_pt` over
@@ -587,7 +591,8 @@ fn group_region(group: &Group, scene: &Scene) -> [u32; 4] {
         // `1/(scale · px_per_pt)` is a safe upper bound.
         let texel_pt = 1.0 / (r.capture_scale * scene.px_per_pt);
         let refraction_blur_pt =
-            r.blur_radius * r.blur_gains.iter().copied().fold(0.0_f32, f32::max) * texel_pt;
+            blur_reach(r.blur_radius * r.blur_gains.iter().copied().fold(0.0_f32, f32::max))
+                * texel_pt;
         // §4.4's taps: the haze radius's footprint plus their
         // ±0.25·level(radius) texel offset.
         let haze_blur_pt = (0.25f32.mul_add(level(r.haze_radius), r.haze_radius)) * texel_pt;
@@ -910,7 +915,11 @@ impl GlassRenderer {
 
         let capture_module = shader(device, "glass capture", CAPTURE_WGSL);
         let field_module = shader(device, "glass field", FIELD_WGSL);
-        let material_module = shader(device, "glass material", MATERIAL_WGSL);
+        let material_module = shader(
+            device,
+            "glass material",
+            &format!("{BLUR_WGSL}\n{MATERIAL_WGSL}"),
+        );
         let foreground_module = shader(device, "glass foreground", FOREGROUND_WGSL);
 
         let blit = pipeline(
@@ -1841,5 +1850,23 @@ mod tests {
     #[test]
     fn recipe_layout_is_23_vec4() {
         assert_eq!(std::mem::size_of::<GpuRecipe>(), 23 * 16);
+    }
+
+    /// The §3 blur both material shaders read declares the constants the
+    /// recipe states, so the reach `group_region` and the theme declare
+    /// covers every tap the shaders take.
+    #[test]
+    fn shaders_declare_the_blur_law() {
+        use crate::material::recipe::{BLUR_LEVEL_SIGMA, BLUR_SIGMA_PER_RADIUS, BLUR_TAPS};
+        for line in [
+            format!("const BLUR_SIGMA_PER_RADIUS: f32 = {BLUR_SIGMA_PER_RADIUS:?};"),
+            format!("const BLUR_TAPS: i32 = {BLUR_TAPS};"),
+            format!("const BLUR_LEVEL_SIGMA: f32 = {BLUR_LEVEL_SIGMA:?};"),
+        ] {
+            assert!(
+                BLUR_WGSL.contains(line.as_str()),
+                "blur.wgsl declares `{line}`"
+            );
+        }
     }
 }

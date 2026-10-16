@@ -44,7 +44,8 @@
 //
 // Distances the recipe calls pt arrive through `px.sdf`/`px.scale`;
 // capture radii are recipe capture-texel counts, scaled onto the bound
-// capture's grid by `backdrop_scale / p5.z` before `level_of_radius` —
+// capture's grid by `backdrop_scale / p5.z` before the blur or
+// `level_of_radius` reads them —
 // a member's capture class snaps its recipe's requested scale up to the
 // registered lattice (see `theme::materials`), so the compensation keeps
 // every physical radius the recipe's. The member rect rides in
@@ -129,7 +130,8 @@ fn glass_work_space(c: vec4<f32>) -> vec3<f32> {
     return srgb_encode_signed(P3_TO_SRGB * glass_unpremultiply(c));
 }
 
-// §3: the mip level a blur radius of `b` capture texels selects.
+// §3: the mip level the haze and the ambient sample read for a radius of
+// `b` capture texels.
 fn level_of_radius(b: f32) -> f32 {
     let x = select(b, 1.0 + b * 0.5, b < 2.0);
     return max(log2(x), 0.0);
@@ -226,6 +228,49 @@ fn tap(q: vec2<f32>, b: f32, k_tex: f32) -> vec3<f32> {
     return tap_at(q, level_of_radius(b * k_tex));
 }
 
+// The §3 blur of `sigma` level-0 texels of the bound capture
+// (blur.wgsl), read on pyramid `level` around device point `q`: the
+// premultiplied capture value, averaged in the capture's own space like
+// the pyramid itself. The level-k grid is `(q · backdrop_scale −
+// backdrop_origin) / 2^k` with texel centres at `+ 0.5`, the grid
+// `backdrop_sample_level` reads.
+fn glass_gaussian_at_level(q: vec2<f32>, sigma: f32, level: f32) -> vec4<f32> {
+    let s = blur_deviation(sigma, level);
+    if s < 1e-4 {
+        return backdrop_sample_level(q, level);
+    }
+    let div = exp2(level);
+    let p = (q * backdrop_scale - backdrop_origin) / div - 0.5;
+    let base = floor(p);
+    let x = blur_axis(p.x - base.x, s);
+    let y = blur_axis(p.y - base.y, s);
+    var acc = vec4<f32>(0.0);
+    var total = 0.0;
+    for (var j = 0; j < BLUR_PAIRS; j += 1) {
+        for (var i = 0; i < BLUR_PAIRS; i += 1) {
+            let w = x.weight[i] * y.weight[j];
+            let at = base + vec2<f32>(x.offset[i], y.offset[j]) + 0.5;
+            acc += w * backdrop_sample_level((at * div + backdrop_origin) / backdrop_scale, level);
+            total += w;
+        }
+    }
+    return acc / total;
+}
+
+// §4.3: a tap blurred by a radius of `b` recipe capture texels; `k_tex`
+// carries the radius onto the bound capture's grid (see `tap`).
+fn blurred_tap(q: vec2<f32>, b: f32, k_tex: f32) -> vec3<f32> {
+    let sigma = BLUR_SIGMA_PER_RADIUS * b * k_tex;
+    let t = blur_position(sigma, backdrop_levels - 1.0);
+    let level = floor(t);
+    var raw = glass_gaussian_at_level(q, sigma, level);
+    let f = t - level;
+    if f > 0.0 {
+        raw = mix(raw, glass_gaussian_at_level(q, sigma, level + 1.0), f);
+    }
+    return glass_work_space(raw);
+}
+
 // The §4.2–§4.9 glass body: the straight encoded colour inside the
 // silhouette. `p` is the member pixel in device space, `d` the field
 // distance in pt, `n` the bent field normal, `u` device px per pt,
@@ -248,7 +293,7 @@ fn glass_body(
     // §4.2: the primary sample, refracted by the primary lobe and blurred
     // at its refracted depth.
     let o1 = lobe_at(d, params[0].y, params[0].x);
-    var c = tap(
+    var c = blurred_tap(
         p + n * (o1 * u),
         params[1].w * blur_gain(params[2], params[3], d + o1),
         k_tex,
@@ -272,15 +317,18 @@ fn glass_body(
         c = mix(c1, f, params[4].w);
     }
 
-    // §4.2: the rim sample and the rim-ramp mix.
-    let o2 = lobe_at(d, params[0].w, params[0].z);
-    let s_rim = tap(
-        p + n * (o2 * u),
-        params[1].w * blur_gain(params[2], params[3], d + o2),
-        k_tex,
-    );
-    let tw = gsat((d - params[1].x) / (params[1].y - params[1].x));
-    c = mix(c, s_rim, params[1].z * tw);
+    // §4.2: the rim sample and the rim-ramp mix; a rim mix of 0 takes no
+    // sample.
+    if params[1].z > 0.0 {
+        let o2 = lobe_at(d, params[0].w, params[0].z);
+        let s_rim = blurred_tap(
+            p + n * (o2 * u),
+            params[1].w * blur_gain(params[2], params[3], d + o2),
+            k_tex,
+        );
+        let tw = gsat((d - params[1].x) / (params[1].y - params[1].x));
+        c = mix(c, s_rim, params[1].z * tw);
+    }
 
     // §4.5: the luminance limit [fitted].
     let lum = dot(LUMA_LIMIT_W, c);

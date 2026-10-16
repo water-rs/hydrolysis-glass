@@ -44,7 +44,7 @@ use crate::material::geometry::{
     CONTAINER_UNION_SMOOTHING, CONTINUOUS_EXPONENT, CornerCurve, Element, SMOOTHING_TO_UNION_K,
     STANDALONE_UNION_SMOOTHING, Shape,
 };
-use crate::material::recipe::Recipe;
+use crate::material::recipe::{Recipe, blur_reach};
 
 /// The key the glass `backdrop_effect` shader registers under: the one
 /// WGSL source serves every capture class.
@@ -70,11 +70,13 @@ const LEVELS: u32 = CaptureLevels::MAX;
 
 /// The sampling reach the shader declares, device pixels: the largest
 /// displacement a `backdrop_sample*` coordinate takes from the member
-/// pixel — the recipe's biggest lobe (the ambient shift, `0.35·m` at the
-/// measured-range bound `m = 200.33`, ≈70.1 pt) at a 4 px/pt recording
-/// bound — plus the haze taps' `0.25 · lod` capture texels (≤14 px at the
-/// smallest class's 8 px texel).
-const SHADER_REACH: f32 = 0.35 * 200.33 * 4.0 + 14.0;
+/// pixel at a 4 px/pt recording bound — the farther of the ambient lobe
+/// (`0.35·m` at the measured-range bound `m = 200.33`, ≈70.1 pt) and the
+/// primary lobe (60 pt) plus the §3 blur's tap grid at the largest blur
+/// radius (5 capture texels at gain 1, [`blur_reach`] at the smallest
+/// class's 8 px texel) — plus the haze taps' `0.25 · lod` capture texels
+/// (≤14 px at that texel).
+const SHADER_REACH: f32 = (60.0 * 4.0 + blur_reach(5.0) * 8.0).max(0.35 * 200.33 * 4.0) + 14.0;
 
 /// The blend distance `k` the engine's quadratic smooth minimum folds a
 /// container's member fields with, pt, and the one every standalone
@@ -123,10 +125,15 @@ pub fn capture_class(container: bool, recipe_scale: f32) -> CaptureClass {
 }
 
 /// The `backdrop_effect` source the shader key registers: the recipe's
-/// engine form with the sampling reach its lobes can take.
+/// engine form, after the §3 blur law it shares with the standalone
+/// pass, with the sampling reach its lobes can take.
 fn shader_source() -> BackdropShaderSource {
-    BackdropShaderSource::wgsl(include_str!("../../shaders/material_engine.wgsl"))
-        .reach(SHADER_REACH)
+    BackdropShaderSource::wgsl(concat!(
+        include_str!("../../shaders/blur.wgsl"),
+        "\n",
+        include_str!("../../shaders/material_engine.wgsl"),
+    ))
+    .reach(SHADER_REACH)
 }
 
 /// Registers the glass backdrop shader and every capture class the
