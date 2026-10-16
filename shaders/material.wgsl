@@ -96,9 +96,6 @@ fn level_of_radius(b: f32) -> f32 {
 // pyramid level `level` around `uv`.
 fn gaussian_at_level(uv: vec2<f32>, sigma: f32, level: f32) -> vec4<f32> {
     let s = blur_deviation(sigma, level);
-    if s < 1e-4 {
-        return textureSampleLevel(capture_tex, linear_sampler, uv, level);
-    }
     let size = vec2<f32>(textureDimensions(capture_tex, i32(level)));
     // Texel centres sit at integers on this grid.
     let p = uv * size - 0.5;
@@ -106,31 +103,54 @@ fn gaussian_at_level(uv: vec2<f32>, sigma: f32, level: f32) -> vec4<f32> {
     let x = blur_axis(p.x - base.x, s);
     let y = blur_axis(p.y - base.y, s);
     var acc = vec4<f32>(0.0);
+    acc = blur_row(acc, base, x, y.offset.x, y.weight.x, size, level);
+    acc = blur_row(acc, base, x, y.offset.y, y.weight.y, size, level);
+    acc = blur_row(acc, base, x, y.offset.z, y.weight.z, size, level);
+    acc = blur_row(acc, base, x, y.offset.w, y.weight.w, size, level);
     var total = 0.0;
-    for (var j = 0; j < BLUR_PAIRS; j += 1) {
-        for (var i = 0; i < BLUR_PAIRS; i += 1) {
-            let w = x.weight[i] * y.weight[j];
-            let at = (base + vec2<f32>(x.offset[i], y.offset[j]) + 0.5) / size;
-            acc += w * textureSampleLevel(capture_tex, linear_sampler, at, level);
-            total += w;
-        }
-    }
+    total = blur_row_total(total, x, y.weight.x);
+    total = blur_row_total(total, x, y.weight.y);
+    total = blur_row_total(total, x, y.weight.z);
+    total = blur_row_total(total, x, y.weight.w);
     return acc / total;
 }
 
+// One row of the folded grid at row offset `oy` and weight `wy`, added
+// to `acc` in the order the reads accumulate.
+fn blur_row(
+    acc: vec4<f32>,
+    base: vec2<f32>,
+    x: BlurAxis,
+    oy: f32,
+    wy: f32,
+    size: vec2<f32>,
+    level: f32,
+) -> vec4<f32> {
+    var a = acc;
+    a += (x.weight.x * wy) * blur_read((base + vec2<f32>(x.offset.x, oy) + 0.5) / size, level);
+    a += (x.weight.y * wy) * blur_read((base + vec2<f32>(x.offset.y, oy) + 0.5) / size, level);
+    a += (x.weight.z * wy) * blur_read((base + vec2<f32>(x.offset.z, oy) + 0.5) / size, level);
+    a += (x.weight.w * wy) * blur_read((base + vec2<f32>(x.offset.w, oy) + 0.5) / size, level);
+    return a;
+}
+
+fn blur_read(at: vec2<f32>, level: f32) -> vec4<f32> {
+    return textureSampleLevel(capture_tex, linear_sampler, at, level);
+}
+
 // §4.1/§4.3: the shared capture at `q_pt`, blurred by a radius of `b`
-// capture texels.
+// capture texels. The reads run straight through, like the engine's
+// `blurred_tap`.
 fn sample_blurred(q_pt: vec2<f32>, b: f32) -> vec4<f32> {
     let uv = (q_pt - uni.region.xy) / uni.region.zw;
     let sigma = BLUR_SIGMA_PER_RADIUS * b;
     let t = blur_position(sigma, uni.scene.w);
     let level = floor(t);
-    let a = gaussian_at_level(uv, sigma, level);
-    let f = t - level;
-    if f <= 0.0 {
-        return a;
-    }
-    return mix(a, gaussian_at_level(uv, sigma, level + 1.0), f);
+    return mix(
+        gaussian_at_level(uv, sigma, level),
+        gaussian_at_level(uv, sigma, min(level + 1.0, uni.scene.w)),
+        t - level,
+    );
 }
 
 // §4.1: the shared capture sampled at `level(b)`, never below 0.
@@ -265,14 +285,11 @@ fn glass_body(
         C = mix(c1, F, r.haze.w);
     }
 
-    // §4.2: the rim sample and the rim-ramp mix; a rim mix of 0 takes no
-    // sample.
-    if r.rim.z > 0.0 {
-        let o2 = lobe_at(d, r.shifts.w, r.shifts.z);
-        let s_rim = unpremultiply(sample_blurred(p + n * o2, blur_radius_at(r, d + o2)));
-        let tw = sat((d - r.rim.x) / (r.rim.y - r.rim.x));
-        C = mix(C, s_rim, r.rim.z * tw);
-    }
+    // §4.2: the rim sample and the rim-ramp mix.
+    let o2 = lobe_at(d, r.shifts.w, r.shifts.z);
+    let s_rim = unpremultiply(sample_blurred(p + n * o2, blur_radius_at(r, d + o2)));
+    let tw = sat((d - r.rim.x) / (r.rim.y - r.rim.x));
+    C = mix(C, s_rim, r.rim.z * tw);
 
     // §4.5: the luminance limit [fitted].
     let lum = dot(LUMA_LIMIT_W, C);

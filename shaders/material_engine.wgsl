@@ -236,38 +236,67 @@ fn tap(q: vec2<f32>, b: f32, k_tex: f32) -> vec3<f32> {
 // `backdrop_sample_level` reads.
 fn glass_gaussian_at_level(q: vec2<f32>, sigma: f32, level: f32) -> vec4<f32> {
     let s = blur_deviation(sigma, level);
-    if s < 1e-4 {
-        return backdrop_sample_level(q, level);
-    }
     let div = exp2(level);
     let p = (q * backdrop_scale - backdrop_origin) / div - 0.5;
     let base = floor(p);
     let x = blur_axis(p.x - base.x, s);
     let y = blur_axis(p.y - base.y, s);
     var acc = vec4<f32>(0.0);
+    acc = glass_blur_row(acc, base, x, y.offset.x, y.weight.x, div, level);
+    acc = glass_blur_row(acc, base, x, y.offset.y, y.weight.y, div, level);
+    acc = glass_blur_row(acc, base, x, y.offset.z, y.weight.z, div, level);
+    acc = glass_blur_row(acc, base, x, y.offset.w, y.weight.w, div, level);
     var total = 0.0;
-    for (var j = 0; j < BLUR_PAIRS; j += 1) {
-        for (var i = 0; i < BLUR_PAIRS; i += 1) {
-            let w = x.weight[i] * y.weight[j];
-            let at = base + vec2<f32>(x.offset[i], y.offset[j]) + 0.5;
-            acc += w * backdrop_sample_level((at * div + backdrop_origin) / backdrop_scale, level);
-            total += w;
-        }
-    }
+    total = blur_row_total(total, x, y.weight.x);
+    total = blur_row_total(total, x, y.weight.y);
+    total = blur_row_total(total, x, y.weight.z);
+    total = blur_row_total(total, x, y.weight.w);
     return acc / total;
+}
+
+// One row of the folded grid at row offset `oy` and weight `wy`, added
+// to `acc` in the order the reads accumulate.
+fn glass_blur_row(
+    acc: vec4<f32>,
+    base: vec2<f32>,
+    x: BlurAxis,
+    oy: f32,
+    wy: f32,
+    div: f32,
+    level: f32,
+) -> vec4<f32> {
+    var a = acc;
+    a += (x.weight.x * wy) * glass_blur_read(base + vec2<f32>(x.offset.x, oy) + 0.5, div, level);
+    a += (x.weight.y * wy) * glass_blur_read(base + vec2<f32>(x.offset.y, oy) + 0.5, div, level);
+    a += (x.weight.z * wy) * glass_blur_read(base + vec2<f32>(x.offset.z, oy) + 0.5, div, level);
+    a += (x.weight.w * wy) * glass_blur_read(base + vec2<f32>(x.offset.w, oy) + 0.5, div, level);
+    return a;
+}
+
+// The bilinear read at level-`level` grid point `at` (texel centres at
+// `+ 0.5`), `div` level-0 texels per texel of that level.
+fn glass_blur_read(at: vec2<f32>, div: f32, level: f32) -> vec4<f32> {
+    return backdrop_sample_level((at * div + backdrop_origin) / backdrop_scale, level);
 }
 
 // §4.3: a tap blurred by a radius of `b` recipe capture texels; `k_tex`
 // carries the radius onto the bound capture's grid (see `tap`).
+//
+// The reads run straight through, the same for every pixel: both levels
+// are read and mixed by the fraction, the sharp read is the grid at its
+// least deviation (blur.wgsl), the grid is unrolled rather than looped
+// over indexed arrays, and the rim sample is taken whatever its weight.
+// With a branch or a loop around these reads, D3D12's WARP device
+// rendered wrong texels and stalled for minutes.
 fn blurred_tap(q: vec2<f32>, b: f32, k_tex: f32) -> vec3<f32> {
     let sigma = BLUR_SIGMA_PER_RADIUS * b * k_tex;
     let t = blur_position(sigma, backdrop_levels - 1.0);
     let level = floor(t);
-    var raw = glass_gaussian_at_level(q, sigma, level);
-    let f = t - level;
-    if f > 0.0 {
-        raw = mix(raw, glass_gaussian_at_level(q, sigma, level + 1.0), f);
-    }
+    let raw = mix(
+        glass_gaussian_at_level(q, sigma, level),
+        glass_gaussian_at_level(q, sigma, min(level + 1.0, backdrop_levels - 1.0)),
+        t - level,
+    );
     return glass_work_space(raw);
 }
 
@@ -317,18 +346,15 @@ fn glass_body(
         c = mix(c1, f, params[4].w);
     }
 
-    // §4.2: the rim sample and the rim-ramp mix; a rim mix of 0 takes no
-    // sample.
-    if params[1].z > 0.0 {
-        let o2 = lobe_at(d, params[0].w, params[0].z);
-        let s_rim = blurred_tap(
-            p + n * (o2 * u),
-            params[1].w * blur_gain(params[2], params[3], d + o2),
-            k_tex,
-        );
-        let tw = gsat((d - params[1].x) / (params[1].y - params[1].x));
-        c = mix(c, s_rim, params[1].z * tw);
-    }
+    // §4.2: the rim sample and the rim-ramp mix.
+    let rim_weight = params[1].z * gsat((d - params[1].x) / (params[1].y - params[1].x));
+    let o2 = lobe_at(d, params[0].w, params[0].z);
+    let s_rim = blurred_tap(
+        p + n * (o2 * u),
+        params[1].w * blur_gain(params[2], params[3], d + o2),
+        k_tex,
+    );
+    c = mix(c, s_rim, rim_weight);
 
     // §4.5: the luminance limit [fitted].
     let lum = dot(LUMA_LIMIT_W, c);
