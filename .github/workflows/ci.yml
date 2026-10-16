@@ -19,13 +19,14 @@ env:
 
 jobs:
   diag:
-    name: Diag / ${{ matrix.variant }}
+    name: Diag / ${{ matrix.variant }} ${{ matrix.rep }}
     runs-on: windows-latest
     timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
-        variant: [pr-fix, fix]
+        variant: [branchless, branchless-loops]
+        rep: [1, 2]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
