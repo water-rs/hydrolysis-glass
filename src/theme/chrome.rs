@@ -125,36 +125,6 @@ pub fn circular_state_layer(
     }
 }
 
-/// A toggle switch: a track that crosses to the accent as it turns on, and a
-/// knob that slides along it.
-pub fn toggle_switch(
-    palette: &Palette,
-    draw: &mut Recorder,
-    bounds: Rect,
-    progress: f32,
-    state: WidgetInteractionState,
-) {
-    let t = progress.clamp(0.0, 1.0);
-    let mut track = mix(palette.track, palette.accent, t);
-    if state.state.contains(InteractionState::DISABLED) {
-        track[3] *= 0.5;
-    }
-    draw.fill(rounded(bounds, capsule(bounds)), working(track));
-    let pad = 2.0;
-    let r = bounds.height().mul_add(0.5, -pad).max(1.0);
-    let x0 = bounds.x0 + pad + r;
-    let x1 = bounds.x1 - pad - r;
-    let center = Point::new(lerp(x0, x1, f64::from(t)), bounds.center().y);
-    draw.shadow(
-        rounded(
-            Rect::from_center_size(center, (r * 2.0, r * 2.0)),
-            uniform(r),
-        ),
-        Shadow::new(4.0, working([0.0, 0.0, 0.0, 0.2])).offset(Vec2::new(0.0, 2.0)),
-    );
-    draw.fill(Circle::new(center, r), working(palette.knob));
-}
-
 /// A checkbox: an outlined continuous square that fills with the accent and
 /// draws its check mark as `progress` rises.
 #[allow(
@@ -340,26 +310,6 @@ pub fn radio_indicator(
         draw.fill(
             Circle::new(center, radius * 0.5 * f64::from(state.inner_scale)),
             working(alpha(palette.accent, state.inner_opacity)),
-        );
-    }
-}
-
-/// The segmented picker's outer track.
-pub fn segmented_container(palette: &Palette, draw: &mut Recorder, bounds: Rect) {
-    draw.fill(rounded(bounds, uniform(9.0)), working(palette.track));
-}
-
-/// One segment: the selected one is a raised knob.
-pub fn segmented_segment(palette: &Palette, draw: &mut Recorder, bounds: Rect, selected: bool) {
-    if selected {
-        let knob = bounds.inset(-2.0);
-        draw.shadow(
-            rounded(knob, uniform(7.0)),
-            Shadow::new(6.0, working([0.0, 0.0, 0.0, 0.12])).offset(Vec2::new(0.0, 2.0)),
-        );
-        draw.fill(
-            rounded(knob, uniform(7.0)),
-            working(palette.knob_for_segment()),
         );
     }
 }
@@ -643,18 +593,6 @@ pub fn table_column_separator(palette: &Palette, draw: &mut Recorder, from: Poin
         Stroke::new(HAIRLINE),
         working(palette.border),
     );
-}
-
-impl Palette {
-    /// The knob colour of a selected segment: the surface in light, a lifted
-    /// variant in dark so the knob reads against the track.
-    #[must_use]
-    pub fn knob_for_segment(&self) -> Rgba {
-        match self.scheme() {
-            waterui::color::ColorScheme::Light => self.surface,
-            waterui::color::ColorScheme::Dark => over([1.0, 1.0, 1.0, 0.18], self.surface),
-        }
-    }
 }
 
 /// Disabled content colour: the foreground faded to `alpha` over the background.

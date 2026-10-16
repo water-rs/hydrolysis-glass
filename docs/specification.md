@@ -703,6 +703,14 @@ vertical black | white edge at the scene's centre. The split uses red
 7. A regular 160 × 80 pt capsule standing alone at (121, 397), its centre on
    the edge, on its own 402 × 874 pt scene at 3 px/pt, in dark appearance at
    translucency 0.5.
+8. The **switch scene** (§8.2), on its own 402 × 874 pt scene at 3 px/pt,
+   over black, grey 0.5 and white, in dark and in light appearance: an off
+   and an on switch; a red-tinted on switch, a red-tinted off switch and a
+   blue-tinted on switch; a disabled off and a disabled on switch; a
+   "Label" switch 300 pt wide.
+9. The **toggle sequence**: an off switch alone over black in dark
+   appearance, switched on at t = 0 and off at t = 1 s, rendered at t = 0,
+   0.05, 0.1, 0.15, 0.3, 1.1 and 1.5 s.
 10. The **slider scene** (§8.3), on its own 402 × 874 pt scene at 3 px/pt,
    over black, grey 0.5 and white, in dark and in light appearance: sliders
    300 pt wide at values 0, 0.3, 0.5 and 1; a red-tinted and a disabled one
@@ -710,6 +718,17 @@ vertical black | white edge at the scene's centre. The split uses red
 11. The **slider sequence**: a 300 pt slider alone over black in dark
    appearance at value 0.2, set to 0.8 at t = 0, rendered at t = 0, 0.05,
    0.1, 0.2, 0.33 and 0.6 s.
+12. The **segmented scene** (§8.4), on its own 402 × 874 pt scene at
+   3 px/pt, over black, grey 0.5 and white, in dark and in light
+   appearance, each control 300 pt wide: "One | Two | Three" with the first
+   segment selected, at the regular and at the large size; "One | Two" with
+   the second selected; "A | Bb | Ccc | Dddd" with the third selected;
+   "Short | A much longer label" with the first selected; three symbol
+   segments; a red-tinted and a disabled "One | Two | Three".
+13. The **selection sequence**: a 300 pt "One | Two | Three" control alone
+   over black in dark appearance, its selection moved from the first to
+   the third segment at t = 0, rendered at t = 0, 0.05, 0.1, 0.2, 0.38 and
+   0.6 s.
 
 ### Observations
 
@@ -774,6 +793,25 @@ vertical black | white edge at the scene's centre. The split uses red
   reaches across the whole circle, and the capsule of scene 7 shows the same
   spread. In the container the circle ramps smoothly through the edge, as
   the card does.
+- **Switch.** Every switch of the switch scene lays out 61 × 28 pt and
+  draws a 63 × 28 pt capsule track from the frame's leading edge, 2 pt past
+  its trailing edge, with a white 37 × 24 pt knob 2 pt inside the track: at
+  the leading end when off, at the trailing end when on. Nothing in the
+  switch is glass, and nothing is drawn outside the track. The off track is
+  70, 70, 73 over black and 249, 249, 252 over white in dark appearance,
+  18, 18, 20 and 197, 197, 199 in light; the on track is solid green, the
+  tinted ones solid red and blue over every backdrop, and the red-tinted
+  off switch looks like the plain one. The disabled switches are the plain
+  ones at half opacity: over black their knobs are 128. The "Label" switch
+  has its label at the leading edge, centred on the track, and the track
+  at the trailing edge.
+- **Toggle.** In the toggle sequence the knob's leading edge is 2 pt from
+  the track's leading edge at t = 0, then 8.2, 15.7, 20.1 and 23.7 pt at
+  0.05, 0.1, 0.15 and 0.3 s, with no overshoot; at 1.1 s it is back at
+  15.7 pt and at 1.5 s at 2 pt. The knob keeps its size and stays opaque
+  white throughout. The track is uniformly a third of the way from grey to
+  green at 0.1 s and 85 % of the way at 0.3 s; on the way back it is
+  60 % of the way to grey at 1.1 s.
 - **Slider.** Every slider of the slider scene lays out 31 pt tall and as
   wide as it is given, with a 6 pt capsule track across its full width,
   centred vertically, and a white 37 × 24 pt knob centred on the track:
@@ -790,6 +828,23 @@ vertical black | white edge at the scene's centre. The split uses red
   52.6 pt from the track's leading end at t = 0, then 84, 135, 199 and
   213 pt at 0.05, 0.1, 0.2 and 0.33 s, past its end, and 210.4 pt at
   0.6 s. The knob keeps its size and stays opaque white throughout.
+- **Segmented control.** Each control of the segmented scene draws a
+  capsule container 32 pt tall (49 pt at the large size), 1 pt taller than
+  its frame, divided into equal segments whatever their labels, with no
+  separators. The selected segment has a capsule thumb 2 pt inside its
+  segment on every side, so the first of three is 96 × 28 pt at x = 2. The
+  container is 28, 28, 31 over black and 222, 222, 225 over white in dark
+  appearance, 14, 14, 15 and 238, 238, 239 in light; the thumb is 90, 90,
+  95 and 226, 226, 231 in dark and white in light. Labels are white in dark
+  and black in light, the selected one visibly heavier. The red tint
+  changes nothing, and the disabled control is the plain one at half
+  opacity, with labels of 128 over black in dark appearance.
+- **Selection.** In the selection sequence the thumb's centre is at 50 pt
+  from the container's leading edge at t = 0, then 89.5, 152, 229 and
+  251.3 pt at 0.05, 0.1, 0.2 and 0.38 s, just past its end, and 250 pt at
+  0.6 s; the thumb keeps its size throughout. "Three" is already in the
+  heavier weight, and "One" in the lighter, from the first frame after the
+  change.
 
 ## 8. Controls
 
@@ -1007,6 +1062,157 @@ of 1 after 0.23 s. From a settled press, the release spring reaches −0.27 at
   setting the device then had, which read 0 before and after; that they do
   not depend on the setting or the appearance is [chosen].
 
+### 8.2 Switch
+
+A switch shows a boolean: a **track** with a **knob** that sits at the
+track's leading end when the switch is off and at its trailing end when it
+is on. At rest neither part is glass: the track and the knob are flat
+fills, and the switch casts no shadow and draws no rim. Glass appears only
+on the knob while a touch holds it (below).
+
+**Reference.** Geometry and motion were observed on the iOS 27.0
+simulator (an iPhone 16 Pro, 402 × 874 pt at 3 px/pt) and are tagged
+[measured: simulator] or [fitted: simulator]. No device capture was
+possible, so the colours below are the simulator's rendering, tagged
+[chosen] until a device capture confirms them. Touch interaction was not
+observed at all.
+
+#### Geometry
+
+| Part | Size | Position |
+|---|---|---|
+| layout frame | 61 × 28 | — |
+| track | 63 × 28, capsule | leading edge on the frame's leading edge, centred vertically |
+| knob | 37 × 24, capsule | 2 pt inside the track's top and bottom; 2 pt from the track's leading end when off, 2 pt from its trailing end when on |
+
+All values are [measured: simulator, within 1/3 pt]. The size is the same
+at every control size, mini through extra large, and the size group has no
+effect. The track is 2 pt longer than the layout frame and overhangs its
+trailing edge by 2 pt; the overhang takes no layout space [measured:
+simulator]. The knob travels 22 pt.
+
+- **Corners.** The track and the knob are capsules whose radii are half
+  their heights, 14 and 12. Their corners are continuous, like the
+  material's capsules [chosen: the 1/3 pt sampling does not separate
+  circular from continuous corners].
+- **Label.** A switch with a label lays the label out at the leading edge
+  of its frame and the track at the trailing edge, centred on each other
+  vertically; the frame takes the width it is given [measured: simulator,
+  a 300 pt "Label" switch, whose label inks 39 × 13 pt like plain 17 pt
+  regular text in the primary label colour].
+- **Direction.** In a right-to-left layout the switch is mirrored: off is
+  at the trailing end, which is then on the left [chosen: not observed].
+- **Hit region.** The frame, extended to at least 44 × 44 pt about its
+  centre, and the label when there is one [chosen: touch hit-testing was
+  not observed; 44 pt is a comfortable minimum touch target].
+
+#### Colours
+
+| Part | Dark appearance | Light appearance |
+|---|---|---|
+| knob | white, opaque | white, opaque |
+| off track | (235, 235, 245) at alpha 0.30 over the backdrop | (60, 60, 67) at alpha 0.30 over the backdrop |
+| on track | the tint, opaque; default green (48, 209, 88) | the tint, opaque; default green (52, 199, 89) |
+
+All entries are [chosen: the simulator's rendering, awaiting a device
+capture]. The off track blends in encoded space [fitted: simulator, the
+blend reproduces the rendered off track over black, grey 0.5 and white
+within 1 level: 70, 160, 249 in dark appearance and 18, 108, 197 in
+light]. The on track rendered the same colour over every backdrop
+[measured: simulator].
+
+#### States
+
+| State | Track | Knob |
+|---|---|---|
+| off | off fill | white, at the leading end |
+| on | the tint | white, at the trailing end |
+| tinted | the tint replaces the on fill only; the off fill is unchanged | unchanged |
+| disabled | as enabled, then the whole switch at opacity 0.5 | as enabled, at opacity 0.5 |
+| pressed | as at rest | grown glass lens (below) [chosen] |
+
+- **Tint.** The tint defaults to the green above. Rendered tints
+  [chosen: simulator rendering]: the accent colour, (0, 145, 255) in dark
+  appearance and (0, 136, 255) in light; red, (255, 66, 69) and
+  (255, 56, 60).
+- **Disabled.** The enabled switch is composited over the backdrop at
+  opacity 0.5, track and knob together [fitted: simulator, within 1 level
+  over black, grey 0.5 and white in both appearances: the knob 128 over
+  black and 192 over grey; the dark off track 35, 144 and 252, the dark
+  on track 24, 105, 44 over black and 151, 232, 171 over white]. A
+  disabled switch does not respond to touches [chosen: not observed].
+- **Focus.** Not observed. An implementation that shows a focused state
+  states its own choice.
+
+#### Toggle motion
+
+A **toggle progress** `q` places the knob: its leading edge is
+`2 + 22·q` pt from the track's leading end, 0 off and 1 on. When the value
+changes, `q` moves toward the new end by the **toggle spring**, a
+critically damped spring on a unit mass:
+
+| Spring | Natural frequency ω0 | Damping ratio ζ | Stiffness ω0² | Damping 2ζω0 |
+|---|---|---|---|---|
+| toggle | 21 rad/s | 1 | 441 | 42 |
+
+[fitted: simulator, four changes at 60 frames per second, on and off;
+every fit lies within ω0 20.6 to 21.5 rad/s and ζ 0.98 to 1.01, with a
+residual below 2.5 % of the travel.] From rest the knob covers 28 % of
+its travel after 0.05 s, 62 % after 0.1 s and 99 % after 0.3 s, and it
+does not overshoot.
+
+- **The motion is the switch's own.** A value change made with an
+  animation moves the knob by the toggle spring whatever the animation
+  asks for: a change requested with a linear 1.5 s animation moved exactly
+  like one with the default animation. A change that explicitly disables
+  animation moves the knob to its new end in the next frame [measured:
+  simulator].
+- **Track fill.** The on fill is drawn over the off fill with an opacity
+  `c` that moves toward 1 when the switch turns on and toward 0 when it
+  turns off, starting with the knob, by a critically damped spring of
+  ω0 = 11.2 rad/s turning on and 20.2 rad/s turning off [fitted:
+  simulator, two changes each way, residual below 6.2 % of the fade]. The
+  fade is uniform along the track [measured: simulator, within the
+  capture's colour resolution]. `c` reaches 0.31 after 0.1 s and 0.85
+  after 0.3 s turning on, and 0.91 after 0.2 s turning off.
+- **Knob.** The knob keeps its size and stays opaque white during the
+  toggle [measured: simulator, 37 × 24 within 1/3 pt in every frame].
+- **Start.** `q` and `c` start at the value change [chosen: the observed
+  motion began 0.022 to 0.027 s after the change was made, which is the
+  render pipeline, not part of the control]. A change during the motion
+  starts the spring from the current `q`, `c` and their velocities
+  [chosen: only changes from rest were observed].
+
+#### Touch
+
+Nothing in this subsection was observed: every value is [chosen],
+awaiting a touch capture. The values make the knob a glass lens while it
+is held, which is the part of the switch that shows the material.
+
+- **Press.** A touch that begins in the hit region drives a press
+  progress `p` toward 1 by a spring of ω0 = 28.2 rad/s and ζ = 0.65;
+  release or cancellation drives it toward 0 by a spring of
+  ω0 = 15.8 rad/s and ζ = 0.385 [chosen: the button's press and release
+  springs, §8.1, so that the controls respond alike].
+- **Lens.** While pressed, the knob scales about its centre by
+  `1 + 0.35·p`, to 50 × 32.4 pt held, overhanging the track by 2.2 pt
+  above and below, and becomes a clear-family glass element (§5.2) over
+  the track: its white fill is drawn at opacity `1 − max(p, 0)` over the
+  glass [chosen: a lens that shows the track through the knob, large
+  enough to read past the finger].
+- **Tap.** A touch that ends in the hit region without having moved more
+  than 10 pt toggles the value at touch-up, with the toggle motion above,
+  while `p` returns to 0 [chosen].
+- **Drag.** A touch that moves more than 10 pt horizontally drags the
+  knob: `q` follows the touch's horizontal offset divided by the 22 pt
+  travel, clamped to [0, 1]. At touch-up the value becomes on when
+  `q ≥ 0.5` and off otherwise, and `q` settles by the toggle spring from
+  its position and velocity [chosen]. While dragged, the track fill
+  follows `c = q` [chosen].
+- **Leaving the switch.** The press stays active while the touch is
+  within 70 pt of the hit region; farther out it cancels, `p` returns to
+  0 and the value does not change [chosen: the button's distance, §8.1].
+
 ### 8.3 Slider
 
 A slider shows a value in a closed range as a position along a **track**:
@@ -1163,3 +1369,155 @@ is dragged, which is the part of the slider that shows the material.
 - **Leaving the slider.** The drag continues wherever the touch goes,
   vertically included, until release; it never cancels [chosen: a drag
   that has started is the user's intent to set the value].
+
+### 8.4 Segmented control
+
+A segmented control selects one of a few options laid out side by side:
+a capsule **container** divided into equal **segments**, each holding one
+option's label, and a capsule **thumb** under the selected segment. At
+rest no part is glass: the container and the thumb are flat fills, with
+no shadow and no rim. Glass appears only on the thumb while a touch drags
+it (below).
+
+**Reference.** Geometry and motion were observed on the iOS 27.0
+simulator (an iPhone 16 Pro, 402 × 874 pt at 3 px/pt) and are tagged
+[measured: simulator] or [fitted: simulator]. No device capture was
+possible, so the colours below are the simulator's rendering, tagged
+[chosen] until a device capture confirms them. Touch interaction was not
+observed at all.
+
+#### Geometry
+
+Let the frame be `W` wide with `n` segments.
+
+| Size group | Frame height | Container height | Thumb height |
+|---|---|---|---|
+| mini, small, regular | 31 | 32 | 28 |
+| large, extra large | 48 | 49 | 45 |
+
+All values are [measured: simulator, within 1/3 pt]. Mini, small and
+regular are identical, and so are large and extra large.
+
+- **Container.** A capsule `W` wide whose top edge is the frame's top edge;
+  it is 1 pt taller than the frame and overhangs its bottom edge by 1 pt,
+  which takes no layout space [measured: simulator]. The control takes the
+  width it is given.
+- **Segments.** The container is divided into `n` segments of width
+  `W / n`, whatever their labels: "Short" and "A much longer label" each
+  get half [measured: simulator, 2, 3 and 4 segments at 300 and 402 pt].
+  No separators are drawn between segments [measured: simulator].
+- **Thumb.** A capsule inset 2 pt on every side from the selected
+  segment: `W / n − 4` wide and the container's height minus 4 [measured:
+  simulator, within 0.05 pt horizontally].
+- **Labels.** Each label is centred in its segment on both axes, in 13 pt
+  text: regular weight when its segment is not selected and medium weight
+  when it is [measured: simulator, ink widths within 1/3 pt of the system
+  font's: "Two" 23.33 pt unselected and 24.33 pt selected]. The text size
+  is the same at the large size [measured: simulator]. A symbol label is
+  drawn at the size of 17 pt text, centred [measured: simulator, a filled
+  star inks 18.7 × 17.3 pt; chosen: the 17 pt size, matching that ink].
+- **Corners.** The container and the thumb are capsules with continuous
+  corners [chosen: the 1/3 pt sampling does not separate circular from
+  continuous corners].
+- **Direction.** In a right-to-left layout the segments are laid out from
+  the right [chosen: not observed].
+- **Hit region.** Each segment, extended vertically to at least 44 pt
+  about the container's centre [chosen: touch hit-testing was not
+  observed].
+
+#### Colours
+
+| Part | Dark appearance | Light appearance |
+|---|---|---|
+| container | (117, 117, 130) at alpha 0.239 over the backdrop | (115, 115, 123) at alpha 0.122 over the backdrop |
+| thumb | (235, 235, 245) at alpha 0.30 over the container | white, opaque |
+| labels, selected or not | white | black |
+
+All entries are [chosen: the simulator's rendering, awaiting a device
+capture]. Both translucent fills blend in encoded space [fitted:
+simulator, the blends reproduce the rendered colours over black, grey 0.5
+and white within 1 level: the dark container 28, 125, 222, the light
+container 14, 126, 238 and the dark thumb 90, 158, 226 in the red
+channel].
+
+#### States
+
+| State | Container and thumb | Labels |
+|---|---|---|
+| enabled | as above | as above |
+| tinted | unchanged: the tint has no effect | unchanged |
+| disabled | as enabled, then the whole control at opacity 0.5 | as enabled, at opacity 0.5 |
+| dragging | the thumb becomes a glass lens (below) [chosen] | as above |
+
+- **Tint.** A red tint left every pixel unchanged [measured: simulator].
+- **Disabled.** The enabled control is composited over the backdrop at
+  opacity 0.5, labels included [fitted: simulator, within 1 level: the
+  labels 128 over black in dark appearance and 127 over white in light;
+  the dark container's alpha halves to 0.122 and the dark thumb's
+  combined alpha from 0.467 to 0.235]. A disabled control does not respond
+  to touches [chosen: not observed].
+- **Focus.** Not observed. An implementation that shows a focused state
+  states its own choice.
+
+#### Selection motion
+
+The thumb's drawn position follows a **display position** `s`, the
+selected index as a real number; the thumb's leading edge is
+`s · W / n + 2`. When the selection changes, `s` moves to the new index by
+the **selection spring**, on a unit mass:
+
+| Spring | Natural frequency ω0 | Damping ratio ζ | Stiffness ω0² | Damping 2ζω0 |
+|---|---|---|---|---|
+| selection | 15.7 rad/s | 0.85 | 246 | 26.7 |
+
+[fitted: simulator, five changes of one and two segments at 60 frames per
+second, in both directions; every fit lies within ω0 15.71 to 15.73 rad/s
+and ζ 0.850 to 0.851, with a residual below 0.3 % of the travel. A sixth
+change, whose recording dropped five frames at the start, is left out.]
+From rest, `s` covers 20 % of the change after 0.05 s, 51 % after 0.1 s
+and 89 % after 0.2 s, overshoots by 0.6 % at 0.38 s and is within 0.1 %
+after 0.6 s.
+
+- **Every change animates.** A selection change moves the thumb by the
+  selection spring whether it was made with an animation, with a linear
+  1.5 s animation, or with animation explicitly disabled [measured:
+  simulator].
+- **Thumb.** The thumb keeps its size and colour during the motion
+  [measured: simulator, 28 pt tall and of constant width in every frame].
+- **Labels.** The labels switch weight at the change, in the first frame
+  after it, before the thumb has moved [measured: simulator].
+- **Start.** `s` starts at the selection change [chosen: the observed
+  motion began 0.019 to 0.032 s after the change was made, which is the
+  render pipeline]. A change during the motion starts the spring from the
+  current `s` and its velocity [chosen: only changes from rest were
+  observed].
+
+#### Touch
+
+Nothing in this subsection was observed: every value is [chosen],
+awaiting a touch capture. The values make the thumb a glass lens while it
+is dragged, which is the part of the control that shows the material.
+
+- **Tap.** A touch that ends in a segment's hit region without having
+  moved more than 10 pt selects that segment at touch-up, with the
+  selection motion above [chosen].
+- **Press.** A touch that begins on the selected segment drives a press
+  progress `p` toward 1 by a spring of ω0 = 28.2 rad/s and ζ = 0.65;
+  release or cancellation drives it toward 0 by a spring of
+  ω0 = 15.8 rad/s and ζ = 0.385 [chosen: the button's press and release
+  springs, §8.1, so that the controls respond alike].
+- **Lens.** While pressed, the thumb scales about its centre by
+  `1 + 0.15·p`, to about the container's height at the regular size and
+  7 pt into each neighbouring segment of a 300 pt, three-segment control,
+  and becomes a clear-family glass element (§5.2)
+  over the container and the labels: its fill is drawn at opacity
+  `1 − max(p, 0)` over the glass [chosen: a lens that shows the labels it
+  passes over, kept small enough to stay inside the neighbouring
+  segments].
+- **Drag.** While pressed, `s` follows the touch: it is the selected
+  index plus the touch's horizontal offset divided by `W / n`, clamped to
+  [0, n − 1]. At release the segment nearest to `s` becomes selected, and
+  `s` settles to it by the selection spring from its position and
+  velocity, while `p` returns to 0 [chosen].
+- **Leaving the control.** The drag continues wherever the touch goes
+  until release; it never cancels [chosen].

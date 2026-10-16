@@ -16,8 +16,10 @@ pub mod button;
 pub mod chrome;
 pub mod materials;
 pub mod palette;
+pub mod segmented;
 pub mod slider;
 pub mod surfaces;
+pub mod switch;
 
 use core::time::Duration;
 
@@ -202,6 +204,33 @@ impl Glass {
     #[must_use]
     pub fn container_surface(&self, bounds: Rect) -> Surface {
         surfaces::container(&self.palette, bounds, self.translucency)
+    }
+
+    /// The chrome of one segment of a segmented control, as the theme would
+    /// place it. `bounds` is the segment's share of the control's frame.
+    #[must_use]
+    pub fn segment_chrome(
+        &self,
+        bounds: Rect,
+        selected: bool,
+        is_first: bool,
+        is_last: bool,
+        state: WidgetInteractionState,
+    ) -> segmented::Chrome {
+        let spec = segmented::SegmentSpec {
+            bounds: surfaces::rect(bounds),
+            position: segmented::Position::of(is_first, is_last),
+            selected,
+            enabled: !state.state.contains(InteractionState::DISABLED),
+            // A touch drives the press progress of the selected segment's
+            // thumb only (§8.4, Touch).
+            press: if selected {
+                surfaces::press_progress(state, self.interaction_motion().pressed_opacity)
+            } else {
+                0.0
+            },
+        };
+        segmented::chrome(&self.palette, &spec, self.translucency)
     }
 
     /// Fuses placed surfaces into one renderable group.
@@ -418,12 +447,19 @@ impl WidgetTheme for Glass {
     fn toggle_metrics(&self, style: ToggleStyle) -> ToggleMetrics {
         match style {
             ToggleStyle::Checkbox => ToggleMetrics::new(22.0, 22.0, 10.0),
-            _ => ToggleMetrics::new(51.0, 31.0, 12.0),
+            // The frame is 61 x 28 at every control size (§8.2); the track
+            // overhangs it and takes no layout space. The specification
+            // gives no gap between a label and the track, so none is kept.
+            _ => ToggleMetrics::new(
+                f64::from(switch::FRAME[0]),
+                f64::from(switch::FRAME[1]),
+                0.0,
+            ),
         }
     }
 
     fn toggle_value_animation(&self) -> Animation {
-        Animation::ease_out(PRESS_DURATION)
+        switch::TOGGLE_SPRING.animation()
     }
 
     fn draw_toggle_switch(
@@ -431,28 +467,18 @@ impl WidgetTheme for Glass {
         draw: &mut Recorder,
         bounds: Rect,
         progress: f32,
-        _selected: bool,
+        selected: bool,
         state: WidgetInteractionState,
     ) {
-        chrome::toggle_switch(&self.palette, draw, bounds, progress, state);
-    }
-
-    fn draw_toggle_switch_state_layer(
-        &self,
-        draw: &mut Recorder,
-        bounds: Rect,
-        _progress: f32,
-        _selected: bool,
-        state: WidgetInteractionState,
-    ) {
-        let r = bounds.height() * 0.5;
-        chrome::state_layer(
-            &self.palette,
-            draw,
-            bounds,
-            RoundedRectRadii::from_single_radius(r),
-            state,
-        );
+        let switch = switch::Switch {
+            appearance: self.palette.appearance,
+            tint: None,
+            progress,
+            selected,
+            press: surfaces::press_progress(state, self.interaction_motion().pressed_opacity),
+            enabled: !state.state.contains(InteractionState::DISABLED),
+        };
+        switch::record(draw, surfaces::rect(bounds), &switch, self.translucency);
     }
 
     fn draw_toggle_checkbox(
@@ -575,8 +601,8 @@ impl WidgetTheme for Glass {
         chrome::separator(&self.palette, draw, bounds);
     }
 
-    fn picker_metrics(&self, _style: PickerStyle) -> PickerMetrics {
-        PickerMetrics {
+    fn picker_metrics(&self, style: PickerStyle) -> PickerMetrics {
+        let metrics = PickerMetrics {
             min_width: 120.0,
             min_height: 36.0,
             horizontal_inset: 12.0,
@@ -590,6 +616,17 @@ impl WidgetTheme for Glass {
             popup_row_height: 40.0,
             popup_corner_radius: chrome::MENU_CORNER_RADIUS,
             segment_min_width: 64.0,
+        };
+        match style {
+            // The segmented control is exactly its frame tall (§8.4). The
+            // hook carries no control size, so the regular group's height
+            // is the one selectable here.
+            PickerStyle::Segmented => PickerMetrics {
+                min_height: f64::from(segmented::SizeGroup::Regular.frame_height()),
+                vertical_inset: 0.0,
+                ..metrics
+            },
+            _ => metrics,
         }
     }
 
@@ -675,45 +712,28 @@ impl WidgetTheme for Glass {
     }
 
     fn segmented_picker_label_color(&self, _selected: bool) -> Option<Color> {
+        // White in dark appearance, black in light, selected or not (§8.4).
         Some(Self::color(self.palette.foreground))
     }
 
-    fn draw_segmented_picker_container(
-        &self,
-        draw: &mut Recorder,
-        bounds: Rect,
-        _segment_count: usize,
-    ) {
-        chrome::segmented_container(&self.palette, draw, bounds);
-    }
-
-    fn draw_segmented_picker_segment(
-        &self,
-        draw: &mut Recorder,
-        bounds: Rect,
-        selected: bool,
-        _is_first: bool,
-        _is_last: bool,
-    ) {
-        chrome::segmented_segment(&self.palette, draw, bounds, selected);
-    }
+    // The container and the segments draw no chrome of their own: the
+    // picker records the container after every segment and its label, so
+    // a translucent container drawn there would lie over the thumb and the
+    // labels. Each segment's slice of the container and the thumb are
+    // recorded in the state-layer hook below, which is also the one hook
+    // that carries the disabled and pressed state.
 
     fn draw_segmented_picker_state_layer(
         &self,
         draw: &mut Recorder,
         bounds: Rect,
-        _selected: bool,
-        _is_first: bool,
-        _is_last: bool,
+        selected: bool,
+        is_first: bool,
+        is_last: bool,
         state: WidgetInteractionState,
     ) {
-        chrome::state_layer(
-            &self.palette,
-            draw,
-            bounds,
-            RoundedRectRadii::from_single_radius(7.0),
-            state,
-        );
+        let chrome = self.segment_chrome(bounds, selected, is_first, is_last, state);
+        segmented::record(draw, &chrome);
     }
 
     fn slider_metrics(&self, _size: ControlSize) -> SliderMetrics {

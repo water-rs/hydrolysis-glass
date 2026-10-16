@@ -41,15 +41,18 @@ mod common;
 use common::*;
 use hydrolysis_glass::material::geometry::STANDALONE_UNION_SMOOTHING;
 use hydrolysis_glass::{Appearance, Element, Glass, Group, Scene};
+use nami::Signal as _;
 use std::time::Duration;
 use waterui::color::Srgb;
+use waterui::form::picker::picker;
 use waterui::layout::stack::hstack;
 use waterui::layout::{PositionExt as _, absolute};
 use waterui::navigation::{NavigationView, Tab, Tabs};
+use waterui::text::text;
 use waterui::{AnyView, Binding, Color, View, ViewExt as _};
 use waterui_backend_core::widget::{WidgetInteractionState, WidgetTheme as _};
 use waterui_controls::slider::{Slider, slider};
-use waterui_controls::{ButtonStyle, ControlSize, button::button};
+use waterui_controls::{ButtonStyle, ControlSize, button::button, toggle::toggle};
 
 /// The control size every button in this file takes: the size
 /// `draw_button_chrome` resolves the surface at, so the standalone
@@ -483,32 +486,243 @@ fn press_sequence() {
     let centre = (AT[0] + 33.0, AT[1] + 17.165);
     let mut clock = Duration::ZERO;
     app.touch_down(centre.0, centre.1);
-    capture_at(&mut app, &mut clock, 17, "t0000");
-    capture_at(&mut app, &mut clock, 147, "t0147");
-    capture_at(&mut app, &mut clock, 500, "t0500");
+    capture_at(&mut app, &mut clock, 17, "press_t0000");
+    capture_at(&mut app, &mut clock, 147, "press_t0147");
+    capture_at(&mut app, &mut clock, 500, "press_t0500");
     app.advance(Duration::from_millis(1000).saturating_sub(clock));
     clock = Duration::from_millis(1000);
     app.touch_up(centre.0, centre.1);
-    capture_at(&mut app, &mut clock, 1215, "t1215");
-    capture_at(&mut app, &mut clock, 1430, "t1430");
-    capture_at(&mut app, &mut clock, 2000, "t2000");
+    capture_at(&mut app, &mut clock, 1215, "press_t1215");
+    capture_at(&mut app, &mut clock, 1430, "press_t1430");
+    capture_at(&mut app, &mut clock, 2000, "press_t2000");
 }
 
 /// Advances the mounted app to `t_ms` since the touch and exports that
 /// frame; the capturing pump itself takes the last frame of the interval.
 fn capture_at(app: &mut GlassApp, clock: &mut Duration, t_ms: u64, name: &str) {
-    capture_named(app, clock, t_ms, "press", name);
-}
-
-/// [`capture_at`] writing `<scene>_<name>.png`.
-fn capture_named(app: &mut GlassApp, clock: &mut Duration, t_ms: u64, scene: &str, name: &str) {
     const FRAME: Duration = Duration::from_micros(16_667);
     let target = Duration::from_millis(t_ms);
     app.advance(target.saturating_sub(*clock + FRAME));
     let image = app.capture_now();
     *clock = target;
-    let path = image.save(&format!("{scene}_{name}"));
-    assert!(path.is_file(), "{scene}_{name}: PNG written");
+    let path = image.save(name);
+    assert!(path.is_file(), "{name}: PNG written");
+}
+
+/// §7, scene 8: the switch scene, the part a view tree can express through
+/// the theme's hooks. Over black, grey 0.5 and white in both appearances:
+/// an off and an on switch, a disabled off and a disabled on switch, and a
+/// "Label" switch 300 pt wide. The tinted switches need a tint the
+/// `WidgetTheme` toggle hooks do not carry.
+#[test]
+fn switch_scene() {
+    for backdrop in [Backdrop::Black, Backdrop::Grey, Backdrop::White] {
+        for (appearance, name) in [(Appearance::Dark, "dark"), (Appearance::Light, "light")] {
+            let mut app = GlassApp::mount(
+                move || {
+                    absolute((
+                        backdrop_view(backdrop),
+                        toggle("", &Binding::bool(false))
+                            .switch()
+                            .hide_label()
+                            .position_anchor(waterui::layout::UnitPoint::TOP_LEADING, 60.0, 100.0),
+                        toggle("", &Binding::bool(true))
+                            .switch()
+                            .hide_label()
+                            .position_anchor(waterui::layout::UnitPoint::TOP_LEADING, 200.0, 100.0),
+                        toggle("", &Binding::bool(false))
+                            .switch()
+                            .hide_label()
+                            .disabled(true)
+                            .position_anchor(waterui::layout::UnitPoint::TOP_LEADING, 60.0, 200.0),
+                        toggle("", &Binding::bool(true))
+                            .switch()
+                            .hide_label()
+                            .disabled(true)
+                            .position_anchor(waterui::layout::UnitPoint::TOP_LEADING, 200.0, 200.0),
+                        toggle("Label", &Binding::bool(true))
+                            .switch()
+                            .width(300.0)
+                            .position_anchor(waterui::layout::UnitPoint::TOP_LEADING, 51.0, 300.0),
+                    ))
+                },
+                theme(appearance),
+            );
+            app.export(&format!("switch_{}_{name}", backdrop.name()));
+        }
+    }
+}
+
+/// §7, scene 9: the toggle sequence. An off switch alone over black in
+/// dark appearance, switched on at t = 0 and off at t = 1 s, captured at
+/// 0, 0.05, 0.1, 0.15, 0.3, 1.1 and 1.5 s.
+#[test]
+fn toggle_sequence() {
+    const AT: [f32; 2] = [170.0, 400.0];
+    let value = Binding::bool(false);
+    let mut app = GlassApp::mount(
+        {
+            let value = value.clone();
+            move || {
+                absolute((
+                    backdrop_view(Backdrop::Black),
+                    toggle("", &value).switch().hide_label().position_anchor(
+                        waterui::layout::UnitPoint::TOP_LEADING,
+                        AT[0],
+                        AT[1],
+                    ),
+                ))
+            }
+        },
+        theme(Appearance::Dark),
+    );
+    app.settle();
+    let mut clock = Duration::ZERO;
+    value.set(true);
+    capture_at(&mut app, &mut clock, 17, "toggle_t0000");
+    capture_at(&mut app, &mut clock, 50, "toggle_t0050");
+    capture_at(&mut app, &mut clock, 100, "toggle_t0100");
+    capture_at(&mut app, &mut clock, 150, "toggle_t0150");
+    capture_at(&mut app, &mut clock, 300, "toggle_t0300");
+    app.advance(Duration::from_millis(1000).saturating_sub(clock));
+    clock = Duration::from_millis(1000);
+    value.set(false);
+    capture_at(&mut app, &mut clock, 1100, "toggle_t1100");
+    capture_at(&mut app, &mut clock, 1500, "toggle_t1500");
+}
+
+/// A 300 pt segmented picker of `labels` with its top-left corner at
+/// `(51, y)`, `selected` segment selected.
+///
+/// The picker's label is hidden: the scene is about the control, and a
+/// heading would move its row.
+fn segmented(
+    labels: &'static [&'static str],
+    selection: &Binding<i32>,
+    disabled: bool,
+    y: f32,
+) -> impl View + use<> {
+    let items: Vec<_> = labels
+        .iter()
+        .zip(0i32..)
+        .map(|(l, i)| text(*l).tag(i))
+        .collect();
+    picker("Choice", items, selection)
+        .hide_label()
+        .segmented()
+        .width(300.0)
+        .disabled(disabled)
+        .position_anchor(waterui::layout::UnitPoint::TOP_LEADING, 51.0, y)
+}
+
+/// §7, scene 12 (§8.4): the segmented controls over black, grey 0.5 and
+/// white in both appearances. The large size, the symbol labels, the red
+/// tint, the 300 pt width (a picker keeps its intrinsic width inside a
+/// frame) and the disabled look (the segmented picker passes no disabled
+/// state to its chrome) need inputs the `WidgetTheme` hooks, `PickerItem`
+/// and the picker's layout do not carry; symbols are stood in for by text
+/// glyphs.
+#[test]
+fn segmented_scene() {
+    const THREE: &[&str] = &["One", "Two", "Three"];
+    const TWO: &[&str] = &["One", "Two"];
+    const FOUR: &[&str] = &["A", "Bb", "Ccc", "Dddd"];
+    const LONG: &[&str] = &["Short", "A much longer label"];
+    const GLYPHS: &[&str] = &["\u{2605}", "\u{2665}", "\u{25cf}"];
+    for backdrop in [Backdrop::Black, Backdrop::Grey, Backdrop::White] {
+        for (appearance, name) in [(Appearance::Dark, "dark"), (Appearance::Light, "light")] {
+            let mut app = GlassApp::mount(
+                move || {
+                    let first = Binding::container(0i32);
+                    let second = Binding::container(1i32);
+                    let third = Binding::container(2i32);
+                    absolute((
+                        backdrop_view(backdrop),
+                        segmented(THREE, &first, false, 60.0),
+                        segmented(TWO, &second, false, 140.0),
+                        segmented(FOUR, &third, false, 220.0),
+                        segmented(LONG, &first, false, 300.0),
+                        segmented(GLYPHS, &first, false, 380.0),
+                        segmented(THREE, &first, true, 460.0),
+                    ))
+                },
+                theme(appearance),
+            );
+            app.export(&format!("segmented_{}_{name}", backdrop.name()));
+        }
+    }
+}
+
+/// §7, scene 13 (§8.4): a 300 pt "One | Two | Three" control alone over
+/// black in dark appearance, its selection moved from the first to the
+/// third segment at t = 0, captured at 0, 0.05, 0.1, 0.2, 0.38 and 0.6 s.
+///
+/// The `WidgetTheme` contract has no hook for the selection's motion, so
+/// the thumb is at the new segment in every frame: the images show the
+/// jump the contract allows, not the selection spring of
+/// `theme::segmented`.
+#[test]
+fn selection_sequence() {
+    let selection = Binding::container(0i32);
+    let shared = selection.clone();
+    let mut app = GlassApp::sized(
+        move || {
+            absolute((
+                backdrop_view(Backdrop::Black),
+                segmented(&["One", "Two", "Three"], &shared, false, 30.0),
+            ))
+        },
+        theme(Appearance::Dark),
+        [SCENE_PT[0], 100.0],
+    );
+    app.settle();
+    selection.set(2);
+    let mut clock = Duration::ZERO;
+    for (t_ms, name) in [
+        (17, "t0000"),
+        (50, "t0050"),
+        (100, "t0100"),
+        (200, "t0200"),
+        (380, "t0380"),
+        (600, "t0600"),
+    ] {
+        capture_at(&mut app, &mut clock, t_ms, &format!("selection_{name}"));
+    }
+}
+
+/// A tap on a segment selects it, and a touch held on the selected
+/// segment presses its thumb into the glass lens (§8.4, Touch).
+#[test]
+fn a_tap_selects_and_a_press_lenses_the_thumb() {
+    let selection = Binding::container(0i32);
+    let shared = selection.clone();
+    let mut app = GlassApp::sized(
+        move || {
+            absolute((
+                backdrop_view(Backdrop::Black),
+                segmented(&["One", "Two", "Three"], &shared, false, 30.0),
+            ))
+        },
+        theme(Appearance::Dark),
+        [SCENE_PT[0], 100.0],
+    );
+    app.settle();
+    // The second segment: x from 151 to 251, the control's row at y = 45.
+    app.touch_down(201.0, 46.0);
+    app.touch_up(201.0, 46.0);
+    app.settle();
+    assert_eq!(selection.snapshot(), 1, "a tap selects the touched segment");
+    // The press, on the now selected segment.
+    app.touch_down(201.0, 46.0);
+    let mut clock = Duration::ZERO;
+    capture_at(&mut app, &mut clock, 500, "segmented_press_dark");
+    app.touch_up(201.0, 46.0);
+    app.settle();
+    assert_eq!(
+        selection.snapshot(),
+        1,
+        "a touch on the selected segment keeps it"
+    );
 }
 
 /// `control` `width` pt wide and as tall as a slider (§8.3) with its
@@ -584,7 +798,7 @@ fn slider_sequence() {
         (330, "t0330"),
         (600, "t0600"),
     ] {
-        capture_named(&mut app, &mut clock, t_ms, "slider", name);
+        capture_at(&mut app, &mut clock, t_ms, &format!("slider_{name}"));
     }
 }
 
