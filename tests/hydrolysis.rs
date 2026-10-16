@@ -100,6 +100,7 @@ fn backdrop_view(backdrop: Backdrop) -> AnyView {
             ))
             .spacing(0.0),
         ),
+        Backdrop::Edge => AnyView::new(hstack((solid(0.0), solid(1.0))).spacing(0.0)),
         Backdrop::Grid | Backdrop::GridOverSplit => {
             panic!("a grid backdrop is reviewed on the standalone exports, not through a view tree")
         }

@@ -159,17 +159,20 @@ pub enum Backdrop {
     Grid,
     /// The grid over the split.
     GridOverSplit,
+    /// Black | white vertical edge at the scene's centre.
+    Edge,
 }
 
 impl Backdrop {
     /// All §7 backdrops.
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Black,
         Self::Grey,
         Self::White,
         Self::Split,
         Self::Grid,
         Self::GridOverSplit,
+        Self::Edge,
     ];
 
     /// The image at the scene's pixel size.
@@ -206,6 +209,7 @@ impl Backdrop {
                 Self::Grey => grey(0.5),
                 Self::White => grey(1.0),
                 Self::Split => split(),
+                Self::Edge => grey(if (x as u32) < cx { 0.0 } else { 1.0 }),
                 Self::Grid => grey(1.0 - gridline(x, y)),
                 Self::GridOverSplit => {
                     let covered = gridline(x, y);
@@ -231,6 +235,7 @@ impl Backdrop {
             Self::Split => "split",
             Self::Grid => "grid",
             Self::GridOverSplit => "grid_split",
+            Self::Edge => "edge",
         }
     }
 }

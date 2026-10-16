@@ -44,7 +44,7 @@ use crate::material::geometry::{
     CONTAINER_UNION_SMOOTHING, CONTINUOUS_EXPONENT, CornerCurve, Element, SMOOTHING_TO_UNION_K,
     STANDALONE_UNION_SMOOTHING, Shape,
 };
-use crate::material::recipe::{Recipe, blur_reach, haze_sigma, sigma_reach};
+use crate::material::recipe::{Recipe, blur_sigma, haze_sigma, sigma_reach};
 
 /// The key the glass `backdrop_effect` shader registers under: the one
 /// WGSL source serves every capture class.
@@ -73,12 +73,13 @@ const LEVELS: u32 = CaptureLevels::MAX;
 /// pixel at a 4 px/pt recording bound — the farther of the ambient lobe
 /// (`0.35·m` at the measured-range bound `m = 200.33`, ≈70.1 pt) and the
 /// primary lobe (60 pt) plus the §3 blur's tap grid at the largest blur
-/// radius (5 capture texels at gain 1, [`blur_reach`] at the smallest
-/// class's 8 px texel) — and the haze's Gaussian at the pixel itself
-/// (radius 8, [`sigma_reach`] of [`haze_sigma`] at the same texel).
-const SHADER_REACH: f32 = (60.0 * 4.0 + blur_reach(5.0) * 8.0)
+/// radius (5 at gain 1, [`sigma_reach`] of [`blur_sigma`] on the smallest
+/// class's 8 px texel, 2 pt at that bound) — and the haze's Gaussian at
+/// the pixel itself (radius 8, [`sigma_reach`] of [`haze_sigma`] on the
+/// same texel).
+const SHADER_REACH: f32 = (60.0 * 4.0 + sigma_reach(blur_sigma(5.0), 2.0) * 4.0)
     .max(0.35 * 200.33 * 4.0)
-    .max(sigma_reach(haze_sigma(8.0)) * 8.0);
+    .max(sigma_reach(haze_sigma(8.0), 2.0) * 4.0);
 
 /// The blend distance `k` the engine's quadratic smooth minimum folds a
 /// container's member fields with, pt, and the one every standalone

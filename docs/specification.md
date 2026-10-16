@@ -8,7 +8,9 @@ uses, and the scenes that verify an implementation.
 
 - Lengths are points (pt). The size driver of an element is
   `m = min(width, height)` of its bounds.
-- Blur radii are in texels of the element's backdrop capture.
+- The blur and haze radii (§3, §4.4) set Gaussian deviations in points,
+  whatever the element's capture scale. The ambient blur radius (§4.7) is
+  in texels of the element's backdrop capture.
 - Colours are 8-bit or unit-range encoded sRGB unless a section says linear.
 - `sat(x)` clamps to [0, 1]. `mix(a, b, t) = a + (b − a)·t`.
 - The field `d` is the signed distance to the element's silhouette, negative
@@ -95,13 +97,18 @@ The displacement is the full `shift` at the silhouette, where the profile has
 a vertical tangent, and falls to 0 with zero slope at `depth` inside it. A
 negative shift pulls the sample inward, which magnifies.
 
-A blur radius `b` in capture texels blurs the capture by a Gaussian of
-standard deviation `σ = 2.5·b` texels [fitted: the clear card at `b` = 0,
-0.375 and 0.75 over the grid and the grid over the split, §6]. The law is
-fitted for `b ≤ 0.75`; the regular family's radii reach 5, and this
-specification extends the law to them [chosen]. Reading the capture's mip
-chain at the level of `b` instead keeps up to 2.3 times the measured
-contrast at `b = 0.75` (§6).
+A blur radius `b` blurs the capture by a Gaussian of standard deviation
+`σ = 5/3·b` pt [fitted: the clear card at `b` = 0, 0.375 and 0.75 over the
+grid and the grid over the split, §6, where a capture texel is 2/3 pt and
+`σ` is `2.5·b` texels]. The deviation is a length on the backdrop: the
+capture scale sets only the resolution at which the capture realizes it
+[fitted: the black | white edge through the large card, captured at 0.25,
+§6]. Every observation was made at 3 px/pt, so whether the deviation
+follows points or device pixels is open; this specification takes points
+[chosen]. The law is fitted for `b ≤ 0.75`; the regular family's radii
+reach 5, and this specification extends the law to them [chosen]. Reading
+the capture's mip chain at the level of `b` capture texels instead keeps up
+to 2.3 times the measured contrast at `b = 0.75` (§6).
 
 The ambient sample (§4.7) reads the capture at the level of its radius on
 its mip chain of 2 × 2 means [chosen]:
@@ -172,14 +179,18 @@ consecutive depths make a step [chosen].
 ### 4.4 Haze
 
 The primary sample is joined by the **haze** `F`, a blurred estimate of the
-backdrop: the capture at the pixel, blurred by a Gaussian whose standard
-deviation in capture texels is the **haze radius**, and unpremultiplied
-[chosen]. The §3 law would give the radius 8 of §5.1 a deviation of 20
-texels, which widens the large card's red | blue transition well past the
-observed one; at a deviation of 8 the transition is as close to the
-observation as with a read of the level of the radius. That level read is
-not used: the 2 × 2 means at level 3 alias the grid's 24 px period into a
-32 pt ripple through the large card (§6). Then [chosen]:
+backdrop: the capture at the pixel, blurred by a Gaussian of standard
+deviation `2·r` pt for the **haze radius** `r`, and unpremultiplied
+[fitted: the black | white edge through the 60 pt circle and the
+160 × 80 pt capsule, captured at 0.5, and through the large card and the
+circle in its container, captured at 0.25, §6]. Like the §3 deviation it
+does not follow the capture scale. A deviation of `r` capture texels is
+5.3 pt on the circle and 10.7 pt on the card: the circle's dark side then
+stays within 4 levels of black until 10 pt from the edge, where the
+device's has risen from 38 at 28 pt to 64. The haze is not read at the
+level of its radius either: the 2 × 2 means at level 3 alias the grid's
+24 px period into a 32 pt ripple through the large card (§6). Then
+[chosen]:
 
 ```
 C1 = a · min(C, F) + b · max(C, F) + (1 − a − b) · C
@@ -607,6 +618,37 @@ gives 0.63 dark and 0.90 light, a bowl across the whole card; a haze read
 at the level of its radius (§4.4) leaves a 32 pt ripple of 0.26 dark and
 0.48 light.
 
+**Black | white edge through the elements** (§3, §4.4; §7 scenes 4 and 5
+over the edge, dark appearance, translucency 0.5): the luma of the 4 pt
+band around each element's centre row, across 28 pt either side of the edge
+(90 pt for the card), against the device capture of the same elements.
+The 60 pt circle standing alone, every 2 pt from 28 pt left of the edge:
+
+| | Profile |
+|---|---|
+| Model | 38 39 41 43 47 51 54 58 61 66 71 76 80 85 · 135 144 150 155 160 165 168 170 173 175 176 177 178 178 |
+| Measured | 38 39 40 43 46 48 52 54 59 64 69 75 80 84 · 136 146 154 160 164 168 171 174 176 178 179 180 180 180 |
+| Deviations in capture texels | 31 31 31 31 32 32 32 32 33 35 41 49 61 76 · 136 157 170 177 181 184 184 184 184 184 183 182 182 181 |
+
+The mean absolute difference from the measured profile, in levels:
+
+| Element | Capture scale | Model | Deviations in capture texels |
+|---|---|---|---|
+| 60 pt circle, alone | 0.5 | 2.3 | 13.1 |
+| 160 × 80 pt capsule, alone | 0.5 | 1.7 | 10.6 |
+| 60 pt circle, in the card's container | 0.25 | 2.1 | 3.6 |
+| large card, alone | 0.25 | 2.2 | 2.7 |
+| large card, in the container | 0.25 | 2.2 | 2.7 |
+
+The last column counts both the §3 and the haze deviations in capture
+texels, `2.5·b` and `r`. No single deviation in capture texels fits both
+scales: the circle alone is closest at 3 texels per unit of haze radius
+(2.3), where the card's difference grows to 4.3 and the container circle's
+to 8.0. Of 1.67, 1.83, 2 and 2.17 pt per unit of haze radius, 2 is the one
+that keeps every element within 2.3 levels. With the haze at 2 pt per unit
+and the §3 deviation in capture texels, the card differs by 2.6 and the
+container circle by 2.5.
+
 ## 7. Verification scenes
 
 An implementation renders these scenes offscreen and the results are reviewed
@@ -639,8 +681,9 @@ circular.
 ### Backdrops
 
 Black; grey 0.5; white; a vertical red | blue split at the scene's centre; an
-8 pt black grid on white with 0.5 pt lines; the grid over the split. The split
-uses red (230, 38, 38) and blue (26, 90, 230), encoded [chosen].
+8 pt black grid on white with 0.5 pt lines; the grid over the split; a
+vertical black | white edge at the scene's centre. The split uses red
+(230, 38, 38) and blue (26, 90, 230), encoded [chosen].
 
 ### Scenes
 
@@ -651,7 +694,10 @@ uses red (230, 38, 38) and blue (26, 90, 230), encoded [chosen].
    (radius 40) at (51, 120) and a regular 60 pt circle at (171, 360.33) in
    one container, with the same two shapes standing alone at (51, 480) and
    (171, 720.33), on its own 402 × 874 pt scene at 3 px/pt. Black, grey 0.5,
-   white and the split, in dark appearance at translucency 0.5.
+   white, the split and the edge, in dark appearance at translucency 0.5.
+5. A regular 160 × 80 pt capsule standing alone at (121, 397), its centre on
+   the edge, on its own 402 × 874 pt scene at 3 px/pt, in dark appearance at
+   translucency 0.5.
 
 ### Observations
 
@@ -693,3 +739,9 @@ uses red (230, 38, 38) and blue (26, 90, 230), encoded [chosen].
   standalone circle's is sharp. Over white and grey it casts the card's soft
   shadow, where the standalone circle's fringe is a few levels deep at most.
   The card renders the same in the container and standing alone.
+- **Edge.** Over the black | white edge, the standalone circle's dark side
+  rises steadily from about 38 at 28 pt from the edge to 84 beside it, then
+  steps to 136 and keeps rising to about 180: light from the white side
+  reaches across the whole circle, and the capsule of scene 5 shows the same
+  spread. In the container the circle ramps smoothly through the edge, as
+  the card does.

@@ -19,7 +19,7 @@
 use super::geometry::{
     CONTINUOUS_EXPONENT, CornerCurve, Element, SMOOTHING_TO_TAU, STANDALONE_UNION_SMOOTHING,
 };
-use super::recipe::{Recipe, blur_reach, haze_sigma, sigma_reach};
+use super::recipe::{Recipe, blur_sigma, haze_sigma, sigma_reach};
 use bytemuck::{Pod, Zeroable};
 use wgpu::util::DeviceExt;
 
@@ -214,7 +214,7 @@ struct CaptureParams {
 struct MaterialUniforms {
     /// Scene size pt, px per pt, the group capture's max lod.
     scene: [f32; 4],
-    /// The display peak, -, -, -.
+    /// The display peak, the capture's texels per pt, -, -.
     misc: [f32; 4],
     /// Region the material pass renders, pt: min.xy, size.xy.
     region: [f32; 4],
@@ -603,12 +603,12 @@ struct GroupGpu {
 /// |cast_shift|`), the contour shade (`2·contour_shade_softness +
 /// contour_shade_shift + contour_shade_width`), the border
 /// (`|border_band_offset| + border_band_width`), the ambient and refraction lobes
-/// plus the blur footprint of the sample taken there, in capture texels ×
-/// `1/(capture_scale · px_per_pt)` pt — the ambient sample's own radius
-/// for the ambient tap, the §3 Gaussian's tap grid
-/// (`blur_reach(blur_radius · max blur gain)`) for the refraction taps —
-/// and the haze's Gaussian (`sigma_reach(haze_sigma(haze_radius))`
-/// texels × `1/(capture_scale · px_per_pt)` pt).
+/// plus the blur footprint of the sample taken there — the ambient
+/// sample's own radius in capture texels × `1/(capture_scale · px_per_pt)`
+/// pt for the ambient tap, the §3 Gaussian's tap grid
+/// (`sigma_reach(blur_sigma(blur_radius · max blur gain))`) for the
+/// refraction taps — and the haze's Gaussian
+/// (`sigma_reach(haze_sigma(haze_radius))`), both on that texel.
 ///
 /// `1/(capture_scale · px_per_pt)` bounds the level-0 texel (`region_pt` over
 /// `ceil(region_pt · px_per_pt · scale)` texels); mip texels can be slightly larger
@@ -631,12 +631,13 @@ fn group_region(group: &Group, scene: &Scene) -> [u32; 4] {
         // this region is computed; `ceil` only enlarges the capture, so
         // `1/(scale · px_per_pt)` is a safe upper bound.
         let texel_pt = 1.0 / (r.capture_scale * scene.px_per_pt);
-        let refraction_blur_pt =
-            blur_reach(r.blur_radius * r.blur_gains.iter().copied().fold(0.0_f32, f32::max))
-                * texel_pt;
+        let refraction_blur_pt = sigma_reach(
+            blur_sigma(r.blur_radius * r.blur_gains.iter().copied().fold(0.0_f32, f32::max)),
+            texel_pt,
+        );
         // §4.4: the haze is a Gaussian of the haze radius's deviation at
         // the pixel.
-        let haze_blur_pt = sigma_reach(haze_sigma(r.haze_radius)) * texel_pt;
+        let haze_blur_pt = sigma_reach(haze_sigma(r.haze_radius), texel_pt);
         reach = reach
             .max(r.exterior_span)
             .max(2.0f32.mul_add(r.cast_falloff, off))
@@ -1556,7 +1557,7 @@ impl GlassRenderer {
             0,
             bytemuck::bytes_of(&MaterialUniforms {
                 scene: [scene.size_pt[0], scene.size_pt[1], scene.px_per_pt, max_lod],
-                misc: [scene.display_peak, 0.0, 0.0, 0.0],
+                misc: [scene.display_peak, scale * scene.px_per_pt, 0.0, 0.0],
                 region: region_pt,
                 origin: [region[0] as f32, region[1] as f32, 0.0, 0.0],
             }),
@@ -1863,11 +1864,11 @@ mod tests {
     #[test]
     fn shaders_declare_the_blur_law() {
         use crate::material::recipe::{
-            BLUR_LEVEL_SIGMA, BLUR_SIGMA_PER_RADIUS, BLUR_TAPS, HAZE_SIGMA_PER_RADIUS,
+            BLUR_LEVEL_SIGMA, BLUR_SIGMA_PT_PER_RADIUS, BLUR_TAPS, HAZE_SIGMA_PT_PER_RADIUS,
         };
         for line in [
-            format!("const BLUR_SIGMA_PER_RADIUS: f32 = {BLUR_SIGMA_PER_RADIUS:?};"),
-            format!("const HAZE_SIGMA_PER_RADIUS: f32 = {HAZE_SIGMA_PER_RADIUS:?};"),
+            format!("const BLUR_SIGMA_PT_PER_RADIUS: f32 = {BLUR_SIGMA_PT_PER_RADIUS:?};"),
+            format!("const HAZE_SIGMA_PT_PER_RADIUS: f32 = {HAZE_SIGMA_PT_PER_RADIUS:?};"),
             format!("const BLUR_TAPS: i32 = {BLUR_TAPS};"),
             format!("const BLUR_LEVEL_SIGMA: f32 = {BLUR_LEVEL_SIGMA:?};"),
         ] {

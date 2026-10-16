@@ -42,11 +42,12 @@
 //   p14 cast/rect       cast shift x, cast shift y, member rect x, member rect y
 //   p15 rect/bend       member rect w, member rect h, ellipse bend, has tint
 //
-// Distances the recipe calls pt arrive through `px.sdf`/`px.scale`;
-// capture radii are recipe capture-texel counts, scaled onto the bound
-// capture's grid by `backdrop_scale / p5.z` before the blur or
-// `level_of_radius` reads them —
-// a member's capture class snaps its recipe's requested scale up to the
+// Distances the recipe calls pt arrive through `px.sdf`/`px.scale`; the
+// §3 and haze deviations are pt, carried onto the bound capture's grid
+// by its texels per pt (`backdrop_scale · px.scale`). The ambient radius
+// is a recipe capture-texel count, scaled onto the bound capture's grid
+// by `backdrop_scale / p5.z` before `level_of_radius` reads it — a
+// member's capture class snaps its recipe's requested scale up to the
 // registered lattice (see `theme::materials`), so the compensation keeps
 // every physical radius the recipe's. The member rect rides in
 // member-local pt.
@@ -279,8 +280,9 @@ fn glass_blur_read(at: vec2<f32>, div: f32, level: f32) -> vec4<f32> {
     return backdrop_sample_level((at * div + backdrop_origin) / backdrop_scale, level);
 }
 
-// §4.3/§4.4: a tap blurred by a Gaussian of `sigma_recipe` recipe capture
-// texels; `k_tex` carries it onto the bound capture's grid (see `tap`).
+// §4.3/§4.4: a tap blurred by a Gaussian of `sigma_pt` pt; `tex_per_pt`,
+// the bound capture's texels per pt, carries it onto that capture's
+// grid.
 //
 // The reads run straight through, the same for every pixel: both levels
 // are read and mixed by the fraction, the sharp read is the grid at its
@@ -288,8 +290,8 @@ fn glass_blur_read(at: vec2<f32>, div: f32, level: f32) -> vec4<f32> {
 // looped over indexed arrays. With a loop or a branch on the pixel's own
 // values around these reads, D3D12's WARP device rendered wrong texels
 // and stalled for minutes; the branch on the recipe's rim mix does not.
-fn blurred_tap(q: vec2<f32>, sigma_recipe: f32, k_tex: f32) -> vec3<f32> {
-    let sigma = sigma_recipe * k_tex;
+fn blurred_tap(q: vec2<f32>, sigma_pt: f32, tex_per_pt: f32) -> vec3<f32> {
+    let sigma = sigma_pt * tex_per_pt;
     let t = blur_position(sigma, backdrop_levels - 1.0);
     let level = floor(t);
     let raw = mix(
@@ -316,16 +318,20 @@ fn glass_body(
     // scale may sit above the recipe's requested scale (classes are
     // registered, recipes are continuous — see `theme::materials`), so a
     // radius of `b` recipe texels is `b · backdrop_scale / recipe scale`
-    // texels here, keeping the physical blur radius in pt the recipe's.
+    // texels here, keeping the physical ambient radius in pt the
+    // recipe's.
     let k_tex = backdrop_scale / params[5].z;
+    // The bound capture's texels per pt, which the §3 and haze
+    // deviations (pt) are read on.
+    let tex_per_pt = backdrop_scale * u;
 
     // §4.2: the primary sample, refracted by the primary lobe and blurred
     // at its refracted depth.
     let o1 = lobe_at(d, params[0].y, params[0].x);
     var c = blurred_tap(
         p + n * (o1 * u),
-        BLUR_SIGMA_PER_RADIUS * params[1].w * blur_gain(params[2], params[3], d + o1),
-        k_tex,
+        BLUR_SIGMA_PT_PER_RADIUS * params[1].w * blur_gain(params[2], params[3], d + o1),
+        tex_per_pt,
     );
 
     // §4.4: the haze — the capture at the pixel blurred by a Gaussian of
@@ -333,7 +339,7 @@ fn glass_body(
     // rim-sample mix.
     let radius = params[4].x;
     if radius > 0.0 {
-        let f = blurred_tap(p, HAZE_SIGMA_PER_RADIUS * radius, k_tex);
+        let f = blurred_tap(p, HAZE_SIGMA_PT_PER_RADIUS * radius, tex_per_pt);
         let c1 = params[4].y * min(c, f)
             + params[4].z * max(c, f)
             + (1.0 - params[4].y - params[4].z) * c;
@@ -347,8 +353,8 @@ fn glass_body(
         let o2 = lobe_at(d, params[0].w, params[0].z);
         let s_rim = blurred_tap(
             p + n * (o2 * u),
-            BLUR_SIGMA_PER_RADIUS * params[1].w * blur_gain(params[2], params[3], d + o2),
-            k_tex,
+            BLUR_SIGMA_PT_PER_RADIUS * params[1].w * blur_gain(params[2], params[3], d + o2),
+            tex_per_pt,
         );
         c = mix(c, s_rim, rim_weight);
     }
