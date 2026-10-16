@@ -344,26 +344,6 @@ pub fn radio_indicator(
     }
 }
 
-/// The segmented picker's outer track.
-pub fn segmented_container(palette: &Palette, draw: &mut Recorder, bounds: Rect) {
-    draw.fill(rounded(bounds, uniform(9.0)), working(palette.track));
-}
-
-/// One segment: the selected one is a raised knob.
-pub fn segmented_segment(palette: &Palette, draw: &mut Recorder, bounds: Rect, selected: bool) {
-    if selected {
-        let knob = bounds.inset(-2.0);
-        draw.shadow(
-            rounded(knob, uniform(7.0)),
-            Shadow::new(6.0, working([0.0, 0.0, 0.0, 0.12])).offset(Vec2::new(0.0, 2.0)),
-        );
-        draw.fill(
-            rounded(knob, uniform(7.0)),
-            working(palette.knob_for_segment()),
-        );
-    }
-}
-
 /// The slider track and its filled portion.
 pub fn slider_track(
     palette: &Palette,
@@ -683,18 +663,6 @@ pub fn table_column_separator(palette: &Palette, draw: &mut Recorder, from: Poin
         Stroke::new(HAIRLINE),
         working(palette.border),
     );
-}
-
-impl Palette {
-    /// The knob colour of a selected segment: the surface in light, a lifted
-    /// variant in dark so the knob reads against the track.
-    #[must_use]
-    pub fn knob_for_segment(&self) -> Rgba {
-        match self.scheme() {
-            waterui::color::ColorScheme::Light => self.surface,
-            waterui::color::ColorScheme::Dark => over([1.0, 1.0, 1.0, 0.18], self.surface),
-        }
-    }
 }
 
 /// Disabled content colour: the foreground faded to `alpha` over the background.
