@@ -33,7 +33,10 @@
 //!   member's own field.
 
 use cherenkov::kurbo::{Rect as KRect, RoundedRect, RoundedRectRadii};
-use cherenkov::{BlendSpace, ContinuousRect, Fixed, Recorder, ShapeData};
+use cherenkov::{
+    BlendSpace, ContinuousRect, Draw as _, Fixed, Group, Interpolation, LinearGradient, Recorder,
+    ShapeData,
+};
 use cherenkov_record::{
     BackdropShaderSource, CaptureClass, CaptureLevels, CaptureScale, MaterialCapture,
     MaterialEffect, MaterialGrouping, MaterialRegistry, MaterialShader, OuterExtent,
@@ -44,7 +47,10 @@ use crate::material::geometry::{
     CONTAINER_UNION_SMOOTHING, CONTINUOUS_EXPONENT, CornerCurve, Element, SMOOTHING_TO_UNION_K,
     STANDALONE_UNION_SMOOTHING, Shape,
 };
-use crate::material::recipe::{Recipe, blur_reach, haze_sigma, sigma_reach};
+use crate::material::recipe::{Recipe, blur_sigma, haze_sigma, sigma_reach};
+
+use super::palette::{Rgba, working};
+use super::surfaces::Wash;
 
 /// The key the glass `backdrop_effect` shader registers under: the one
 /// WGSL source serves every capture class.
@@ -73,12 +79,13 @@ const LEVELS: u32 = CaptureLevels::MAX;
 /// pixel at a 4 px/pt recording bound — the farther of the ambient lobe
 /// (`0.35·m` at the measured-range bound `m = 200.33`, ≈70.1 pt) and the
 /// primary lobe (60 pt) plus the §3 blur's tap grid at the largest blur
-/// radius (5 capture texels at gain 1, [`blur_reach`] at the smallest
-/// class's 8 px texel) — and the haze's Gaussian at the pixel itself
-/// (radius 8, [`sigma_reach`] of [`haze_sigma`] at the same texel).
-const SHADER_REACH: f32 = (60.0 * 4.0 + blur_reach(5.0) * 8.0)
+/// radius (5 at gain 1, [`sigma_reach`] of [`blur_sigma`] on the smallest
+/// class's 8 px texel, 2 pt at that bound) — and the haze's Gaussian at
+/// the pixel itself (radius 8, [`sigma_reach`] of [`haze_sigma`] on the
+/// same texel).
+const SHADER_REACH: f32 = (60.0 * 4.0 + sigma_reach(blur_sigma(5.0), 2.0) * 4.0)
     .max(0.35 * 200.33 * 4.0)
-    .max(sigma_reach(haze_sigma(8.0)) * 8.0);
+    .max(sigma_reach(haze_sigma(8.0), 2.0) * 4.0);
 
 /// The blend distance `k` the engine's quadratic smooth minimum folds a
 /// container's member fields with, pt, and the one every standalone
@@ -300,7 +307,7 @@ pub fn effect(element: &Element) -> MaterialEffect {
         rect.w,
         rect.h,
         r.ellipse_bend,
-        f32::from(r.tint.is_some()),
+        crate::material::recipe::Tint::flag(r.tint),
     ];
     debug_assert_eq!(
         uniforms.len(),
@@ -365,5 +372,29 @@ pub fn record(recorder: &mut Recorder, element: &Element, container: bool) {
         GLASS_SHADER,
         capture_class(container, element.recipe.capture_scale),
         Fixed(effect(element)),
+    );
+}
+
+/// Colour stops the wash's horizontal profile is sampled at, evenly across
+/// the grown width: its alpha is quadratic in the distance from the touch,
+/// which a piecewise-linear gradient of this many segments follows within
+/// a thousandth of the peak.
+const WASH_SEGMENTS: u16 = 32;
+
+/// Records the press wash of a button (§8.1): a white fill of the grown
+/// silhouette, composited in encoded space, over the glass body and below
+/// the label.
+pub fn record_wash(recorder: &mut Recorder, wash: &Wash) {
+    let r = wash.shape.rect;
+    let mut gradient = LinearGradient::new((f64::from(r.x), 0.0), (f64::from(r.x + r.w), 0.0))
+        .interpolation(Interpolation::SrgbEncoded);
+    for i in 0..=WASH_SEGMENTS {
+        let t = f32::from(i) / f32::from(WASH_SEGMENTS);
+        let white: Rgba = [1.0, 1.0, 1.0, wash.alpha_at(r.w.mul_add(t, r.x))];
+        gradient = gradient.stop(t, working(white));
+    }
+    recorder.group(
+        Group::new().blend_space(BlendSpace::SrgbEncoded),
+        |recorder| recorder.fill(Fixed(shape_data(&wash.shape)), gradient),
     );
 }
