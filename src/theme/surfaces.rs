@@ -10,7 +10,6 @@
 use cherenkov::kurbo::Rect as KRect;
 use waterui::interaction::InteractionState;
 use waterui_backend_core::widget::WidgetInteractionState;
-use waterui_controls::ControlSize;
 use waterui_controls::button::ButtonStyle;
 
 use crate::material::geometry::{
@@ -19,22 +18,13 @@ use crate::material::geometry::{
 use crate::material::gpu::Group;
 use crate::material::recipe::{Appearance, Family, Recipe, Tint, Translucency};
 
+use super::button::{self, BorderShape, Kind, SizeGroup};
 use super::palette::{Palette, Rgba};
 
 /// Continuous corner radius of a sheet's exposed corners, pt.
 pub const SHEET_CORNER_RADIUS: f32 = 38.0;
 /// Continuous corner radius of a container the union fuses members into, pt.
 pub const CONTAINER_CORNER_RADIUS: f32 = 26.0;
-/// Continuous corner radius of a non-capsule button, pt.
-pub const BUTTON_CORNER_RADIUS: f32 = 16.0;
-/// A button whose aspect is longer than this is a capsule; a squarer one keeps
-/// continuous corners so a tall icon well does not turn into a pill.
-pub const CAPSULE_ASPECT: f32 = 1.6;
-/// Bounds growth of a glass button at full press: `1 + 0.25·press` about its
-/// centre, uniform in both axes (spec §5.5). **[chosen]**
-pub const BUTTON_PRESS_SCALE: f32 = 0.25;
-/// Declared alpha of the accent tint folded into a prominent capsule.
-pub const PROMINENT_TINT_ALPHA: f32 = 0.9;
 
 /// Which kind of surface a [`Surface`] describes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -58,6 +48,28 @@ pub struct Surface {
     pub role: Role,
     /// Its element.
     pub element: Element,
+    /// The press wash lying over the glass body, below the label.
+    pub wash: Option<Wash>,
+}
+
+/// The white press wash of a button (§8.1, Press motion).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Wash {
+    /// The grown silhouette the wash fills.
+    pub shape: Shape,
+    /// The press progress `p` driving its alpha.
+    pub progress: f32,
+    /// The touch point's horizontal position.
+    pub touch_x: f32,
+}
+
+impl Wash {
+    /// The wash alpha at horizontal position `x`.
+    #[must_use]
+    pub fn alpha_at(&self, x: f32) -> f32 {
+        let half = self.shape.rect.w * 0.5;
+        button::wash_alpha(self.progress, (x - self.touch_x).abs() / half)
+    }
 }
 
 /// Converts kurbo bounds to material bounds.
@@ -75,54 +87,33 @@ pub const fn rect(bounds: KRect) -> Rect {
     )
 }
 
-/// The press amount `0..=1` the theme reads from a renderer state snapshot.
+/// The press progress `p` the theme reads from a renderer state snapshot:
+/// the newest press wave's opacity over the pressed opacity.
 ///
-/// The renderer eases the state-layer opacity toward `pressed_opacity` while
-/// the pointer is down, so normalising it gives the animated press that scales
-/// the bounds by `1 + BUTTON_PRESS_SCALE·press`; a snapshot with no state-layer motion
-/// falls back to the raw pressed flag.
+/// The renderer animates that opacity with the theme's press and release
+/// animations (the springs of §8.1), so `p` follows the springs, overshoot
+/// included. A wave is dropped once its opacity reaches zero, so the
+/// release spring's undershoot below rest never reaches the theme. A
+/// disabled button does not respond to touches (§8.1).
 #[must_use]
-pub fn press_amount(state: WidgetInteractionState, pressed_opacity: f32) -> f32 {
+pub fn press_progress(state: WidgetInteractionState, pressed_opacity: f32) -> f32 {
     if state.state.contains(InteractionState::DISABLED) {
         return 0.0;
     }
-    if state.state_layer_opacity > 0.0 && pressed_opacity > 0.0 {
-        (state.state_layer_opacity / pressed_opacity).clamp(0.0, 1.0)
-    } else {
-        f32::from(u8::from(state.state.contains(InteractionState::PRESSED)))
-    }
+    state
+        .press_waves
+        .latest()
+        .map_or(0.0, |wave| wave.opacity / pressed_opacity)
 }
 
-/// Whether a button style is realised as glass.
-///
-/// `Plain`, `Link` and `Borderless` draw only their label; every other style
-/// is a glass capsule.
+/// The kind of glass a button style is realised as, or `None` for the
+/// styles that draw only their label (`Plain`, `Link`, `Borderless`).
 #[must_use]
-pub const fn button_is_glass(style: ButtonStyle) -> bool {
-    !matches!(
-        style,
-        ButtonStyle::Plain | ButtonStyle::Link | ButtonStyle::Borderless
-    )
-}
-
-/// Whether a button style is the prominent, accent-tinted capsule.
-#[must_use]
-pub const fn button_is_prominent(style: ButtonStyle) -> bool {
-    matches!(
-        style,
-        ButtonStyle::GlassProminent | ButtonStyle::BorderedProminent
-    )
-}
-
-/// A glass button while pressed: bounds grown `1 + BUTTON_PRESS_SCALE·press`
-/// about the centre with the radii scaled the same (spec §5.5). The growth
-/// belongs to the button style; the interactive material itself never grows.
-fn press_shape(shape: Shape, press: f32) -> Shape {
-    let grow = BUTTON_PRESS_SCALE.mul_add(press, 1.0);
-    Shape {
-        rect: shape.rect.scaled_about_center(grow),
-        radii: shape.radii.map(|r| r * grow),
-        ..shape
+pub const fn button_kind(style: ButtonStyle) -> Option<Kind> {
+    match style {
+        ButtonStyle::Plain | ButtonStyle::Link | ButtonStyle::Borderless => None,
+        ButtonStyle::GlassProminent | ButtonStyle::BorderedProminent => Some(Kind::Prominent),
+        _ => Some(Kind::Glass),
     }
 }
 
@@ -136,68 +127,118 @@ fn element(
     Element { shape, recipe }
 }
 
-const fn tinted(mut e: Element, rgba: Rgba) -> Element {
-    e.recipe = e.recipe.with_tint(Tint {
-        rgb: [rgba[0], rgba[1], rgba[2]],
-        alpha: rgba[3],
-    });
+const fn tinted(mut e: Element, rgb: [f32; 3], alpha: f32) -> Element {
+    e.recipe = e.recipe.with_tint(Tint { rgb, alpha });
     e
 }
 
-/// The silhouette of a button: a circle when icon-only and square, a capsule
-/// when wide, continuous corners otherwise.
-#[must_use]
-pub fn button_shape(bounds: Rect, icon_only: bool) -> Shape {
-    let aspect = bounds.w / bounds.h.max(1e-3);
-    if icon_only && (aspect - 1.0).abs() < 0.05 {
-        let [cx, cy] = bounds.center();
-        Shape::circle(cx, cy, bounds.m() * 0.5)
-    } else if aspect >= CAPSULE_ASPECT || aspect <= 1.0 / CAPSULE_ASPECT {
-        Shape::capsule(bounds)
-    } else {
-        Shape::rounded_rect(
-            bounds,
-            BUTTON_CORNER_RADIUS.min(bounds.m() * 0.5),
-            CornerCurve::Continuous,
-        )
+/// What a button is made of (§8.1).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ButtonSpec {
+    /// Glass or prominent.
+    pub kind: Kind,
+    /// The border shape.
+    pub border: BorderShape,
+    /// The size group.
+    pub size: SizeGroup,
+    /// The tint; `None` takes the default tint.
+    pub tint: Option<Rgba>,
+    /// Whether the button responds to touches.
+    pub enabled: bool,
+}
+
+impl ButtonSpec {
+    /// An enabled, default-tinted capsule button.
+    #[must_use]
+    pub const fn new(kind: Kind, size: SizeGroup) -> Self {
+        Self {
+            kind,
+            border: BorderShape::Capsule,
+            size,
+            tint: None,
+            enabled: true,
+        }
     }
 }
 
-/// The glass surface of a button, or `None` for a style that draws no chrome.
+/// The press of a button: the progress `p` and where the touch is.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Press {
+    /// The press progress, 0 at rest, 1 pressed; the springs overshoot it.
+    pub progress: f32,
+    /// The touch point's horizontal position; `None` is the frame's centre.
+    pub touch_x: Option<f32>,
+}
+
+impl Press {
+    /// A button at rest.
+    pub const REST: Self = Self {
+        progress: 0.0,
+        touch_x: None,
+    };
+}
+
+/// The glass surface of a button laid out at `frame` (§8.1).
+///
+/// The regular glass body at the frame's `m`, the prominent fill or the
+/// disabled prominent fill as a tint layer, and the grown silhouette and
+/// wash of a press. The recipe keeps the idle `m`.
 #[must_use]
 pub fn button(
     palette: &Palette,
-    bounds: KRect,
-    style: ButtonStyle,
-    _size: ControlSize,
-    icon_only: bool,
-    press: f32,
+    frame: KRect,
+    spec: &ButtonSpec,
+    press: Press,
     translucency: Translucency,
-) -> Option<Surface> {
-    if !button_is_glass(style) {
-        return None;
-    }
-    let shape = button_shape(rect(bounds), icon_only);
-    let mut e = if button_is_prominent(style) {
-        tinted(
-            element(shape, Family::Regular, palette.appearance, translucency),
-            [
-                palette.accent[0],
-                palette.accent[1],
-                palette.accent[2],
-                PROMINENT_TINT_ALPHA,
-            ],
-        )
-    } else {
-        element(shape, Family::Regular, palette.appearance, translucency)
+) -> Surface {
+    let idle = button::shape(rect(frame), spec.border, spec.size);
+    let body = element(idle, Family::Regular, palette.appearance, translucency);
+    let mut e = match (spec.kind, spec.enabled) {
+        (Kind::Glass, _) => body,
+        (Kind::Prominent, true) => {
+            let tint = spec
+                .tint
+                .unwrap_or_else(|| button::default_tint(palette.appearance));
+            tinted(
+                body,
+                [tint[0], tint[1], tint[2]],
+                button::FULL_STRENGTH_TINT_ALPHA,
+            )
+        }
+        (Kind::Prominent, false) => {
+            let (grey, strength) = button::disabled_prominent_fill(palette.appearance);
+            tinted(
+                body,
+                [grey; 3],
+                strength / crate::material::recipe::TINT_EFFECTIVE_ALPHA,
+            )
+        }
     };
-    // A pressed button grows uniformly about its centre while keeping its idle
-    // recipe (spec §5.5).
-    e.shape = press_shape(e.shape, press);
-    Some(Surface {
+    // A pressed button grows uniformly about its centre; the recipe stays
+    // the idle one (§5.5, §8.1).
+    let p = if spec.enabled { press.progress } else { 0.0 };
+    e.shape = grown(e.shape, p);
+    let wash = (p > 0.0).then(|| Wash {
+        shape: e.shape,
+        progress: p,
+        touch_x: press.touch_x.unwrap_or_else(|| e.shape.rect.center()[0]),
+    });
+    Surface {
         role: Role::Button,
         element: e,
-    })
+        wash,
+    }
+}
+
+/// A button silhouette grown `1 + 0.245·p` about its centre, the radii
+/// scaled the same.
+fn grown(shape: Shape, p: f32) -> Shape {
+    let s = button::growth(p);
+    Shape {
+        rect: shape.rect.scaled_about_center(s),
+        radii: shape.radii.map(|r| r * s),
+        ..shape
+    }
 }
 
 /// A tab bar: a regular capsule spanning its bounds.
@@ -211,6 +252,7 @@ pub fn tab_bar(palette: &Palette, bounds: KRect, translucency: Translucency) -> 
             palette.appearance,
             translucency,
         ),
+        wash: None,
     }
 }
 
@@ -225,6 +267,7 @@ pub fn toolbar(palette: &Palette, bounds: KRect, translucency: Translucency) -> 
             palette.appearance,
             translucency,
         ),
+        wash: None,
     }
 }
 
@@ -243,6 +286,7 @@ pub fn sheet(palette: &Palette, bounds: KRect, translucency: Translucency) -> Su
             palette.appearance,
             translucency,
         ),
+        wash: None,
     }
 }
 
@@ -263,6 +307,7 @@ pub fn container(palette: &Palette, bounds: KRect, translucency: Translucency) -
             palette.appearance,
             translucency,
         ),
+        wash: None,
     }
 }
 
@@ -280,10 +325,24 @@ pub fn group(surfaces: Vec<Surface>) -> Group {
 }
 
 #[cfg(test)]
+#[allow(
+    clippy::suboptimal_flops,
+    reason = "tests spell out the specification's arithmetic"
+)]
 mod tests {
     use super::*;
+    use waterui_backend_core::widget::{PressWave, PressWaves};
 
     const P: Palette = Palette::LIGHT;
+    const FRAME: KRect = KRect::new(10.0, 20.0, 86.0, 54.33);
+
+    fn spec(kind: Kind) -> ButtonSpec {
+        ButtonSpec::new(kind, SizeGroup::Regular)
+    }
+
+    fn surface(spec: &ButtonSpec, press: Press) -> Surface {
+        button(&P, FRAME, spec, press, Translucency::default())
+    }
 
     #[test]
     fn plain_styles_have_no_glass() {
@@ -292,94 +351,95 @@ mod tests {
             ButtonStyle::Link,
             ButtonStyle::Borderless,
         ] {
-            assert!(
-                button(
-                    &P,
-                    KRect::new(0.0, 0.0, 120.0, 44.0),
-                    s,
-                    ControlSize::Small,
-                    false,
-                    0.0,
-                    Translucency::default(),
-                )
-                .is_none()
-            );
+            assert_eq!(button_kind(s), None);
         }
+        assert_eq!(button_kind(ButtonStyle::Glass), Some(Kind::Glass));
+        assert_eq!(button_kind(ButtonStyle::Bordered), Some(Kind::Glass));
+        assert_eq!(
+            button_kind(ButtonStyle::GlassProminent),
+            Some(Kind::Prominent)
+        );
     }
 
     #[test]
-    fn wide_button_is_a_capsule() {
-        let s = button(
-            &P,
-            KRect::new(10.0, 20.0, 130.0, 64.0),
-            ButtonStyle::Glass,
-            ControlSize::Small,
-            false,
-            0.0,
-            Translucency::default(),
-        )
-        .expect("glass");
-        assert_eq!(s.element.shape.radii, [22.0; 4]);
-        assert_eq!(s.element.shape.curve, CornerCurve::Circular);
+    fn a_glass_button_is_an_untinted_capsule_filling_its_frame() {
+        let s = surface(&spec(Kind::Glass), Press::REST);
+        let shape = s.element.shape;
+        assert_eq!(shape.rect, rect(FRAME));
+        assert_eq!(shape.radii, [34.33 * 0.5; 4]);
+        assert_eq!(shape.curve, CornerCurve::Continuous);
         assert!(s.element.recipe.tint.is_none());
+        assert!(s.wash.is_none());
     }
 
     #[test]
-    fn prominent_button_carries_the_accent_tint() {
-        let s = button(
-            &P,
-            KRect::new(0.0, 0.0, 120.0, 44.0),
-            ButtonStyle::GlassProminent,
-            ControlSize::Small,
-            false,
-            0.0,
-            Translucency::default(),
-        )
-        .expect("glass");
+    fn a_prominent_button_fills_with_the_default_tint_at_full_strength() {
+        let s = surface(&spec(Kind::Prominent), Press::REST);
         let tint = s.element.recipe.tint.expect("tinted");
-        assert_eq!(tint.rgb, [P.accent[0], P.accent[1], P.accent[2]]);
-        assert_eq!(tint.alpha, PROMINENT_TINT_ALPHA);
+        assert_eq!(tint.rgb, [0.0, 136.0 / 255.0, 1.0]);
+        assert!((tint.alpha * crate::material::recipe::TINT_EFFECTIVE_ALPHA - 1.0).abs() < 1e-6);
+        let red = ButtonSpec {
+            tint: Some([1.0, 56.0 / 255.0, 61.0 / 255.0, 1.0]),
+            ..spec(Kind::Prominent)
+        };
+        let tint = surface(&red, Press::REST)
+            .element
+            .recipe
+            .tint
+            .expect("tinted");
+        assert_eq!(tint.rgb, [1.0, 56.0 / 255.0, 61.0 / 255.0]);
     }
 
     #[test]
-    fn icon_button_is_a_circle() {
-        let s = button(
-            &P,
-            KRect::new(0.0, 0.0, 44.0, 44.0),
-            ButtonStyle::Glass,
-            ControlSize::Small,
-            true,
-            0.0,
-            Translucency::default(),
-        )
-        .expect("glass");
-        assert_eq!(s.element.shape.radii, [22.0; 4]);
+    fn a_disabled_prominent_button_drops_the_tint_for_the_grey_fill() {
+        let off = ButtonSpec {
+            enabled: false,
+            ..spec(Kind::Prominent)
+        };
+        let tint = surface(&off, Press::REST)
+            .element
+            .recipe
+            .tint
+            .expect("tinted");
+        assert_eq!(tint.rgb, [0.55; 3]);
+        assert!((tint.alpha * crate::material::recipe::TINT_EFFECTIVE_ALPHA - 0.25).abs() < 1e-6);
+        // A disabled glass button's body is unchanged.
+        let glass = ButtonSpec {
+            enabled: false,
+            ..spec(Kind::Glass)
+        };
+        assert_eq!(
+            surface(&glass, Press::REST),
+            surface(&spec(Kind::Glass), Press::REST)
+        );
     }
 
     #[test]
-    fn press_grows_bounds_and_keeps_the_idle_recipe() {
-        let rest = button(
-            &P,
-            KRect::new(0.0, 0.0, 100.0, 40.0),
-            ButtonStyle::Glass,
-            ControlSize::Small,
-            false,
-            0.0,
-            Translucency::default(),
-        )
-        .expect("glass");
-        let down = button(
-            &P,
-            KRect::new(0.0, 0.0, 100.0, 40.0),
-            ButtonStyle::Glass,
-            ControlSize::Small,
-            false,
-            1.0,
-            Translucency::default(),
-        )
-        .expect("glass");
-        assert!((down.element.shape.rect.w - 125.0).abs() < 1e-3);
-        assert!((down.element.shape.rect.h - 50.0).abs() < 1e-3);
+    fn a_disabled_button_ignores_a_press() {
+        let off = ButtonSpec {
+            enabled: false,
+            ..spec(Kind::Glass)
+        };
+        let down = Press {
+            progress: 1.0,
+            touch_x: None,
+        };
+        assert_eq!(surface(&off, down), surface(&off, Press::REST));
+    }
+
+    #[test]
+    fn press_grows_the_silhouette_and_keeps_the_idle_recipe() {
+        let rest = surface(&spec(Kind::Glass), Press::REST);
+        let down = surface(
+            &spec(Kind::Glass),
+            Press {
+                progress: 1.0,
+                touch_x: None,
+            },
+        );
+        assert!((down.element.shape.rect.w - 76.0 * 1.245).abs() < 1e-3);
+        assert!((down.element.shape.rect.h - 34.33 * 1.245).abs() < 1e-3);
+        assert!((down.element.shape.radii[0] - 34.33 * 0.5 * 1.245).abs() < 1e-3);
         assert_eq!(
             down.element.shape.rect.center(),
             rest.element.shape.rect.center()
@@ -388,15 +448,54 @@ mod tests {
     }
 
     #[test]
-    fn press_amount_normalises_the_state_layer() {
+    fn the_wash_follows_the_touch_and_the_grown_width() {
+        let down = surface(
+            &spec(Kind::Glass),
+            Press {
+                progress: 1.0,
+                touch_x: None,
+            },
+        );
+        let wash = down.wash.expect("pressed");
+        let [cx, _] = down.element.shape.rect.center();
+        assert!((wash.alpha_at(cx) - 0.30).abs() < 1e-6);
+        let end = down.element.shape.rect.x;
+        assert!((wash.alpha_at(end) - 0.30 * 0.63).abs() < 1e-4);
+        // Centred on a touch near the left end.
+        let off = surface(
+            &spec(Kind::Glass),
+            Press {
+                progress: 1.0,
+                touch_x: Some(end),
+            },
+        )
+        .wash
+        .expect("pressed");
+        assert!((off.alpha_at(end) - 0.30).abs() < 1e-6);
+    }
+
+    #[test]
+    fn press_progress_is_the_newest_waves_opacity_over_the_pressed_opacity() {
         let mut state = WidgetInteractionState::NONE;
-        assert_eq!(press_amount(state, 0.12), 0.0);
-        state.state = InteractionState::PRESSED;
-        assert_eq!(press_amount(state, 0.12), 1.0);
+        assert_eq!(press_progress(state, 0.12), 0.0);
+        // The hover layer is not a press.
         state.state_layer_opacity = 0.06;
-        assert!((press_amount(state, 0.12) - 0.5).abs() < 1e-6);
+        assert_eq!(press_progress(state, 0.12), 0.0);
+        let mut waves = PressWaves::EMPTY;
+        waves.push(PressWave {
+            origin: None,
+            progress: 1.0,
+            opacity: 0.06,
+        });
+        waves.push(PressWave {
+            origin: None,
+            progress: 1.0,
+            opacity: 0.1284,
+        });
+        state.press_waves = waves;
+        assert!((press_progress(state, 0.12) - 1.07).abs() < 1e-4);
         state.state = InteractionState::PRESSED | InteractionState::DISABLED;
-        assert_eq!(press_amount(state, 0.12), 0.0);
+        assert_eq!(press_progress(state, 0.12), 0.0);
     }
 
     #[test]
