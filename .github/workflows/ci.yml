@@ -25,7 +25,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [pr, engine-mip, reads-only, axis-only, rimskip]
+        variant: [no-arrays, no-arrays-rimskip]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -34,7 +34,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: windows-latest
-          save-if: ${{ matrix.variant == 'pr' }}
+          save-if: false
       - if: matrix.variant != 'pr'
         shell: bash
         run: cp diag/variants/${{ matrix.variant }}/*.wgsl shaders/
