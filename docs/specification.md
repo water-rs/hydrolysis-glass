@@ -820,7 +820,9 @@ observed and is chosen to move as the glass kind does.
   specification draws the fill as the tint layer of §4.13 over the glass
   body at full strength [chosen: it reproduces the two matching cases and
   is within 50 levels of the others; the law of the shift is the open
-  strength of §4.13]. The rim highlight remains faintly visible at the top
+  strength of §4.13], without the §4.13 edge gradient: no darkening toward
+  the fill's edge was observed [measured], so the fill is flat out to the
+  silhouette. The §4.12 rim highlight remains faintly visible at the top
   and bottom edges of the fill, about 8 levels above it [measured].
 - **Tinted glass label.** The label takes the tint colour [measured:
   rendered red labels 238, 94, 99 and 252, 195, 197 over black and white in
