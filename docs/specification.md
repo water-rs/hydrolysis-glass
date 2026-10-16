@@ -652,6 +652,14 @@ uses red (230, 38, 38) and blue (26, 90, 230), encoded [chosen].
    one container, with the same two shapes standing alone at (51, 480) and
    (171, 720.33), on its own 402 × 874 pt scene at 3 px/pt. Black, grey 0.5,
    white and the split, in dark appearance at translucency 0.5.
+5. The **switch scene** (§8.2), on its own 402 × 874 pt scene at 3 px/pt,
+   over black, grey 0.5 and white, in dark and in light appearance: an off
+   and an on switch; a red-tinted on switch, a red-tinted off switch and a
+   blue-tinted on switch; a disabled off and a disabled on switch; a
+   "Label" switch 300 pt wide.
+6. The **toggle sequence**: an off switch alone over black in dark
+   appearance, switched on at t = 0 and off at t = 1 s, rendered at t = 0,
+   0.05, 0.1, 0.15, 0.3, 1.1 and 1.5 s.
 
 ### Observations
 
@@ -693,3 +701,183 @@ uses red (230, 38, 38) and blue (26, 90, 230), encoded [chosen].
   standalone circle's is sharp. Over white and grey it casts the card's soft
   shadow, where the standalone circle's fringe is a few levels deep at most.
   The card renders the same in the container and standing alone.
+- **Switch.** Every switch of the switch scene lays out 61 × 28 pt and
+  draws a 63 × 28 pt capsule track from the frame's leading edge, 2 pt past
+  its trailing edge, with a white 37 × 24 pt knob 2 pt inside the track: at
+  the leading end when off, at the trailing end when on. Nothing in the
+  switch is glass, and nothing is drawn outside the track. The off track is
+  70, 70, 73 over black and 249, 249, 252 over white in dark appearance,
+  18, 18, 20 and 197, 197, 199 in light; the on track is solid green, the
+  tinted ones solid red and blue over every backdrop, and the red-tinted
+  off switch looks like the plain one. The disabled switches are the plain
+  ones at half opacity: over black their knobs are 128. The "Label" switch
+  has its label at the leading edge, centred on the track, and the track
+  at the trailing edge.
+- **Toggle.** In the toggle sequence the knob's leading edge is 2 pt from
+  the track's leading edge at t = 0, then 8.2, 15.7, 20.1 and 23.7 pt at
+  0.05, 0.1, 0.15 and 0.3 s, with no overshoot; at 1.1 s it is back at
+  15.7 pt and at 1.5 s at 2 pt. The knob keeps its size and stays opaque
+  white throughout. The track is uniformly a third of the way from grey to
+  green at 0.1 s and 85 % of the way at 0.3 s; on the way back it is
+  60 % of the way to grey at 1.1 s.
+
+## 8. Controls
+
+A control is drawn from the glass elements of §2 to §5 and the chrome its
+section specifies: geometry, states and motion. Lengths are layout points at
+the default text size. Colours are encoded 8-bit sRGB as rendered on the
+observed display, and "over black" or "over white" names the backdrop behind
+the control. Unless a row says otherwise, observations are at translucency
+0.5.
+
+
+### 8.2 Switch
+
+A switch shows a boolean: a **track** with a **knob** that sits at the
+track's leading end when the switch is off and at its trailing end when it
+is on. At rest neither part is glass: the track and the knob are flat
+fills, and the switch casts no shadow and draws no rim. Glass appears only
+on the knob while a touch holds it (below).
+
+**Reference.** Geometry and motion were observed on the iOS 27.0
+simulator (an iPhone 16 Pro, 402 × 874 pt at 3 px/pt) and are tagged
+[measured: simulator] or [fitted: simulator]. No device capture was
+possible, so the colours below are the simulator's rendering, tagged
+[chosen] until a device capture confirms them. Touch interaction was not
+observed at all.
+
+#### Geometry
+
+| Part | Size | Position |
+|---|---|---|
+| layout frame | 61 × 28 | — |
+| track | 63 × 28, capsule | leading edge on the frame's leading edge, centred vertically |
+| knob | 37 × 24, capsule | 2 pt inside the track's top and bottom; 2 pt from the track's leading end when off, 2 pt from its trailing end when on |
+
+All values are [measured: simulator, within 1/3 pt]. The size is the same
+at every control size, mini through extra large, and the size group has no
+effect. The track is 2 pt longer than the layout frame and overhangs its
+trailing edge by 2 pt; the overhang takes no layout space [measured:
+simulator]. The knob travels 22 pt.
+
+- **Corners.** The track and the knob are capsules whose radii are half
+  their heights, 14 and 12. Their corners are continuous, like the
+  material's capsules [chosen: the 1/3 pt sampling does not separate
+  circular from continuous corners].
+- **Label.** A switch with a label lays the label out at the leading edge
+  of its frame and the track at the trailing edge, centred on each other
+  vertically; the frame takes the width it is given [measured: simulator,
+  a 300 pt "Label" switch, whose label inks 39 × 13 pt like plain 17 pt
+  regular text in the primary label colour].
+- **Direction.** In a right-to-left layout the switch is mirrored: off is
+  at the trailing end, which is then on the left [chosen: not observed].
+- **Hit region.** The frame, extended to at least 44 × 44 pt about its
+  centre, and the label when there is one [chosen: touch hit-testing was
+  not observed; 44 pt is a comfortable minimum touch target].
+
+#### Colours
+
+| Part | Dark appearance | Light appearance |
+|---|---|---|
+| knob | white, opaque | white, opaque |
+| off track | (235, 235, 245) at alpha 0.30 over the backdrop | (60, 60, 67) at alpha 0.30 over the backdrop |
+| on track | the tint, opaque; default green (48, 209, 88) | the tint, opaque; default green (52, 199, 89) |
+
+All entries are [chosen: the simulator's rendering, awaiting a device
+capture]. The off track blends in encoded space [fitted: simulator, the
+blend reproduces the rendered off track over black, grey 0.5 and white
+within 1 level: 70, 160, 249 in dark appearance and 18, 108, 197 in
+light]. The on track rendered the same colour over every backdrop
+[measured: simulator].
+
+#### States
+
+| State | Track | Knob |
+|---|---|---|
+| off | off fill | white, at the leading end |
+| on | the tint | white, at the trailing end |
+| tinted | the tint replaces the on fill only; the off fill is unchanged | unchanged |
+| disabled | as enabled, then the whole switch at opacity 0.5 | as enabled, at opacity 0.5 |
+| pressed | as at rest | grown glass lens (below) [chosen] |
+
+- **Tint.** The tint defaults to the green above. Rendered tints
+  [chosen: simulator rendering]: the accent colour, (0, 145, 255) in dark
+  appearance and (0, 136, 255) in light; red, (255, 66, 69) and
+  (255, 56, 60).
+- **Disabled.** The enabled switch is composited over the backdrop at
+  opacity 0.5, track and knob together [fitted: simulator, within 1 level
+  over black, grey 0.5 and white in both appearances: the knob 128 over
+  black and 192 over grey; the dark off track 35, 144 and 252, the dark
+  on track 24, 105, 44 over black and 151, 232, 171 over white]. A
+  disabled switch does not respond to touches [chosen: not observed].
+- **Focus.** Not observed. An implementation that shows a focused state
+  states its own choice.
+
+#### Toggle motion
+
+A **toggle progress** `q` places the knob: its leading edge is
+`2 + 22·q` pt from the track's leading end, 0 off and 1 on. When the value
+changes, `q` moves toward the new end by the **toggle spring**, a
+critically damped spring on a unit mass:
+
+| Spring | Natural frequency ω0 | Damping ratio ζ | Stiffness ω0² | Damping 2ζω0 |
+|---|---|---|---|---|
+| toggle | 21 rad/s | 1 | 441 | 42 |
+
+[fitted: simulator, four changes at 60 frames per second, on and off;
+every fit lies within ω0 20.6 to 21.5 rad/s and ζ 0.98 to 1.01, with a
+residual below 2.5 % of the travel.] From rest the knob covers 28 % of
+its travel after 0.05 s, 62 % after 0.1 s and 99 % after 0.3 s, and it
+does not overshoot.
+
+- **The motion is the switch's own.** A value change made with an
+  animation moves the knob by the toggle spring whatever the animation
+  asks for: a change requested with a linear 1.5 s animation moved exactly
+  like one with the default animation. A change that explicitly disables
+  animation moves the knob to its new end in the next frame [measured:
+  simulator].
+- **Track fill.** The on fill is drawn over the off fill with an opacity
+  `c` that moves toward 1 when the switch turns on and toward 0 when it
+  turns off, starting with the knob, by a critically damped spring of
+  ω0 = 11.2 rad/s turning on and 20.2 rad/s turning off [fitted:
+  simulator, two changes each way, residual below 6.2 % of the fade]. The
+  fade is uniform along the track [measured: simulator, within the
+  capture's colour resolution]. `c` reaches 0.31 after 0.1 s and 0.85
+  after 0.3 s turning on, and 0.91 after 0.2 s turning off.
+- **Knob.** The knob keeps its size and stays opaque white during the
+  toggle [measured: simulator, 37 × 24 within 1/3 pt in every frame].
+- **Start.** `q` and `c` start at the value change [chosen: the observed
+  motion began 0.022 to 0.027 s after the change was made, which is the
+  render pipeline, not part of the control]. A change during the motion
+  starts the spring from the current `q`, `c` and their velocities
+  [chosen: only changes from rest were observed].
+
+#### Touch
+
+Nothing in this subsection was observed: every value is [chosen],
+awaiting a touch capture. The values make the knob a glass lens while it
+is held, which is the part of the switch that shows the material.
+
+- **Press.** A touch that begins in the hit region drives a press
+  progress `p` toward 1 by a spring of ω0 = 28.2 rad/s and ζ = 0.65;
+  release or cancellation drives it toward 0 by a spring of
+  ω0 = 15.8 rad/s and ζ = 0.385 [chosen: the button's press and release
+  springs, §8.1, so that the controls respond alike].
+- **Lens.** While pressed, the knob scales about its centre by
+  `1 + 0.35·p`, to 50 × 32.4 pt held, overhanging the track by 2.2 pt
+  above and below, and becomes a clear-family glass element (§5.2) over
+  the track: its white fill is drawn at opacity `1 − max(p, 0)` over the
+  glass [chosen: a lens that shows the track through the knob, large
+  enough to read past the finger].
+- **Tap.** A touch that ends in the hit region without having moved more
+  than 10 pt toggles the value at touch-up, with the toggle motion above,
+  while `p` returns to 0 [chosen].
+- **Drag.** A touch that moves more than 10 pt horizontally drags the
+  knob: `q` follows the touch's horizontal offset divided by the 22 pt
+  travel, clamped to [0, 1]. At touch-up the value becomes on when
+  `q ≥ 0.5` and off otherwise, and `q` settles by the toggle spring from
+  its position and velocity [chosen]. While dragged, the track fill
+  follows `c = q` [chosen].
+- **Leaving the switch.** The press stays active while the touch is
+  within 70 pt of the hit region; farther out it cancels, `p` returns to
+  0 and the value does not change [chosen: the button's distance, §8.1].
