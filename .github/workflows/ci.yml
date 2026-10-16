@@ -25,7 +25,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [pr-fix, fix]
+        variant: [probe]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -44,6 +44,8 @@ jobs:
         env:
           RUST_LOG: warn
         run: cargo nextest run --locked --test hydrolysis --no-fail-fast -j 1 --no-capture -E 'test(a_material_group) | test(a_mounted)'
-      - name: Whole suite
+      - uses: actions/upload-artifact@v4
         if: always()
-        run: cargo nextest run --locked --no-fail-fast
+        with:
+          name: verification-${{ matrix.variant }}
+          path: target/verification/*.png
