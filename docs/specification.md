@@ -128,7 +128,13 @@ The backdrop under the element's bounds plus the reach of its samples is
 captured at the element's **capture scale** and mip-mapped. A capture texel
 is the mean of the device pixels it covers [fitted: at blur radius 0 the
 model reproduces the clear card's interior over the grid over the split
-within 0.3 levels, §6]. All samples below read this capture at a displaced
+within 0.3 levels, §6]. The capture reads the backdrop through a chain of
+2 × 2 means, so a texel weights the pixels under it near equally even where
+a level does not halve the one below it evenly [chosen]. A capture whose
+texels weight some pixels of a periodic backdrop more than others shifts
+the backdrop's mean by an amount that drifts across the capture; over the
+grid the large regular card showed that drift as a 2-level bowl (§6). All
+samples below read this capture at a displaced
 point, blurred by a radius or at a level (§3). A container is captured once,
 under the union of its members' bounds, at the capture scale of its recipe
 (§5.6).

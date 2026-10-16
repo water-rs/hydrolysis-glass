@@ -1170,7 +1170,7 @@ impl GlassRenderer {
             Self::fullscreen_pass(
                 encoder,
                 view,
-                &self.blit,
+                &self.downsample,
                 bg,
                 wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
                 Some([x[0], y[0], x[1] - x[0], y[1] - y[0]]),
