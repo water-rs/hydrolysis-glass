@@ -125,36 +125,6 @@ pub fn circular_state_layer(
     }
 }
 
-/// A toggle switch: a track that crosses to the accent as it turns on, and a
-/// knob that slides along it.
-pub fn toggle_switch(
-    palette: &Palette,
-    draw: &mut Recorder,
-    bounds: Rect,
-    progress: f32,
-    state: WidgetInteractionState,
-) {
-    let t = progress.clamp(0.0, 1.0);
-    let mut track = mix(palette.track, palette.accent, t);
-    if state.state.contains(InteractionState::DISABLED) {
-        track[3] *= 0.5;
-    }
-    draw.fill(rounded(bounds, capsule(bounds)), working(track));
-    let pad = 2.0;
-    let r = bounds.height().mul_add(0.5, -pad).max(1.0);
-    let x0 = bounds.x0 + pad + r;
-    let x1 = bounds.x1 - pad - r;
-    let center = Point::new(lerp(x0, x1, f64::from(t)), bounds.center().y);
-    draw.shadow(
-        rounded(
-            Rect::from_center_size(center, (r * 2.0, r * 2.0)),
-            uniform(r),
-        ),
-        Shadow::new(4.0, working([0.0, 0.0, 0.0, 0.2])).offset(Vec2::new(0.0, 2.0)),
-    );
-    draw.fill(Circle::new(center, r), working(palette.knob));
-}
-
 /// A checkbox: an outlined continuous square that fills with the accent and
 /// draws its check mark as `progress` rises.
 #[allow(
