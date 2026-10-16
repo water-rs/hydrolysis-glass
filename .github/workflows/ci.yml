@@ -25,7 +25,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        variant: [no-arrays, no-arrays-rimskip]
+        variant: [pr-fix, fix]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -44,3 +44,6 @@ jobs:
         env:
           RUST_LOG: warn
         run: cargo nextest run --locked --test hydrolysis --no-fail-fast -j 1 --no-capture -E 'test(a_material_group) | test(a_mounted)'
+      - name: Whole suite
+        if: always()
+        run: cargo nextest run --locked --no-fail-fast
