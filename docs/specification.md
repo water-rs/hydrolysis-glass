@@ -449,8 +449,8 @@ or its interactivity contributes to its size-specific values (cast falloff
 and density, luminance limit, exterior span) is open.
 Interaction does not change the recipe [measured].
 
-The interactive material (the `.interactive()` behaviour of elements 3, 4 and
-5) never changes its geometry on press or drag: a 200 × 80 pt tinted element, a
+The interactive material (the `.interactive()` behaviour) never changes its
+geometry on press or drag: a 200 × 80 pt tinted element, a
 200 × 80 pt untinted element, a 66 × 34 pt element and a plain-style button all
 kept a growth of 1.000 through a press and through a drag [measured]. Any press
 feedback of the material that is not geometry is unchanged.
