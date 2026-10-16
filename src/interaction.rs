@@ -1,11 +1,12 @@
-//! Interaction dynamics: press, drag, neighbour attraction, merge smoothing
-//! and shape morphing.
+//! Interaction dynamics: drag, neighbour attraction, merge smoothing and
+//! shape morphing.
 //!
 //! Inputs are reactive signals ([`nami::Binding`] / [`nami::Computed`]);
 //! the dynamics are stepped once per frame and publish the [`Group`] the
-//! renderer draws. [`PRESS_SCALE`] is the measured press growth (spec
-//! §5.5); the remaining dynamics constants are chosen starting values to
-//! verify on a device (see docs/specification.md §5.5).
+//! renderer draws. The interactive material never changes its geometry on
+//! press or drag; press growth belongs to the glass button style
+//! (`theme::surfaces`, spec §5.5). The dynamics constants are chosen
+//! starting values to verify on a device (see docs/specification.md §5.5).
 
 use nami::{Binding, Computed, Signal, SignalExt};
 
@@ -13,18 +14,12 @@ use crate::material::geometry::{Element, Shape};
 use crate::material::gpu::Group;
 use crate::material::recipe::{Appearance, Family, Recipe, Translucency};
 
-/// Bounds growth at full press: `1 + 0.24·press` about the centre — the
-/// measured button went 66 × 34.33 to 82 × 42.66 pt, ≈1.242 in both axes
-/// (spec §5.5). **[measured]**
-pub const PRESS_SCALE: f32 = 0.24;
-/// Exponential approach rate of `press` per frame (≈95 % in ~220 ms at
-/// 60 fps) — §5.5 measures the growth, not its dynamics. **[chosen]**
-pub const PRESS_RATE: f32 = 0.22;
 /// Exponential approach rate of the drag offset per frame (≈95 % in
-/// ~170 ms) — §5.5 measures the growth, not its dynamics. **[chosen]**
+/// ~170 ms) — §5.5 does not measure the dynamics. **[chosen]**
 pub const DRAG_RATE: f32 = 0.28;
-/// Corner-radius morphs ease at the press rate. **[chosen]**
-pub const MORPH_RATE: f32 = PRESS_RATE;
+/// Exponential approach rate of the corner radii per frame (≈95 % in
+/// ~220 ms at 60 fps). **[chosen]**
+pub const MORPH_RATE: f32 = 0.22;
 /// Centre-to-centre radius inside which neighbours lean towards a dragged
 /// element, pt. **[chosen]**
 pub const ATTRACTION_RADIUS: f32 = 140.0;
@@ -40,26 +35,13 @@ pub const ATTRACTION_GAP_FRACTION: f32 = 0.5;
 ///
 /// ×1.35 at full drag on the 30 pt container smoothing, which bridges the
 /// gap closed by an 8 pt pull across a 16 pt gap while the gap opening on
-/// the far side (≈19 pt after the press growth and the neighbour's lean)
-/// stays open.
+/// the far side (≈19 pt after the neighbour's lean) stays open.
 pub const DRAG_SMOOTHING_GAIN: f32 = 0.35;
 
 /// Exponential approach of `current` towards `target` by `rate`.
 #[must_use]
 pub fn approach(current: f32, target: f32, rate: f32) -> f32 {
     (target - current).mul_add(rate.clamp(0.0, 1.0), current)
-}
-
-/// The press response: bounds grown `1 + PRESS_SCALE·press` about the
-/// centre with the radii scaled the same (spec §5.5).
-#[must_use]
-pub fn press_shape(shape: Shape, press: f32) -> Shape {
-    let grow = PRESS_SCALE.mul_add(press, 1.0);
-    Shape {
-        rect: shape.rect.scaled_about_center(grow),
-        radii: shape.radii.map(|r| r * grow),
-        ..shape
-    }
 }
 
 fn approach2(current: [f32; 2], target: [f32; 2], rate: f32) -> [f32; 2] {
@@ -89,8 +71,6 @@ pub fn attraction(delta: [f32; 2], gap: f32) -> [f32; 2] {
 /// Reactive inputs of one interactive element.
 #[derive(Clone, Debug)]
 pub struct Controls {
-    /// `true` while pressed or held; `press` approaches 1.
-    pub pressed: Binding<bool>,
     /// Pointer offset from the grab point while dragged, `None` at rest.
     pub drag: Binding<Option<[f32; 2]>>,
     /// Target corner radii; morphs a capsule into a rect and back.
@@ -102,7 +82,6 @@ impl Controls {
     #[must_use]
     pub fn new(radii: [f32; 4]) -> Self {
         Self {
-            pressed: Binding::container(false),
             drag: Binding::container(None),
             radii: Binding::container(radii),
         }
@@ -113,13 +92,12 @@ impl Controls {
 /// controls and the eased dynamic state.
 #[derive(Clone, Debug)]
 pub struct Member {
-    /// Resting shape (bounds without press growth or drag translation).
+    /// Resting shape (bounds without drag translation).
     pub rest: Shape,
     /// The family used for the recipe.
     pub family: Family,
     /// Reactive inputs.
     pub controls: Controls,
-    press: f32,
     offset: [f32; 2],
     radii: [f32; 4],
 }
@@ -132,16 +110,9 @@ impl Member {
             rest,
             family,
             controls: Controls::new(rest.radii),
-            press: 0.0,
             offset: [0.0; 2],
             radii: rest.radii,
         }
-    }
-
-    /// Current eased press, `0..=1`.
-    #[must_use]
-    pub const fn press(&self) -> f32 {
-        self.press
     }
 
     /// Current eased translation, pt.
@@ -155,17 +126,16 @@ impl Member {
     }
 
     /// The shape as drawn this frame: rest bounds translated by the offset,
-    /// grown by `1 + PRESS_SCALE·press` about the centre, with the eased
-    /// radii.
+    /// with the eased radii. Press and drag never change its size (spec
+    /// §5.5).
     #[must_use]
     pub fn shape(&self) -> Shape {
-        let mut s = press_shape(self.rest.with_radii(self.radii), self.press);
+        let mut s = self.rest.with_radii(self.radii);
         s.rect = s.rect.translated(self.offset[0], self.offset[1]);
         s
     }
 
-    /// The element as drawn this frame: grown and translated, but with
-    /// the idle recipe — interaction does not change the recipe (spec §5.5).
+    /// The element as drawn this frame: translated, but with the idle recipe — interaction does not change the recipe (spec §5.5).
     #[must_use]
     pub fn element(&self, appearance: Appearance, translucency: Translucency) -> Element {
         let shape = self.shape();
@@ -180,12 +150,6 @@ impl Member {
     }
 
     fn step(&mut self, pull: [f32; 2]) {
-        let press_target = if self.controls.pressed.snapshot() || self.grabbed() {
-            1.0
-        } else {
-            0.0
-        };
-        self.press = approach(self.press, press_target, PRESS_RATE);
         let offset_target = self.controls.drag.snapshot().unwrap_or(pull);
         self.offset = approach2(self.offset, offset_target, DRAG_RATE);
         let radii_target = self.controls.radii.snapshot();
@@ -390,33 +354,6 @@ mod tests {
     }
 
     #[test]
-    fn press_grows_and_keeps_the_idle_recipe() {
-        let mut g = container();
-        let rest = g.group().members[1].recipe;
-        g.members[1].controls.pressed.set(true);
-        // 95 % settle in about 13 frames at 0.22/frame.
-        for _ in 0..13 {
-            g.step();
-        }
-        assert!(g.members[1].press() > 0.95);
-        g.settle(1e-4, 200);
-        let e = &g.group().members[1];
-        assert!((e.shape.rect.w - 60.0 * 1.24).abs() < 1e-2);
-        let [cx, cy] = e.shape.rect.center();
-        assert!(
-            (cx - 106.0).abs() < 1e-3 && (cy - 30.0).abs() < 1e-3,
-            "grows about the centre"
-        );
-        assert_eq!(e.recipe, rest);
-        g.members[1].controls.pressed.set(false);
-        g.settle(1e-4, 200);
-        assert!(
-            (g.group().members[1].shape.rect.w - 60.0).abs() < 1e-2,
-            "symmetric return"
-        );
-    }
-
-    #[test]
     fn drag_settles_in_about_170ms_and_neighbours_lean_in() {
         let mut g = container();
         g.members[1].controls.drag.set(Some([8.0, 0.0]));
@@ -430,6 +367,12 @@ mod tests {
             "offset after 10 frames: {off}"
         );
         g.settle(1e-4, 200);
+        let dragged = &g.group().members[1];
+        assert!(
+            (dragged.shape.rect.w - 60.0).abs() < 1e-4
+                && (dragged.shape.rect.h - 60.0).abs() < 1e-4,
+            "the interactive material keeps its size through a drag"
+        );
         let left = g.members[0].offset();
         let right = g.members[2].offset();
         assert!(left[0] > 0.0, "left neighbour leans right: {left:?}");
@@ -464,9 +407,8 @@ mod tests {
             field.sample([x, 30.0]).distance < 0.0,
             "gap bridged at x={x}"
         );
-        // The pressed member's measured growth (~1.24) plus its neighbour's
-        // lean bridges the left gap as well; a member sitting farther away
-        // than the attraction radius keeps its gap open instead.
+        // A member sitting farther away than the attraction radius keeps its
+        // gap open.
         let far = group.members[3].shape.rect;
         let x_far = (right.x + right.w + far.x) * 0.5;
         assert!(
@@ -520,8 +462,8 @@ mod tests {
     fn frame_signal_tracks_steps() {
         let mut g = container();
         let frame = g.frame();
-        g.members[0].controls.pressed.set(true);
+        g.members[0].controls.drag.set(Some([8.0, 0.0]));
         g.step();
-        assert!(frame.snapshot().members[0].shape.rect.w > 60.0);
+        assert!(frame.snapshot().members[0].shape.rect.x > 0.0);
     }
 }

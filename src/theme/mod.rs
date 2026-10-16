@@ -51,7 +51,7 @@ use palette::{Palette, resolved, working};
 use surfaces::Surface;
 
 /// Duration of the eased press response: the time an exponential ease at
-/// `PRESS_RATE` per 60 Hz frame takes to close 95 % of the gap,
+/// 0.22 per 60 Hz frame takes to close 95 % of the gap,
 /// `ln(0.05) / ln(1 − 0.22) / 60 ≈ 0.201 s`.
 pub const PRESS_DURATION: Duration = Duration::from_millis(201);
 /// Duration of the eased drag response, likewise from `DRAG_RATE`:

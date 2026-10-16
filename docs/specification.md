@@ -447,11 +447,22 @@ A tint adds the layers of §4.13. Element 3, the only tinted and the only
 m = 80 regular element, matches every fitted law at its size; whether its tint
 or its interactivity contributes to its size-specific values (cast falloff
 and density, luminance limit, exterior span) is open.
-Interaction does not change the recipe [measured]. Element 5 grew by a
-factor of about 1.24 while pressed (66 × 34.33 → 82 × 42.66 pt), returned on
-release and kept its idle recipe while larger; element 3 kept its bounds and
-its recipe through a press and a drag [measured]. Which elements grow on press
-and on drag is open.
+Interaction does not change the recipe [measured].
+
+The interactive material (the `.interactive()` behaviour) never changes its
+geometry on press or drag: a 200 × 80 pt tinted element, a
+200 × 80 pt untinted element, a 66 × 34 pt element and a plain-style button all
+kept a growth of 1.000 through a press and through a drag [measured]. Any press
+feedback of the material that is not geometry is unchanged.
+
+Growth belongs to the glass button control style. While pressed, the button
+scales uniformly about its centre to 1.25 times its idle size, in both axes
+and with its radii, and keeps its idle recipe. It keeps that scale through a
+drag that started on it (drags of 20 and 80 pt) and returns to its idle size
+after release [measured]. The 66 × 34 pt button held 1.244 and 1.247, peaking
+near 1.26. The uniform factor 1.25 is fitted to the observed 1.24 to 1.26
+[chosen]. That the growth does not depend on the button's size or tint is
+[chosen]; only the 66 × 34 pt button was observed.
 
 ## 6. Model checks
 
