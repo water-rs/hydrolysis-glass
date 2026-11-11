@@ -2,6 +2,7 @@
 
 use hydrolysis::{
     HeadlessRuntime, HeadlessSnapshot, InputEvent, OutputAlpha, PointerButton, PointerKind,
+    TouchScrollConfig,
 };
 use hydrolysis_glass::material::geometry::{CornerCurve, Rect, Shape};
 use hydrolysis_glass::material::gpu::{COMPOSITE_FORMAT, f32_to_half, read_texture};
@@ -493,7 +494,7 @@ impl GlassApp {
     )]
     pub fn sized(view: impl View + Clone + 'static, glass: Glass, size_pt: [f32; 2]) -> Self {
         let content = AnyViewBuilder::new(move || AnyView::new(view.clone()));
-        let runtime = HeadlessRuntime::new_for_tests(
+        let mut runtime = HeadlessRuntime::new_for_tests(
             Environment::new(),
             content,
             size_pt[0] as u32,
@@ -501,6 +502,9 @@ impl GlassApp {
             glass,
         )
         .with_scale_factor(f64::from(PX_PER_PT));
+        // The mount takes touches, so its window reports the touch gesture's
+        // parameters as a touch platform's does.
+        runtime.set_touch_scroll_config(TouchScrollConfig::android_default());
         Self {
             runtime,
             at: Instant::now(),
@@ -510,7 +514,7 @@ impl GlassApp {
     /// Pumps one frame, capturing it when `capture`.
     fn pump(&mut self, capture: bool) -> Option<HeadlessSnapshot> {
         self.at += VIRTUAL_FRAME;
-        self.runtime.pump_at(capture, self.at).snapshot
+        self.runtime.pump_at(capture, self.at).into_snapshot()
     }
 
     /// Pumps until the runtime reports quiescence.
@@ -537,6 +541,16 @@ impl GlassApp {
             x,
             y,
             button: PointerButton::Primary,
+        });
+    }
+
+    /// Slides the finger to `(x, y)` pt.
+    pub fn touch_move(&mut self, x: f32, y: f32) {
+        self.runtime.push_input_event(InputEvent::PointerMove {
+            id: 1,
+            kind: PointerKind::Touch,
+            x,
+            y,
         });
     }
 
@@ -592,14 +606,14 @@ impl GlassApp {
 
     fn image_of(snapshot: &HeadlessSnapshot) -> Image {
         assert_eq!(
-            snapshot.output_alpha,
+            snapshot.output_alpha(),
             OutputAlpha::Straight,
             "the offscreen surface presents straight alpha",
         );
-        let count = (snapshot.width * snapshot.height) as usize;
-        assert_eq!(snapshot.rgba8.len(), count * 4, "the frame's byte count");
+        let count = (snapshot.width() * snapshot.height()) as usize;
+        assert_eq!(snapshot.rgba8().len(), count * 4, "the frame's byte count");
         let pixels = snapshot
-            .rgba8
+            .rgba8()
             .as_chunks::<4>()
             .0
             .iter()
@@ -614,8 +628,8 @@ impl GlassApp {
             })
             .collect();
         Image {
-            width: snapshot.width,
-            height: snapshot.height,
+            width: snapshot.width(),
+            height: snapshot.height(),
             pixels,
         }
     }

@@ -7,9 +7,9 @@
 //! and the standalone [`crate::GlassRenderer`] takes them as the frame's
 //! [`Group`]s over a captured backdrop.
 
-use cherenkov::kurbo::Rect as KRect;
+use cherenkov_record::kurbo::Rect as KRect;
+use hydrolysis::theme::WidgetInteractionState;
 use waterui::interaction::InteractionState;
-use waterui_backend_core::widget::WidgetInteractionState;
 use waterui_controls::button::ButtonStyle;
 
 use crate::material::geometry::{
@@ -20,7 +20,6 @@ use crate::material::recipe::{Appearance, Family, Recipe, Tint, Translucency};
 
 use super::button::{self, BorderShape, Kind, SizeGroup};
 use super::palette::{Palette, Rgba};
-use super::slider::Slider;
 
 /// Continuous corner radius of a sheet's exposed corners, pt.
 pub const SHEET_CORNER_RADIUS: f32 = 38.0;
@@ -40,8 +39,6 @@ pub enum Role {
     Sheet,
     /// A container that fuses its members.
     Container,
-    /// The knob of a pressed slider.
-    Slider,
 }
 
 /// One glass surface the theme placed.
@@ -227,46 +224,15 @@ pub fn button(
 
 /// A button silhouette grown `1 + 0.245·p` about its centre, the radii
 /// scaled the same.
-fn grown(shape: Shape, p: f32) -> Shape {
+/// `shape` grown uniformly about its centre by the press progress `p`.
+#[must_use]
+pub fn grown(shape: Shape, p: f32) -> Shape {
     let s = button::growth(p);
     Shape {
         rect: shape.rect.scaled_about_center(s),
         radii: shape.radii.map(|r| r * s),
         ..shape
     }
-}
-
-/// The glass lens a pressed slider's knob becomes (§8.3, Touch): a
-/// clear-family capsule over the track, grown about the knob's centre.
-///
-/// The recipe keeps the knob's idle `m`, as a pressed button's does
-/// (§5.5), so the capture class does not change while `p` springs.
-/// `None` while the slider is not pressed or is disabled.
-#[must_use]
-pub fn slider_lens(
-    palette: &Palette,
-    slider: &Slider,
-    translucency: Translucency,
-) -> Option<Surface> {
-    if !slider.is_lens() {
-        return None;
-    }
-    let capsule = |r: KRect| {
-        let r = rect(r);
-        Shape::rounded_rect(r, r.h * 0.5, CornerCurve::Continuous)
-    };
-    let mut e = element(
-        capsule(slider.idle_knob()),
-        Family::Clear,
-        palette.appearance,
-        translucency,
-    );
-    e.shape = capsule(slider.knob());
-    Some(Surface {
-        role: Role::Slider,
-        element: e,
-        wash: None,
-    })
 }
 
 /// A tab bar: a regular capsule spanning its bounds.
@@ -359,7 +325,7 @@ pub fn group(surfaces: Vec<Surface>) -> Group {
 )]
 mod tests {
     use super::*;
-    use waterui_backend_core::widget::{PressWave, PressWaves};
+    use hydrolysis::theme::{PressWave, PressWaves};
 
     const P: Palette = Palette::LIGHT;
     const FRAME: KRect = KRect::new(10.0, 20.0, 86.0, 54.33);

@@ -9,6 +9,11 @@
 //! `shaders/material.wgsl` retargeted onto the `BackdropPixel`
 //! contract — against the group's shared capture and union field.
 //!
+//! Every blurred read of the engine form is `backdrop_sample_blur` on a
+//! Gaussian pyramid, which every glass class registers: the Gaussian of
+//! each sample's deviation (§3, §4.4 and, as [`ambient_sigma`], §4.7) in
+//! 16 filtered fetches, with no loops.
+//!
 //! Two contract choices live here:
 //!
 //! - **Capture scale.** A capture class is a registered token, so its
@@ -32,14 +37,11 @@
 //!   capture and one field; a single-member union degenerates to the
 //!   member's own field.
 
-use cherenkov::kurbo::{Rect as KRect, RoundedRect, RoundedRectRadii, Vec2};
-use cherenkov::{
-    BlendSpace, ContinuousRect, Draw as _, Fixed, Group, Interpolation, LinearGradient, Recorder,
-    Shadow, ShapeData,
-};
+use cherenkov_record::kurbo::{Rect as KRect, RoundedRect, RoundedRectRadii};
 use cherenkov_record::{
-    BackdropShaderSource, CaptureClass, CaptureLevels, CaptureScale, MaterialCapture,
-    MaterialEffect, MaterialGrouping, MaterialRegistry, MaterialShader, OuterExtent,
+    BackdropShaderSource, BlendSpace, CaptureClass, CaptureLevels, CapturePyramid, CaptureScale,
+    ContinuousRect, Fixed, Interpolation, LinearGradient, MaterialCapture, MaterialEffect,
+    MaterialGrouping, MaterialRegistry, MaterialShader, OuterExtent, Paint, Recorder, ShapeData,
     UnionSmoothing,
 };
 
@@ -47,10 +49,9 @@ use crate::material::geometry::{
     CONTAINER_UNION_SMOOTHING, CONTINUOUS_EXPONENT, CornerCurve, Element, SMOOTHING_TO_UNION_K,
     STANDALONE_UNION_SMOOTHING, Shape,
 };
-use crate::material::recipe::{Recipe, blur_sigma, haze_sigma, sigma_reach};
+use crate::material::recipe::{Recipe, ambient_sigma, blur_read_reach, blur_sigma, haze_sigma};
 
 use super::palette::{Rgba, working};
-use super::slider::{self, Slider};
 use super::surfaces::Wash;
 
 /// The key the glass `backdrop_effect` shader registers under: the one
@@ -75,18 +76,56 @@ const CONTAINER_CLASS_BASE: u32 = 0x200;
 /// deepest level, so the classes take the engine's maximum.
 const LEVELS: u32 = CaptureLevels::MAX;
 
+/// The device pixels per pt the declared reach is derived at: the
+/// recording bound.
+const REACH_PX_PER_PT: f32 = 4.0;
+/// The largest primary-lobe displacement, pt (§5).
+const PRIMARY_LOBE_PT: f32 = 60.0;
+/// The largest blur radius, at gain 1 (§4.3).
+const LARGEST_BLUR_RADIUS: f32 = 5.0;
+/// The haze's largest radius (§4.4).
+const LARGEST_HAZE_RADIUS: f32 = 8.0;
+/// The ambient pickup's lobe and blur radius, `0.35·m` at the
+/// measured-range bound `m = 200.33` (§4.7): pt for the lobe, recipe
+/// capture texels for the blur.
+const LARGEST_AMBIENT: f32 = 0.35 * 200.33;
+
 /// The sampling reach the shader declares, device pixels: the largest
-/// displacement a `backdrop_sample*` coordinate takes from the member
-/// pixel at a 4 px/pt recording bound — the farther of the ambient lobe
-/// (`0.35·m` at the measured-range bound `m = 200.33`, ≈70.1 pt) and the
-/// primary lobe (60 pt) plus the §3 blur's tap grid at the largest blur
-/// radius (5 at gain 1, [`sigma_reach`] of [`blur_sigma`] on the smallest
-/// class's 8 px texel, 2 pt at that bound) — and the haze's Gaussian at
-/// the pixel itself (radius 8, [`sigma_reach`] of [`haze_sigma`] on the
-/// same texel).
-const SHADER_REACH: f32 = (60.0 * 4.0 + sigma_reach(blur_sigma(5.0), 2.0) * 4.0)
-    .max(0.35 * 200.33 * 4.0)
-    .max(sigma_reach(haze_sigma(8.0), 2.0) * 4.0);
+/// displacement a `backdrop_sample_blur` coordinate takes from the member
+/// pixel at a 4 px/pt recording bound plus the footprint of the read
+/// there, whichever sample and capture class is the farthest.
+///
+/// The reads are the primary sample (lobe 60 pt, blur radius 5 at gain 1:
+/// [`blur_sigma`] pt), the haze at the pixel itself (radius 8:
+/// [`haze_sigma`] pt) and the ambient sample (lobe `0.35·m` pt, blur
+/// `0.35·m` capture texels read as [`ambient_sigma`] texels).
+///
+/// On a class of capture scale `scale` a pt deviation is `σ_pt · scale · 4`
+/// texels at the 4 px/pt bound, and a read of `σ` texels reaches
+/// [`blur_read_reach`] of `σ` texels, that is `/ scale` device pixels. The
+/// ambient radius counts texels of the recipe's own capture, taken to be
+/// the class's (a recipe sits on the lattice), so it is `0.35·m` texels on
+/// every class. A finer class reaches farther for the same length, as the
+/// footprint's constant term (4.5 texels) is longer on it, so the reach is
+/// the maximum over [`CAPTURE_SCALES`].
+fn shader_reach() -> f32 {
+    let top = LEVELS - 1;
+    CAPTURE_SCALES
+        .iter()
+        .flat_map(|&scale| {
+            let texels_per_pt = scale * REACH_PX_PER_PT;
+            let device = |sigma_texels: f32| blur_read_reach(sigma_texels, top) / scale;
+            [
+                PRIMARY_LOBE_PT.mul_add(
+                    REACH_PX_PER_PT,
+                    device(blur_sigma(LARGEST_BLUR_RADIUS) * texels_per_pt),
+                ),
+                device(haze_sigma(LARGEST_HAZE_RADIUS) * texels_per_pt),
+                LARGEST_AMBIENT.mul_add(REACH_PX_PER_PT, device(ambient_sigma(LARGEST_AMBIENT))),
+            ]
+        })
+        .fold(0.0, f32::max)
+}
 
 /// The blend distance `k` the engine's quadratic smooth minimum folds a
 /// container's member fields with, pt, and the one every standalone
@@ -136,14 +175,14 @@ pub fn capture_class(container: bool, recipe_scale: f32) -> CaptureClass {
 
 /// The `backdrop_effect` source the shader key registers: the recipe's
 /// engine form, after the §3 blur law it shares with the standalone
-/// pass, with the sampling reach its lobes can take.
+/// pass, with the sampling reach its lobes and blur reads can take.
 fn shader_source() -> BackdropShaderSource {
     BackdropShaderSource::wgsl(concat!(
-        include_str!("../../shaders/blur.wgsl"),
+        include_str!("../../shaders/blur_law.wgsl"),
         "\n",
         include_str!("../../shaders/material_engine.wgsl"),
     ))
-    .reach(SHADER_REACH)
+    .reach(shader_reach())
 }
 
 /// Registers the glass backdrop shader and every capture class the
@@ -169,6 +208,7 @@ pub fn register(registry: &mut MaterialRegistry) {
                 MaterialCapture {
                     scale: CaptureScale::new(scale).expect("the lattice stays inside (0, 1]"),
                     levels: CaptureLevels::new(LEVELS).expect("the level count is inside 1..=MAX"),
+                    pyramid: CapturePyramid::Gaussian,
                     grouping: MaterialGrouping::Union {
                         smoothing: UnionSmoothing::new(union_smoothing(container))
                             .expect("the union smoothings are positive"),
@@ -183,7 +223,7 @@ pub fn register(registry: &mut MaterialRegistry) {
 /// The Lamé smoothing matching the recipe's `CONTINUOUS_EXPONENT` corner:
 /// the engine's `ContinuousRect` maps smoothing to exponent `2 + 2·s`,
 /// so 2.02 is `s = 0.01`.
-const CONTINUOUS_SMOOTHING: f64 = (CONTINUOUS_EXPONENT as f64 - 2.0) * 0.5;
+pub const CONTINUOUS_SMOOTHING: f64 = (CONTINUOUS_EXPONENT as f64 - 2.0) * 0.5;
 
 /// Converts the element's silhouette to the engine's analytic shape.
 ///
@@ -382,10 +422,13 @@ pub fn record(recorder: &mut Recorder, element: &Element, container: bool) {
 /// a thousandth of the peak.
 const WASH_SEGMENTS: u16 = 32;
 
-/// Records the press wash of a button (§8.1): a white fill of the grown
-/// silhouette, composited in encoded space, over the glass body and below
-/// the label.
-pub fn record_wash(recorder: &mut Recorder, wash: &Wash) {
+/// The paint of a button's press wash (§8.1).
+///
+/// White, its alpha following [`Wash::alpha_at`] across the grown width,
+/// interpolated in encoded space. The look fills the grown silhouette with it, in a group composited in
+/// encoded space, over the glass body and below the label.
+#[must_use]
+pub fn wash_paint(wash: &Wash) -> Paint {
     let r = wash.shape.rect;
     let mut gradient = LinearGradient::new((f64::from(r.x), 0.0), (f64::from(r.x + r.w), 0.0))
         .interpolation(Interpolation::SrgbEncoded);
@@ -394,68 +437,5 @@ pub fn record_wash(recorder: &mut Recorder, wash: &Wash) {
         let white: Rgba = [1.0, 1.0, 1.0, wash.alpha_at(r.w.mul_add(t, r.x))];
         gradient = gradient.stop(t, working(white));
     }
-    recorder.group(
-        Group::new().blend_space(BlendSpace::SrgbEncoded),
-        |recorder| recorder.fill(Fixed(shape_data(&wash.shape)), gradient),
-    );
-}
-
-/// The continuous capsule of a rectangle, as the engine's analytic shape.
-fn capsule_data(rect: KRect) -> ShapeData {
-    shape_data(&Shape::rounded_rect(
-        super::surfaces::rect(rect),
-        super::surfaces::rect(rect).h * 0.5,
-        CornerCurve::Continuous,
-    ))
-}
-
-/// The track, its fill and the knob's shadow of `slider`, composited in
-/// encoded space (§8.3, Colours).
-fn record_slider_track(recorder: &mut Recorder, slider: &Slider) {
-    recorder.fill(
-        Fixed(capsule_data(slider.track)),
-        working(slider::unfilled_track(slider.appearance)),
-    );
-    recorder.fill(Fixed(capsule_data(slider.fill())), working(slider.tint));
-    let alpha = slider::SHADOW_ALPHA * slider.flat_opacity();
-    if alpha > 0.0 {
-        recorder.shadow(
-            Fixed(capsule_data(slider.knob())),
-            Shadow::new(slider::SHADOW_SIGMA, working([0.0, 0.0, 0.0, alpha]))
-                .offset(Vec2::new(0.0, slider::SHADOW_OFFSET)),
-        );
-    }
-}
-
-/// The knob's white fill at the opacity the lens leaves it.
-fn record_slider_knob(recorder: &mut Recorder, slider: &Slider) {
-    let alpha = slider.flat_opacity();
-    if alpha > 0.0 {
-        recorder.fill(
-            Fixed(capsule_data(slider.knob())),
-            working([1.0, 1.0, 1.0, alpha]),
-        );
-    }
-}
-
-/// Records a slider (§8.3) in encoded space.
-///
-/// The track, the fill, the knob's shadow and the knob form one group at
-/// the slider's opacity. A pressed slider's knob is the glass `lens` between
-/// the shadow and the white fill, which fade out as the lens takes over.
-///
-/// # Panics
-/// With a lens, as [`record`] does.
-pub fn record_slider(recorder: &mut Recorder, slider: &Slider, lens: Option<&Element>) {
-    let encoded = Group::new().blend_space(BlendSpace::SrgbEncoded);
-    if let Some(lens) = lens {
-        recorder.group(encoded, |r| record_slider_track(r, slider));
-        record(recorder, lens, false);
-        recorder.group(encoded, |r| record_slider_knob(r, slider));
-    } else {
-        recorder.group(encoded.opacity(slider.opacity()), |r| {
-            record_slider_track(r, slider);
-            record_slider_knob(r, slider);
-        });
-    }
+    Paint::Linear(gradient)
 }

@@ -39,6 +39,16 @@ jobs:
       - name: Install DirectX Shader Compiler
         if: runner.os == 'Windows'
         uses: tracel-ai/github-actions/install-dxc@295f2fdbae5271f4f8ad56d634e4ff6a95daafc8
+      # The image's system WARP misexecutes optimized DXIL and stalls the
+      # Hydrolysis-mounted tests; the framework's pinned current WARP runs
+      # them (water-rs/waterui#3093).
+      - name: Install current WARP
+        if: runner.os == 'Windows'
+        uses: water-rs/waterui/.github/actions/install-warp@dev
+        with:
+          into: |
+            target/debug/deps
+            target/debug
       - uses: Swatinem/rust-cache@v2
       - if: runner.os == 'Linux'
         run: cargo fmt --all -- --check

@@ -5,8 +5,8 @@
 //! toggles, tracks, dividers, menus — and the tint a prominent capsule folds
 //! into its body.
 
-use cherenkov::WorkingColor;
 use waterui::color::{ColorScheme, Srgb};
+use waterui_graphics::WorkingColor;
 
 use crate::material::recipe::Appearance;
 

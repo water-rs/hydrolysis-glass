@@ -239,6 +239,15 @@ impl Spring {
         let omega = self.omega0 * Animation::spring(1.0, 0.0).duration().as_secs_f32();
         Animation::spring(omega * omega, 2.0 * self.zeta * omega)
     }
+
+    /// The framework animation a look's [`Motion`](hydrolysis::theme::Motion)
+    /// runs this spring as: the engine integrates it in seconds, so the
+    /// stiffness and damping are the physical `ω0²` and `2ζω0`, with none of
+    /// [`Self::animation`]'s normalisation to the framework's fixed duration.
+    #[must_use]
+    pub fn physical(self) -> Animation {
+        Animation::spring(self.omega0 * self.omega0, 2.0 * self.zeta * self.omega0)
+    }
 }
 
 /// The default tint (the accent colour): (0, 145, 255) in dark appearance,

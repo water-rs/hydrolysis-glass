@@ -131,12 +131,41 @@ pub fn lobe(d: f32, depth: f32, shift: f32) -> f32 {
     shift * (1.0 - (t * (2.0 - t)).sqrt())
 }
 
-/// §3: the mip level the ambient sample (§4.7) reads for a radius of `b`
-/// capture texels, `max(0, log2(b < 2 ? 1 + b/2 : b))`.
+/// §3: the standard deviation, in capture texels, of the Gaussian the
+/// ambient sample (§4.7) reads for a radius of `b` capture texels:
+/// `sqrt(x²/4 − 1/12)` with `x = b < 2 ? 1 + b/2 : b` (at least 1).
+///
+/// It is the deviation a trilinear read of a 2 × 2-mean chain at level
+/// `log2 x` makes: `(x² − 1)/12` from the reductions and `x²/6` from the
+/// bilinear read. At `x = 1` it is the plain bilinear read's `1/√6`.
 /// **[chosen]**
 #[must_use]
-pub fn level(b: f32) -> f32 {
-    (if b < 2.0 { 1.0 + b / 2.0 } else { b }).log2().max(0.0)
+pub fn ambient_sigma(b: f32) -> f32 {
+    let x = (if b < 2.0 { 1.0 + b / 2.0 } else { b }).max(1.0);
+    x.mul_add(x * 0.25, -1.0 / 12.0).sqrt()
+}
+
+/// The deviation at or below which a Gaussian read of the engine's
+/// Gaussian pyramid is the plain bilinear read, level-0 texels: `1/√6`,
+/// the bilinear interpolation's own.
+pub const BILINEAR_SIGMA: f32 = 0.408_248_3;
+
+/// How far, in level-0 texels, `backdrop_sample_blur` of deviation `sigma`
+/// level-0 texels reaches from its sample point on a pyramid whose deepest
+/// level is `top`.
+///
+/// The read takes level `k = clamp(⌊½·log2((12σ² + 5)/7)⌋, 0, top)` and
+/// touches texels within `4.5·2^k` level-0 texels of the point, so its
+/// footprint is at most `4.5·sqrt((12σ² + 5)/7)`, which is 4.5 at
+/// `σ = 1/√6` and grows with σ; it never exceeds `4.5·2^top`. At or below
+/// `1/√6` the read is bilinear and touches one texel past the point.
+#[must_use]
+pub fn blur_read_reach(sigma: f32, top: u32) -> f32 {
+    if sigma <= BILINEAR_SIGMA {
+        return 1.0;
+    }
+    let widest = 4.5 * 2.0f32.powi(top.cast_signed());
+    (4.5 * (12.0f32.mul_add(sigma * sigma, 5.0) / 7.0).sqrt()).min(widest)
 }
 
 /// §3: the Gaussian's standard deviation, pt, per unit of blur radius.
@@ -150,10 +179,11 @@ pub fn level(b: f32) -> f32 {
 /// the regular family's radii up to 5 extend it — chosen]**
 pub const BLUR_SIGMA_PT_PER_RADIUS: f32 = 5.0 / 3.0;
 
-/// Half-width of the tap grid that realizes the §3 Gaussian.
+/// Half-width of the tap grid that realizes the §3 Gaussian in the
+/// standalone pass.
 ///
-/// It counts texels of the mip level the grid reads; the shaders read
-/// the grid folded into `(BLUR_TAPS + 1)²` bilinear reads that split each
+/// It counts texels of the mip level the grid reads; the pass reads the
+/// grid folded into `(BLUR_TAPS + 1)²` bilinear reads that split each
 /// adjacent texel pair's weight, which reach no farther. **[chosen]**
 pub const BLUR_TAPS: u8 = 3;
 
@@ -188,8 +218,11 @@ pub const fn haze_sigma(r: f32) -> f32 {
     HAZE_SIGMA_PT_PER_RADIUS * r.max(0.0)
 }
 
-/// How far a blurred read of deviation `sigma` reaches on a capture whose
-/// level-0 texel is `texel` long, in the unit of both.
+/// How far the standalone pass reads a blur of deviation `sigma`.
+///
+/// The pass reads a box pyramid's tap grid on a capture whose level-0
+/// texel is `texel` long, in the unit of both. The engine form reads
+/// `backdrop_sample_blur` and declares [`blur_read_reach`] instead.
 ///
 /// Past its sample point it reads [`BLUR_TAPS`] texels of the level
 /// above the one that keeps the deviation at most [`BLUR_LEVEL_SIGMA`] of
@@ -1376,13 +1409,26 @@ mod tests {
         assert_eq!(lobe(-20.0, 20.0, 4.0), 0.0);
         let mid_lobe = 4.0 * (1.0 - 0.75f32.sqrt());
         assert!((lobe(-10.0, 20.0, 4.0) - mid_lobe).abs() < 1e-6);
-        // §3 level: 0 at b ≤ 0, log2-scaled above.
-        assert_eq!(level(0.0), 0.0);
-        assert_eq!(level(-3.0), 0.0);
-        assert!((level(2.0) - 1.0).abs() < 1e-6);
-        assert!((level(4.0) - 2.0).abs() < 1e-6);
+        // §3 ambient deviation: the bilinear read's 1/√6 at b ≤ 0, and
+        // `sqrt(x²/4 − 1/12)` above.
+        assert!((ambient_sigma(0.0) - BILINEAR_SIGMA).abs() < 1e-6);
+        assert!((ambient_sigma(-3.0) - BILINEAR_SIGMA).abs() < 1e-6);
+        assert!((ambient_sigma(2.0) - (1.0f32 - 1.0 / 12.0).sqrt()).abs() < 1e-6);
+        assert!((ambient_sigma(4.0) - (4.0f32 - 1.0 / 12.0).sqrt()).abs() < 1e-6);
         // Small radii take the 1 + b/2 branch.
-        assert!((level(1.0) - 1.5f32.log2()).abs() < 1e-6);
+        assert!((ambient_sigma(1.0) - (2.25f32 / 4.0 - 1.0 / 12.0).sqrt()).abs() < 1e-6);
+        // The blur read's footprint: one texel when bilinear, 4.5 just
+        // above it, `4.5·sqrt((12σ² + 5)/7)` past it, capped at the
+        // deepest level's.
+        assert_eq!(blur_read_reach(0.0, 7), 1.0);
+        assert!((blur_read_reach(BILINEAR_SIGMA * 1.001, 7) - 4.5).abs() < 1e-2);
+        assert!(
+            4.5f32
+                .mul_add(-(1205.0f32 / 7.0).sqrt(), blur_read_reach(10.0, 7))
+                .abs()
+                < 1e-3
+        );
+        assert_eq!(blur_read_reach(1e6, 3), 4.5 * 8.0);
         // §3 blur: σ = 5/3·b pt, the clear card's 0.75 at 1.25 pt — 1.875
         // texels of its 2/3 pt texel; the read reaches the level-0 grid
         // for small σ and 4σ above it.

@@ -84,13 +84,6 @@ fn load_field(px: vec2<f32>) -> FieldSample {
 
 // ------------------------------------------------------------- sampling ---
 
-// §3: the mip level the ambient sample reads for a radius of `b` capture
-// texels.
-fn level_of_radius(b: f32) -> f32 {
-    let x = select(b, 1.0 + b * 0.5, b < 2.0);
-    return max(log2(x), 0.0);
-}
-
 // The §3 blur of `sigma` level-0 capture texels (blur.wgsl) read on
 // pyramid level `level` around `uv`.
 fn gaussian_at_level(uv: vec2<f32>, sigma: f32, level: f32) -> vec4<f32> {
@@ -139,10 +132,14 @@ fn blur_read(at: vec2<f32>, level: f32) -> vec4<f32> {
 
 // §4.1/§4.3/§4.4: the shared capture at `q_pt`, blurred by a Gaussian of
 // `sigma_pt` pt — `sigma_pt` times the capture's texels per pt in its
-// texels. The reads run straight through, like the engine's
-// `blurred_tap`.
+// texels.
 fn sample_blurred(q_pt: vec2<f32>, sigma_pt: f32) -> vec4<f32> {
-    let sigma = sigma_pt * uni.misc.y;
+    return sample_blurred_texels(q_pt, sigma_pt * uni.misc.y);
+}
+
+// The shared capture at `q_pt`, blurred by a Gaussian of `sigma` level-0
+// texels of the capture. The reads run straight through.
+fn sample_blurred_texels(q_pt: vec2<f32>, sigma: f32) -> vec4<f32> {
     let uv = (q_pt - uni.region.xy) / uni.region.zw;
     let t = blur_position(sigma, uni.scene.w);
     let level = floor(t);
@@ -151,13 +148,6 @@ fn sample_blurred(q_pt: vec2<f32>, sigma_pt: f32) -> vec4<f32> {
         gaussian_at_level(uv, sigma, min(level + 1.0, uni.scene.w)),
         t - level,
     );
-}
-
-// §4.1: the shared capture sampled at `level(b)`, never below 0.
-fn sample_capture(q_pt: vec2<f32>, b: f32) -> vec4<f32> {
-    let uv = (q_pt - uni.region.xy) / uni.region.zw;
-    let lod = clamp(level_of_radius(b), 0.0, uni.scene.w);
-    return textureSampleLevel(capture_tex, linear_sampler, uv, lod);
 }
 
 fn sample_backdrop(q_pt: vec2<f32>) -> vec4<f32> {
@@ -306,7 +296,7 @@ fn glass_body(
     let o_b = lobe_at(d, r.ambient.y, r.ambient.x);
     let ambient_sample = apply_grade(
         r.ambient_grade.xyz,
-        unpremultiply(sample_capture(p + n * o_b, r.ambient.z)),
+        unpremultiply(sample_blurred_texels(p + n * o_b, ambient_sigma(r.ambient.z))),
     );
     let gate = dot(LUMA_GATE_W, C);
     let k = select(1.0 - gate, gate, r.ambient_misc.z > 0.5);

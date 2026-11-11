@@ -254,7 +254,7 @@ fn button_scene() {
                 let mut x = (SCENE_PT[0] - total) * 0.5;
                 let tall = frames.iter().map(|f| f[1]).fold(0.0, f32::max);
                 for (e, f) in row.iter().zip(&frames) {
-                    let frame = cherenkov::kurbo::Rect::new(
+                    let frame = cherenkov_record::kurbo::Rect::new(
                         f64::from(x),
                         f64::from(y + (tall - f[1]) * 0.5),
                         f64::from(x + f[0]),

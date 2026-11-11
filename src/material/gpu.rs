@@ -342,7 +342,9 @@ const FIELD_WGSL: &str = include_str!("../../shaders/field.wgsl");
 const MATERIAL_WGSL: &str = include_str!("../../shaders/material.wgsl");
 /// The §3 blur law both material shaders read: the standalone pass here,
 /// the engine shader through `theme::materials`.
-pub(crate) const BLUR_WGSL: &str = include_str!("../../shaders/blur.wgsl");
+const BLUR_LAW_WGSL: &str = include_str!("../../shaders/blur_law.wgsl");
+/// The standalone pass's realization of the law on its box pyramid.
+const BLUR_WGSL: &str = include_str!("../../shaders/blur.wgsl");
 const FOREGROUND_WGSL: &str = include_str!("../../shaders/foreground.wgsl");
 
 fn shader(device: &wgpu::Device, label: &str, body: &str) -> wgpu::ShaderModule {
@@ -964,7 +966,7 @@ impl GlassRenderer {
         let material_module = shader(
             device,
             "glass material",
-            &format!("{BLUR_WGSL}\n{MATERIAL_WGSL}"),
+            &format!("{BLUR_LAW_WGSL}\n{BLUR_WGSL}\n{MATERIAL_WGSL}"),
         );
         let foreground_module = shader(device, "glass foreground", FOREGROUND_WGSL);
 
@@ -1858,9 +1860,9 @@ mod tests {
         assert_eq!(std::mem::size_of::<GpuRecipe>(), 23 * 16);
     }
 
-    /// The §3 blur both material shaders read declares the constants the
-    /// recipe states, so the reach `group_region` and the theme declare
-    /// covers every tap the shaders take.
+    /// The §3 blur law both material shaders read declares the deviations
+    /// the recipe states, and the standalone pass's tap grid the constants
+    /// `group_region`'s reach assumes.
     #[test]
     fn shaders_declare_the_blur_law() {
         use crate::material::recipe::{
@@ -1869,6 +1871,13 @@ mod tests {
         for line in [
             format!("const BLUR_SIGMA_PT_PER_RADIUS: f32 = {BLUR_SIGMA_PT_PER_RADIUS:?};"),
             format!("const HAZE_SIGMA_PT_PER_RADIUS: f32 = {HAZE_SIGMA_PT_PER_RADIUS:?};"),
+        ] {
+            assert!(
+                BLUR_LAW_WGSL.contains(line.as_str()),
+                "blur_law.wgsl declares `{line}`"
+            );
+        }
+        for line in [
             format!("const BLUR_TAPS: i32 = {BLUR_TAPS};"),
             format!("const BLUR_LEVEL_SIGMA: f32 = {BLUR_LEVEL_SIGMA:?};"),
         ] {

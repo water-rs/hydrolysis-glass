@@ -1,12 +1,12 @@
 //! The glass slider (specification §8.3): geometry, colours, the knob's
-//! shadow, the value spring and the drag laws.
+//! shadow and the value spring.
 //!
-//! Everything here is a pure function of the specification's tables, so the
-//! widget theme ([`super::Glass`]) and the verification scenes build a
-//! slider from the same decisions.
+//! Everything here is a pure function of the specification's tables; the
+//! slider look ([`super::looks`]) builds a slider from the same decisions.
+//! The drag, its step rounding and the value's range are Hydrolysis's: the
+//! look names the drag mapping (§8.3, Touch) and the renderer executes it.
 
-use cherenkov::kurbo::{Point, Rect};
-use waterui_backend_core::widget::SliderMetrics;
+use cherenkov_record::kurbo::{Point, Rect};
 
 use crate::material::recipe::Appearance;
 
@@ -24,30 +24,21 @@ pub const KNOB_HEIGHT: f64 = 24.0;
 /// Space between an end symbol's layout box and the track, pt
 /// **[chosen]**.
 pub const SYMBOL_GAP: f64 = 12.0;
-/// Smallest track width the layout asks for, pt: the knob's travel.
+/// Smallest width of the knob's travel the layout asks for, pt.
 pub const MIN_TRAVEL: f64 = 120.0;
 /// Space between the slider's own label and its row, pt.
 pub const LABEL_SPACING: f64 = 8.0;
 
-/// The layout metrics the slider asks the renderer for.
+/// How far the track runs past each end of the knob's travel, pt: half the
+/// knob, whose centre travels the track inset by it.
 ///
-/// The renderer lays the knob's *centre* along the rectangle it hands the
-/// theme as the track, so that rectangle is the knob's travel: the full
-/// track inset by half the knob at each end. The horizontal inset is that
-/// half knob, and a symbol's gap to the full track is the spec's
-/// [`SYMBOL_GAP`] beyond it.
-#[must_use]
-pub const fn metrics() -> SliderMetrics {
-    SliderMetrics::new(
-        KNOB_WIDTH * 0.5,
-        SYMBOL_GAP + KNOB_WIDTH * 0.5,
-        LABEL_SPACING,
-        MIN_TRAVEL,
-        TRACK_HEIGHT,
-        KNOB_WIDTH,
-        HEIGHT,
-    )
-}
+/// The renderer lays the knob's *centre* along the row it hands the look as
+/// the frame, so that row is the knob's travel and the full track is the
+/// travel grown by this at each end.
+pub const TRAVEL_INSET: f64 = KNOB_WIDTH * 0.5;
+/// Space between an end symbol's layout box and the knob's travel, pt: the
+/// spec's [`SYMBOL_GAP`] to the full track, beyond [`TRAVEL_INSET`].
+pub const LABEL_GAP: f64 = SYMBOL_GAP + TRAVEL_INSET;
 
 /// Alpha of the unfilled track's white (dark) or black (light) fill
 /// **[chosen]**.
@@ -110,137 +101,43 @@ pub fn knob_leading(v: f64, width: f64) -> f64 {
     v * (width - KNOB_WIDTH)
 }
 
-/// A slider as the renderer hands it to the theme, with what the theme
-/// reads from the interaction state.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub struct Slider {
-    /// The full track: [`TRACK_HEIGHT`] tall across the slider's width.
-    pub track: Rect,
-    /// The knob's centre, which is also where the fill ends.
-    pub knob_center: Point,
-    /// The appearance.
-    pub appearance: Appearance,
-    /// The fill colour.
-    pub tint: Rgba,
-    /// Whether the slider responds to touches.
-    pub enabled: bool,
-    /// The press progress `p`, 0 at rest and 1 pressed; the springs
-    /// overshoot it. Zero while disabled.
-    pub press: f32,
-}
-
-impl Slider {
-    /// The slider whose knob travels `travel` (the rectangle the renderer
-    /// calls the track) and whose fill ends at `fill`'s trailing edge.
-    #[must_use]
-    pub const fn new(
-        travel: Rect,
-        fill: Rect,
-        appearance: Appearance,
-        tint: Rgba,
-        enabled: bool,
-        press: f32,
-    ) -> Self {
-        let y = travel.center().y;
-        Self {
-            track: Rect::new(
-                KNOB_WIDTH.mul_add(-0.5, travel.x0),
-                TRACK_HEIGHT.mul_add(-0.5, y),
-                KNOB_WIDTH.mul_add(0.5, travel.x1),
-                TRACK_HEIGHT.mul_add(0.5, y),
-            ),
-            knob_center: Point::new(fill.x1, y),
-            appearance,
-            tint,
-            enabled,
-            press: if enabled { press } else { 0.0 },
-        }
-    }
-
-    /// The part of the track before the knob's centre, under the knob.
-    #[must_use]
-    pub const fn fill(&self) -> Rect {
-        Rect::new(
-            self.track.x0,
-            self.track.y0,
-            self.knob_center.x,
-            self.track.y1,
-        )
-    }
-
-    /// The knob: 37 × 24 pt, scaled about its centre by `1 + 0.35·p`.
-    #[must_use]
-    pub fn knob(&self) -> Rect {
-        let s = LENS_GROWTH.mul_add(f64::from(self.press), 1.0);
-        Rect::from_center_size(self.knob_center, (KNOB_WIDTH * s, KNOB_HEIGHT * s))
-    }
-
-    /// The knob at rest: the size the lens's recipe keeps.
-    #[must_use]
-    pub fn idle_knob(&self) -> Rect {
-        Rect::from_center_size(self.knob_center, (KNOB_WIDTH, KNOB_HEIGHT))
-    }
-
-    /// The touch target: the knob, extended to at least 44 × 44 pt about
-    /// its centre **[chosen]**.
-    #[must_use]
-    pub fn hit_region(&self) -> Rect {
-        let side = f64::from(button::MIN_HIT_SIDE);
-        Rect::from_center_size(
-            self.knob_center,
-            (KNOB_WIDTH.max(side), KNOB_HEIGHT.max(side)),
-        )
-    }
-
-    /// Whether the knob is a glass lens: pressed and enabled.
-    #[must_use]
-    pub fn is_lens(&self) -> bool {
-        self.enabled && self.press > 0.0
-    }
-
-    /// The opacity of the knob's white fill and its shadow over the lens:
-    /// `1 − max(p, 0)`, clamped to [0, 1] **[chosen]**.
-    #[must_use]
-    pub fn flat_opacity(&self) -> f32 {
-        (1.0 - self.press.max(0.0)).clamp(0.0, 1.0)
-    }
-
-    /// The opacity of the whole slider: half while disabled.
-    #[must_use]
-    pub const fn opacity(&self) -> f32 {
-        if self.enabled { 1.0 } else { DISABLED_OPACITY }
-    }
-}
-
-/// A value rounded to the nearest multiple of `step` from the range's
-/// start, kept inside the range **[chosen]**.
+/// The full track of a slider whose knob's centre travels `travel`: the
+/// travel grown by [`TRAVEL_INSET`] at each end, [`TRACK_HEIGHT`] tall and
+/// centred on it.
 #[must_use]
-pub fn round_to_step(value: f64, step: f64, range: &core::ops::RangeInclusive<f64>) -> f64 {
-    let start = *range.start();
-    let steps = ((value - start) / step).round();
-    steps.mul_add(step, start).clamp(start, *range.end())
+pub fn track_rect(travel: Rect) -> Rect {
+    let y = travel.center().y;
+    Rect::new(
+        travel.x0 - TRAVEL_INSET,
+        TRACK_HEIGHT.mul_add(-0.5, y),
+        travel.x1 + TRAVEL_INSET,
+        TRACK_HEIGHT.mul_add(0.5, y),
+    )
 }
 
-/// The value after a drag of `offset` pt from `start` on a slider `width`
-/// pt wide.
-///
-/// It moves by `offset / (W − 37)` of the range, clamped to the range, then
-/// rounded to the step if there is one. `mirrored` flips the direction in a
-/// right-to-left layout **[chosen]**.
+/// The knob's centre for the value `v` mapped to [0, 1], on `travel`.
 #[must_use]
-pub fn dragged_value(
-    start: f64,
-    offset: f64,
-    width: f64,
-    range: &core::ops::RangeInclusive<f64>,
-    step: Option<f64>,
-    mirrored: bool,
-) -> f64 {
-    let span = *range.end() - *range.start();
-    let offset = if mirrored { -offset } else { offset };
-    let moved = (offset / (width - KNOB_WIDTH)).mul_add(span, start);
-    let clamped = moved.clamp(*range.start(), *range.end());
-    step.map_or(clamped, |step| round_to_step(clamped, step, range))
+pub const fn knob_center(travel: Rect, v: f64) -> Point {
+    Point::new(v.mul_add(travel.width(), travel.x0), travel.center().y)
+}
+
+/// The knob for the value `v` on `travel`: [`KNOB_WIDTH`] by
+/// [`KNOB_HEIGHT`], scaled about its centre by `1 + 0.35·p` for the press
+/// progress `p`.
+#[must_use]
+pub fn knob_rect(travel: Rect, v: f64, p: f64) -> Rect {
+    let growth = LENS_GROWTH.mul_add(p, 1.0);
+    Rect::from_center_size(
+        knob_center(travel, v),
+        (KNOB_WIDTH * growth, KNOB_HEIGHT * growth),
+    )
+}
+
+/// The part of the track before the knob's centre, under the knob.
+#[must_use]
+pub fn fill_rect(travel: Rect, v: f64) -> Rect {
+    let track = track_rect(travel);
+    Rect::new(track.x0, track.y0, knob_center(travel, v).x, track.y1)
 }
 
 #[cfg(test)]
@@ -252,94 +149,60 @@ pub fn dragged_value(
 )]
 mod tests {
     use super::*;
+    use crate::theme::switch;
 
     fn near(a: f64, b: f64, tol: f64) {
         assert!((a - b).abs() <= tol, "{a} vs {b}");
     }
 
-    /// A slider 300 pt wide at value `v`, whose frame starts at x = 0.
-    fn slider_at(v: f64, press: f32) -> Slider {
-        let travel = Rect::new(
-            KNOB_WIDTH * 0.5,
-            12.5,
-            300.0 - KNOB_WIDTH * 0.5,
-            12.5 + TRACK_HEIGHT,
-        );
-        let end = travel.x0 + v * travel.width();
-        let fill = Rect::new(travel.x0, travel.y0, end, travel.y1);
-        Slider::new(
-            travel,
-            fill,
-            Appearance::Dark,
-            default_tint(Appearance::Dark),
-            true,
-            press,
-        )
+    /// The knob's travel on a 300 pt slider whose frame starts at x = 0:
+    /// the track inset by half the knob at each end.
+    fn travel() -> Rect {
+        Rect::new(TRAVEL_INSET, 12.5, 300.0 - TRAVEL_INSET, 18.5)
     }
 
     #[test]
-    fn the_metrics_make_the_knobs_centre_travel_the_inset_track() {
-        let m = metrics();
-        assert_eq!(m.horizontal_inset, 18.5);
-        assert_eq!(m.handle_overhang(), 18.5);
-        assert_eq!(m.horizontal_spacing - m.handle_overhang(), SYMBOL_GAP);
-        assert_eq!(m.track_height, TRACK_HEIGHT);
-        // The row's height is the frame's.
-        assert_eq!(m.handle_height, HEIGHT);
+    fn the_layout_makes_the_knobs_centre_travel_the_inset_track() {
+        assert_eq!(TRAVEL_INSET, 18.5);
+        // A symbol's gap to the full track is the spec's.
+        assert_eq!(LABEL_GAP - TRAVEL_INSET, SYMBOL_GAP);
+        assert_eq!(MIN_TRAVEL, 120.0);
+        assert_eq!(HEIGHT, 31.0);
     }
 
     #[test]
     fn the_track_spans_the_width_and_the_knob_sits_on_it() {
         for v in [0.0, 0.3, 0.5, 1.0] {
-            let s = slider_at(v, 0.0);
-            assert_eq!((s.track.x0, s.track.x1), (0.0, 300.0));
-            assert_eq!(s.track.height(), 6.0);
-            assert_eq!(s.track.center().y, s.knob().center().y);
-            near(s.knob().x0, knob_leading(v, 300.0), 1e-9);
-            assert_eq!((s.knob().width(), s.knob().height()), (37.0, 24.0));
-            assert_eq!(s.fill().x1, s.knob_center.x);
+            let track = track_rect(travel());
+            assert_eq!((track.x0, track.x1), (0.0, 300.0));
+            assert_eq!(track.height(), 6.0);
+            let knob = knob_rect(travel(), v, 0.0);
+            assert_eq!(track.center().y, knob.center().y);
+            near(knob.x0, knob_leading(v, 300.0), 1e-9);
+            assert_eq!((knob.width(), knob.height()), (37.0, 24.0));
+            assert_eq!(fill_rect(travel(), v).x1, knob.center().x);
+            assert_eq!(fill_rect(travel(), v).x0, track.x0);
         }
         near(knob_leading(0.3, 300.0), 78.9, 1e-9);
-        near(slider_at(0.5, 0.0).knob().center().x, 150.0, 1e-9);
-        near(slider_at(1.0, 0.0).knob().x1, 300.0, 1e-9);
+        near(knob_rect(travel(), 0.5, 0.0).center().x, 150.0, 1e-9);
+        near(knob_rect(travel(), 1.0, 0.0).x1, 300.0, 1e-9);
     }
 
     #[test]
     fn a_press_grows_the_knob_about_its_centre_to_the_lens() {
-        let rest = slider_at(0.5, 0.0);
-        let held = slider_at(0.5, 1.0);
-        near(held.knob().width(), 49.95, 1e-9);
-        near(held.knob().height(), 32.4, 1e-9);
-        assert_eq!(held.knob().center(), rest.knob().center());
-        assert!(held.is_lens() && !rest.is_lens());
-        assert_eq!(held.flat_opacity(), 0.0);
-        // The springs overshoot p past 1; the opacity stays a coverage.
-        assert_eq!(slider_at(0.5, 1.07).flat_opacity(), 0.0);
-        near(f64::from(slider_at(0.5, 0.25).flat_opacity()), 0.75, 1e-6);
+        let rest = knob_rect(travel(), 0.5, 0.0);
+        let held = knob_rect(travel(), 0.5, 1.0);
+        near(held.width(), 49.95, 1e-9);
+        near(held.height(), 32.4, 1e-9);
+        assert_eq!(held.center(), rest.center());
     }
 
     #[test]
-    fn a_disabled_slider_is_at_half_opacity_and_ignores_a_press() {
-        let travel = Rect::new(18.5, 0.0, 281.5, 6.0);
-        let off = Slider::new(
-            travel,
-            travel,
-            Appearance::Light,
-            default_tint(Appearance::Light),
-            false,
-            1.0,
-        );
-        assert_eq!(off.opacity(), 0.5);
-        assert_eq!(off.press, 0.0);
-        assert!(!off.is_lens());
-        assert_eq!(slider_at(0.5, 0.0).opacity(), 1.0);
-    }
-
-    #[test]
-    fn the_hit_region_is_at_least_44_by_44_about_the_knob() {
-        let hit = slider_at(0.5, 0.0).hit_region();
-        assert_eq!((hit.width(), hit.height()), (44.0, 44.0));
-        assert_eq!(hit.center().x, 150.0);
+    fn the_lens_is_the_switchs_knob_at_the_same_growth() {
+        // The slider's lens takes the switch's recipe (`switch::lens_effect`)
+        // because the two controls' knobs and growth are the same numbers.
+        assert_eq!([KNOB_WIDTH, KNOB_HEIGHT], switch::KNOB);
+        assert_eq!(LENS_GROWTH, switch::LENS_GROWTH);
     }
 
     /// Encoded 8-bit result of `fg` over a grey backdrop in encoded space.
@@ -388,42 +251,6 @@ mod tests {
             2.0 * f64::from(VALUE_SPRING.zeta * VALUE_SPRING.omega0),
             24.6,
             0.05,
-        );
-    }
-
-    #[test]
-    fn values_round_to_the_nearest_step() {
-        let range = 0.0..=1.0;
-        near(round_to_step(0.37, 0.25, &range), 0.25, 1e-12);
-        near(round_to_step(0.38, 0.25, &range), 0.5, 1e-12);
-        near(round_to_step(2.0, 0.25, &range), 1.0, 1e-12);
-        let range = 10.0..=20.0;
-        near(round_to_step(13.0, 5.0, &range), 15.0, 1e-12);
-    }
-
-    #[test]
-    fn a_drag_moves_the_value_by_the_offset_over_the_travel() {
-        let range = 0.0..=1.0;
-        // The travel of a 300 pt slider is 263 pt.
-        near(
-            dragged_value(0.2, 52.6, 300.0, &range, None, false),
-            0.4,
-            1e-9,
-        );
-        // Clamped to the range wherever the touch goes.
-        assert_eq!(dragged_value(0.9, 500.0, 300.0, &range, None, false), 1.0);
-        assert_eq!(dragged_value(0.1, -500.0, 300.0, &range, None, false), 0.0);
-        // Rounded to the step.
-        near(
-            dragged_value(0.2, 52.6, 300.0, &range, Some(0.25), false),
-            0.5,
-            1e-12,
-        );
-        // Mirrored in a right-to-left layout.
-        near(
-            dragged_value(0.5, 26.3, 300.0, &range, None, true),
-            0.4,
-            1e-9,
         );
     }
 }

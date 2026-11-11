@@ -39,6 +39,7 @@
 mod common;
 
 use common::*;
+use hydrolysis::theme::WidgetInteractionState;
 use hydrolysis_glass::material::geometry::STANDALONE_UNION_SMOOTHING;
 use hydrolysis_glass::{Appearance, Element, Glass, Group, Scene};
 use nami::Signal as _;
@@ -50,7 +51,6 @@ use waterui::layout::{PositionExt as _, absolute};
 use waterui::navigation::{NavigationView, Tab, Tabs};
 use waterui::text::text;
 use waterui::{AnyView, Binding, Color, View, ViewExt as _};
-use waterui_backend_core::widget::{WidgetInteractionState, WidgetTheme as _};
 use waterui_controls::slider::{Slider, slider};
 use waterui_controls::{ButtonStyle, ControlSize, button::button, toggle::toggle};
 
@@ -82,9 +82,9 @@ fn glass_button(x: f32, y: f32) -> impl View {
     clippy::cast_possible_truncation,
     reason = "the metrics are small positive point sizes"
 )]
-fn button_rect(glass: &Glass, x: f32, y: f32) -> [f32; 4] {
-    let m = glass.button_metrics(ButtonStyle::Glass, SIZE);
-    [x, y, (2.0 * m.padding_x) as f32, (2.0 * m.padding_y) as f32]
+fn button_rect(_glass: &Glass, x: f32, y: f32) -> [f32; 4] {
+    let m = hydrolysis_glass::theme::button::SizeGroup::of(SIZE).metrics();
+    [x, y, 2.0 * m.inset_x, 2.0 * m.inset_y]
 }
 
 /// The §7 backdrop as a view, for the backdrops a view tree can express
@@ -147,8 +147,8 @@ fn button_element(appearance: Appearance, rect: [f32; 4]) -> Element {
 }
 
 /// `[x, y, w, h]` pt as the engine's rect.
-fn kurbo_rect([x, y, w, h]: [f32; 4]) -> cherenkov::kurbo::Rect {
-    cherenkov::kurbo::Rect::new(
+fn kurbo_rect([x, y, w, h]: [f32; 4]) -> cherenkov_record::kurbo::Rect {
+    cherenkov_record::kurbo::Rect::new(
         f64::from(x),
         f64::from(y),
         f64::from(x + w),
@@ -377,7 +377,7 @@ fn app_chrome_over_the_backdrops() {
 /// container, so the frame carries the theme's bars as well as its
 /// buttons.
 fn app_chrome(backdrop: Backdrop) -> impl View {
-    let selection = Binding::container(0i32);
+    let selection = Binding::container(0usize);
     let page = move || {
         NavigationView::new(
             "Glass",
@@ -398,8 +398,8 @@ fn app_chrome(backdrop: Backdrop) -> impl View {
     Tabs::new(
         &selection,
         vec![
-            Tab::new(0i32, "Glass", page),
-            Tab::new(1i32, "Second", move || {
+            Tab::new("Glass", page),
+            Tab::new("Second", move || {
                 NavigationView::new("Second", backdrop_view(backdrop))
             }),
         ],
@@ -742,13 +742,14 @@ fn slider_at(value: &Binding<f64>, y: f32) -> impl View + use<> {
 }
 
 /// §7 scene 10, the slider scene: 300 pt sliders at values 0, 0.3, 0.5 and
-/// 1, a disabled one at 0.5 and one at 0.5 with a label at each end, over
-/// black, grey 0.5 and white in dark and light appearance. The red-tinted
-/// slider needs a tint the `WidgetTheme` slider hooks do not carry.
+/// 1, a disabled and a red-tinted one at 0.5 and one at 0.5 with a label at
+/// each end, over black, grey 0.5 and white in dark and light appearance.
+/// The end labels are text standing in for the speaker symbols.
 #[test]
 fn slider_scene() {
     for backdrop in [Backdrop::Black, Backdrop::Grey, Backdrop::White] {
         for (appearance, name) in [(Appearance::Dark, "dark"), (Appearance::Light, "light")] {
+            let red = hydrolysis_glass::theme::slider::red_tint(appearance);
             let mut app = GlassApp::mount(
                 move || {
                     let at = |v: f64| Binding::container(v);
@@ -767,6 +768,8 @@ fn slider_scene() {
                             51.0,
                             520.0,
                         ),
+                        placed(slider("Volume", &at(0.5)), 300.0, 51.0, 600.0)
+                            .tint(Color::new(Srgb::new(red[0], red[1], red[2]))),
                     ))
                 },
                 theme(appearance),
@@ -818,4 +821,59 @@ fn slider_lens_while_pressed() {
     app.advance(Duration::from_millis(600));
     let image = app.capture_now();
     assert!(image.save("slider_lens_pressed").is_file());
+}
+
+/// A drag that begins on the knob moves the value by the touch's offset over
+/// the knob's travel, `W − 37` pt, wherever the touch goes vertically, and a
+/// touch elsewhere on the track does nothing (§8.3, Touch).
+#[test]
+fn a_drag_from_the_knob_moves_the_value() {
+    let value = Binding::container(0.5f64);
+    let shown = value.clone();
+    let mut app = GlassApp::mount(
+        move || absolute((backdrop_view(Backdrop::Split), slider_at(&shown, 400.0))),
+        theme(Appearance::Dark),
+    );
+    app.settle();
+
+    // A touch on the track away from the knob does not move it.
+    app.touch_down(80.0, 415.5);
+    app.touch_move(120.0, 415.5);
+    app.advance(Duration::from_millis(100));
+    app.touch_up(120.0, 415.5);
+    app.settle();
+    assert!(
+        (value.snapshot() - 0.5).abs() < 1e-9,
+        "a touch off the knob moved the value to {}",
+        value.snapshot()
+    );
+
+    // The knob's centre is at x = 201; 52.6 pt over the 263 pt travel is
+    // 0.2 of the range, and the touch may leave the slider vertically.
+    app.touch_down(201.0, 415.5);
+    app.touch_move(221.0, 415.5);
+    app.touch_move(253.6, 700.0);
+    app.advance(Duration::from_millis(100));
+    assert!(
+        (value.snapshot() - 0.7).abs() < 1e-3,
+        "a drag of 52.6 pt moved the value to {}",
+        value.snapshot()
+    );
+    // Clamped to the range wherever the touch goes.
+    app.touch_move(900.0, 415.5);
+    app.advance(Duration::from_millis(100));
+    assert!(
+        (value.snapshot() - 1.0).abs() < 1e-9,
+        "a drag past the end left the value at {}",
+        value.snapshot()
+    );
+    app.touch_move(120.0, 415.5);
+    app.advance(Duration::from_millis(100));
+    let at_release = value.snapshot();
+    app.touch_up(120.0, 415.5);
+    app.settle();
+    assert!(
+        (value.snapshot() - at_release).abs() < 1e-9,
+        "the value stays where the drag left it"
+    );
 }
