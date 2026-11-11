@@ -178,7 +178,6 @@ pub fn capture_class(container: bool, recipe_scale: f32) -> CaptureClass {
 /// pass, with the sampling reach its lobes and blur reads can take.
 fn shader_source() -> BackdropShaderSource {
     let debug = std::env::var("GLASS_DEBUG_SHADER").unwrap_or_default();
-    tracing::warn!(variant = %debug, "glass-debug: shader variant");
     match debug.as_str() {
         "const" => {
             return BackdropShaderSource::wgsl(
