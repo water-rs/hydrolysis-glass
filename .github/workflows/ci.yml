@@ -1,7 +1,8 @@
 name: CI
 
 # Diagnostic only, never merged: times every pumped frame of one
-# Hydrolysis-mounted test on Windows and prints the framework's logs.
+# Hydrolysis-mounted test on Windows under minimal stand-ins for the glass
+# backdrop shader, and prints the framework's logs.
 
 on:
   pull_request:
@@ -18,12 +19,13 @@ env:
   CARGO_PROFILE_DEV_DEBUG: "0"
   CARGO_PROFILE_TEST_DEBUG: "0"
   CARGO_TERM_COLOR: never
+  RUST_LOG: "warn,hydrolysis=debug,cherenkov_gpu=info,wgpu_hal=warn"
 
 jobs:
   hang:
     name: Windows mounted-test timing
     runs-on: windows-latest
-    timeout-minutes: 40
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -31,9 +33,17 @@ jobs:
         uses: tracel-ai/github-actions/install-dxc@295f2fdbae5271f4f8ad56d634e4ff6a95daafc8
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@nextest
-      - name: One mounted test, terminated after six minutes
+      - name: Constant backdrop shader
+        continue-on-error: true
         env:
-          RUST_LOG: "warn,hydrolysis=debug,cherenkov_gpu=info,wgpu_hal=warn"
+          GLASS_DEBUG_SHADER: const
+        run: >
+          cargo nextest run --locked --no-capture -j 1 --test hydrolysis
+          -E "test(a_mounted_glass_button_matches_the_standalone_surface)"
+      - name: One Gaussian read
+        continue-on-error: true
+        env:
+          GLASS_DEBUG_SHADER: blur
         run: >
           cargo nextest run --locked --no-capture -j 1 --test hydrolysis
           -E "test(a_mounted_glass_button_matches_the_standalone_surface)"

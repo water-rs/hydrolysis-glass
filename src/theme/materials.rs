@@ -177,6 +177,23 @@ pub fn capture_class(container: bool, recipe_scale: f32) -> CaptureClass {
 /// engine form, after the §3 blur law it shares with the standalone
 /// pass, with the sampling reach its lobes and blur reads can take.
 fn shader_source() -> BackdropShaderSource {
+    let debug = std::env::var("GLASS_DEBUG_SHADER").unwrap_or_default();
+    tracing::warn!(variant = %debug, "glass-debug: shader variant");
+    match debug.as_str() {
+        "const" => {
+            return BackdropShaderSource::wgsl(
+                "fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32> {\n    return vec4<f32>(0.25, 0.25, 0.25, 0.5);\n}\n",
+            )
+            .reach(shader_reach());
+        }
+        "blur" => {
+            return BackdropShaderSource::wgsl(
+                "fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32> {\n    return backdrop_sample_blur(px.p, 3.0);\n}\n",
+            )
+            .reach(shader_reach());
+        }
+        _ => {}
+    }
     BackdropShaderSource::wgsl(concat!(
         include_str!("../../shaders/blur_law.wgsl"),
         "\n",
