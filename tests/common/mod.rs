@@ -493,6 +493,11 @@ impl GlassApp {
         reason = "the scene's point size is positive and far below u32::MAX"
     )]
     pub fn sized(view: impl View + Clone + 'static, glass: Glass, size_pt: [f32; 2]) -> Self {
+        let _ = tracing_subscriber::fmt()
+            .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+            .with_writer(std::io::stderr)
+            .try_init();
+        let started = std::time::Instant::now();
         let content = AnyViewBuilder::new(move || AnyView::new(view.clone()));
         let mut runtime = HeadlessRuntime::new_for_tests(
             Environment::new(),
@@ -505,6 +510,7 @@ impl GlassApp {
         // The mount takes touches, so its window reports the touch gesture's
         // parameters as a touch platform's does.
         runtime.set_touch_scroll_config(TouchScrollConfig::android_default());
+        tracing::warn!(elapsed = ?started.elapsed(), "glass-debug: mounted");
         Self {
             runtime,
             at: Instant::now(),
@@ -514,7 +520,16 @@ impl GlassApp {
     /// Pumps one frame, capturing it when `capture`.
     fn pump(&mut self, capture: bool) -> Option<HeadlessSnapshot> {
         self.at += VIRTUAL_FRAME;
-        self.runtime.pump_at(capture, self.at).into_snapshot()
+        let started = std::time::Instant::now();
+        tracing::warn!(capture, "glass-debug: pump start");
+        let out = self.runtime.pump_at(capture, self.at).into_snapshot();
+        tracing::warn!(
+            capture,
+            elapsed = ?started.elapsed(),
+            settled = self.runtime.is_settled(),
+            "glass-debug: pump end"
+        );
+        out
     }
 
     /// Pumps until the runtime reports quiescence.

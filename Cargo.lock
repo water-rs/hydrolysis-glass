@@ -1478,6 +1478,7 @@ dependencies = [
  "nami",
  "pollster 1.0.1",
  "tracing",
+ "tracing-subscriber",
  "waterui",
  "waterui-controls",
  "waterui-core",
