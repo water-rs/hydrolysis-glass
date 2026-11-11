@@ -110,11 +110,14 @@ reach 5, and this specification extends the law to them [chosen]. Reading
 the capture's mip chain at the level of `b` capture texels instead keeps up
 to 2.3 times the measured contrast at `b = 0.75` (§6).
 
-The ambient sample (§4.7) reads the capture at the level of its radius on
-its mip chain of 2 × 2 means [chosen]:
+The ambient sample (§4.7) reads the capture under a Gaussian of
+`σ = sqrt(x²/4 − 1/12)` capture texels, `x = b < 2 ? 1 + b/2 : b` for a
+radius of `b` capture texels (at least 1) [chosen]; it is the deviation a
+read of a 2 × 2-mean chain at level `log2 x` makes, `(x² − 1)/12` from the
+reductions and `x²/6` from the bilinear read:
 
 ```
-level(b) = max(0, log2(b < 2 ? 1 + b/2 : b))
+σ(b) = sqrt(x²/4 − 1/12)
 ```
 
 Two shadow terms weight by a smooth step `falloff(x)` that runs from 1 at
@@ -136,8 +139,11 @@ captured at the element's **capture scale** and mip-mapped. A capture texel
 is the mean of the device pixels it covers [fitted: at blur radius 0 the
 model reproduces the clear card's interior over the grid over the split
 within 0.3 levels, §6]. The capture reads the backdrop through a chain of
-2 × 2 means, so a texel weights the pixels under it near equally even where
-a level does not halve the one below it evenly [chosen]. A capture whose
+reductions that weight each texel under a texel of the next level equally,
+so a texel weights the pixels under it near equally even where a level does
+not halve the one below it evenly [chosen]; the 2 × 2 mean and the
+`[1, 5, 10, 10, 5, 1]/32` kernel both satisfy it, each source texel's
+weights summing to 16/32 in either parity. A capture whose
 texels weight some pixels of a periodic backdrop more than others shifts
 the backdrop's mean by an amount that drifts across the capture; over the
 grid the large regular card showed that drift as a 2-level bowl (§6). All
@@ -236,8 +242,8 @@ colour with an alpha, is composited over the graded colour by that alpha.
 ### 4.7 Ambient pickup
 
 A third sample, the **ambient sample**, is pushed outward by
-`lobe(d, ambient depth, ambient shift)`, blurred at the level of its own
-**ambient blur** radius, graded by the **ambient grade** (same construction as
+`lobe(d, ambient depth, ambient shift)`, blurred at the deviation of its own
+**ambient blur** radius (§3), graded by the **ambient grade** (same construction as
 §4.6, no wash) and mixed in, so the surroundings' colour reaches the interior:
 
 ```

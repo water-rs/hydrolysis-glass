@@ -10,19 +10,20 @@
 // `BlendSpace::SrgbEncoded`, so the engine converts the member's
 // premultiplied result into encoded space and runs the source-over
 // there: the specification's compositing space, exactly what the
-// standalone `material.wgsl` computed. The taps therefore move each
+// standalone `material.wgsl` computed. The reads therefore move each
 // sample from linear P3 to the recipe's sRGB-encoded straight working
 // space, and the return moves the premultiplied result back.
 //
 // The body is the standalone `shaders/material.wgsl` retargeted: field
-// reads are `px.sdf`/`backdrop_field`, the capture pyramid is
-// `backdrop_sample_level`, and the ellipse bend the standalone baked
-// into its field texture is applied to `px.normal` here. The recipe's
-// 23-vec4 layout does not fit the contract's sixteen parameters, so the
-// packing keeps every recipe-varying field and folds the recipe's
-// constant block — the highlight's shared terms and the border
-// correction's measured constants — into shader constants that
-// `theme::materials::uniforms` asserts (see its packing table).
+// reads are `px.sdf`/`backdrop_field`, every blurred read is
+// `backdrop_sample_blur` on the group's Gaussian pyramid, and the ellipse
+// bend the standalone baked into its field texture is applied to
+// `px.normal` here. The recipe's 23-vec4 layout does not fit the
+// contract's sixteen parameters, so the packing keeps every
+// recipe-varying field and folds the recipe's constant block — the
+// highlight's shared terms and the border correction's measured
+// constants — into shader constants that `theme::materials::uniforms`
+// asserts (see its packing table).
 //
 // Parameter layout (must match `theme::materials::uniforms`):
 //   p0  shifts          primary_shift, primary_depth, rim_shift, rim_depth
@@ -46,11 +47,11 @@
 // §3 and haze deviations are pt, carried onto the bound capture's grid
 // by its texels per pt (`backdrop_scale · px.scale`). The ambient radius
 // is a recipe capture-texel count, scaled onto the bound capture's grid
-// by `backdrop_scale / p5.z` before `level_of_radius` reads it — a
-// member's capture class snaps its recipe's requested scale up to the
-// registered lattice (see `theme::materials`), so the compensation keeps
-// every physical radius the recipe's. The member rect rides in
-// member-local pt.
+// by `backdrop_scale / p5.z` before `ambient_sigma` turns it into a
+// deviation — a member's capture class snaps its recipe's requested
+// scale up to the registered lattice (see `theme::materials`), so the
+// compensation keeps every physical radius the recipe's. The member rect
+// rides in member-local pt.
 
 const PI: f32 = 3.141592653589793;
 const EPS_ALPHA: f32 = 1e-4;
@@ -130,13 +131,6 @@ fn glass_work_space(c: vec4<f32>) -> vec3<f32> {
     return space_srgb_encode(SPACE_P3_TO_SRGB * glass_unpremultiply(c));
 }
 
-// §3: the mip level the ambient sample reads for a radius of `b` capture
-// texels.
-fn level_of_radius(b: f32) -> f32 {
-    let x = select(b, 1.0 + b * 0.5, b < 2.0);
-    return max(log2(x), 0.0);
-}
-
 // §3: the quarter-circle lobe, `shift · meniscus(−d; depth)`.
 fn lobe_at(d: f32, depth: f32, shift: f32) -> f32 {
     return shift * meniscus(-d, depth);
@@ -213,94 +207,6 @@ fn ellipse_normal(rect: vec4<f32>, pt: vec2<f32>) -> vec2<f32> {
     return v / len;
 }
 
-// A capture tap at blur radius `b` capture texels. `q` is a device point;
-// the capture's premultiplied linear P3 converts to the recipe's
-// sRGB-encoded straight working space.
-fn tap_at(q: vec2<f32>, lod: f32) -> vec3<f32> {
-    return glass_work_space(backdrop_sample_level(q, lod));
-}
-
-// `b` is a radius in recipe capture texels; `k_tex` scales it onto the
-// bound capture's own texel grid (`backdrop_scale / recipe scale`) so the
-// physical blur radius in pt is the recipe's whatever class the member
-// landed in.
-fn tap(q: vec2<f32>, b: f32, k_tex: f32) -> vec3<f32> {
-    return tap_at(q, level_of_radius(b * k_tex));
-}
-
-// The §3 blur of `sigma` level-0 texels of the bound capture
-// (blur.wgsl), read on pyramid `level` around device point `q`: the
-// premultiplied capture value, averaged in the capture's own space like
-// the pyramid itself. The level-k grid is `(q · backdrop_scale −
-// backdrop_origin) / 2^k` with texel centres at `+ 0.5`, the grid
-// `backdrop_sample_level` reads.
-fn glass_gaussian_at_level(q: vec2<f32>, sigma: f32, level: f32) -> vec4<f32> {
-    let s = blur_deviation(sigma, level);
-    let div = exp2(level);
-    let p = (q * backdrop_scale - backdrop_origin) / div - 0.5;
-    let base = floor(p);
-    let x = blur_axis(p.x - base.x, s);
-    let y = blur_axis(p.y - base.y, s);
-    var acc = vec4<f32>(0.0);
-    acc = glass_blur_row(acc, base, x, y.offset.x, y.weight.x, div, level);
-    acc = glass_blur_row(acc, base, x, y.offset.y, y.weight.y, div, level);
-    acc = glass_blur_row(acc, base, x, y.offset.z, y.weight.z, div, level);
-    acc = glass_blur_row(acc, base, x, y.offset.w, y.weight.w, div, level);
-    var total = 0.0;
-    total = blur_row_total(total, x, y.weight.x);
-    total = blur_row_total(total, x, y.weight.y);
-    total = blur_row_total(total, x, y.weight.z);
-    total = blur_row_total(total, x, y.weight.w);
-    return acc / total;
-}
-
-// One row of the folded grid at row offset `oy` and weight `wy`, added
-// to `acc` in the order the reads accumulate.
-fn glass_blur_row(
-    acc: vec4<f32>,
-    base: vec2<f32>,
-    x: BlurAxis,
-    oy: f32,
-    wy: f32,
-    div: f32,
-    level: f32,
-) -> vec4<f32> {
-    var a = acc;
-    a += (x.weight.x * wy) * glass_blur_read(base + vec2<f32>(x.offset.x, oy) + 0.5, div, level);
-    a += (x.weight.y * wy) * glass_blur_read(base + vec2<f32>(x.offset.y, oy) + 0.5, div, level);
-    a += (x.weight.z * wy) * glass_blur_read(base + vec2<f32>(x.offset.z, oy) + 0.5, div, level);
-    a += (x.weight.w * wy) * glass_blur_read(base + vec2<f32>(x.offset.w, oy) + 0.5, div, level);
-    return a;
-}
-
-// The bilinear read at level-`level` grid point `at` (texel centres at
-// `+ 0.5`), `div` level-0 texels per texel of that level.
-fn glass_blur_read(at: vec2<f32>, div: f32, level: f32) -> vec4<f32> {
-    return backdrop_sample_level((at * div + backdrop_origin) / backdrop_scale, level);
-}
-
-// §4.3/§4.4: a tap blurred by a Gaussian of `sigma_pt` pt; `tex_per_pt`,
-// the bound capture's texels per pt, carries it onto that capture's
-// grid.
-//
-// The reads run straight through, the same for every pixel: both levels
-// are read and mixed by the fraction, the sharp read is the grid at its
-// least deviation (blur.wgsl), and the grid is unrolled rather than
-// looped over indexed arrays. With a loop or a branch on the pixel's own
-// values around these reads, D3D12's WARP device rendered wrong texels
-// and stalled for minutes; the branch on the recipe's rim mix does not.
-fn blurred_tap(q: vec2<f32>, sigma_pt: f32, tex_per_pt: f32) -> vec3<f32> {
-    let sigma = sigma_pt * tex_per_pt;
-    let t = blur_position(sigma, backdrop_levels - 1.0);
-    let level = floor(t);
-    let raw = mix(
-        glass_gaussian_at_level(q, sigma, level),
-        glass_gaussian_at_level(q, sigma, min(level + 1.0, backdrop_levels - 1.0)),
-        t - level,
-    );
-    return glass_work_space(raw);
-}
-
 // The §4.2–§4.9 glass body: the straight encoded colour inside the
 // silhouette. `p` is the member pixel in device space, `d` the field
 // distance in pt, `n` the bent field normal, `u` device px per pt,
@@ -327,18 +233,19 @@ fn glass_body(
     // §4.2: the primary sample, refracted by the primary lobe and blurred
     // at its refracted depth.
     let o1 = lobe_at(d, params[0].y, params[0].x);
-    var c = blurred_tap(
+    var c = glass_work_space(backdrop_sample_blur(
         p + n * (o1 * u),
-        BLUR_SIGMA_PT_PER_RADIUS * params[1].w * blur_gain(params[2], params[3], d + o1),
-        tex_per_pt,
-    );
+        BLUR_SIGMA_PT_PER_RADIUS * params[1].w * blur_gain(params[2], params[3], d + o1) * tex_per_pt,
+    ));
 
     // §4.4: the haze — the capture at the pixel blurred by a Gaussian of
     // the haze radius's deviation, in the working space; runs before the
     // rim-sample mix.
     let radius = params[4].x;
     if radius > 0.0 {
-        let f = blurred_tap(p, HAZE_SIGMA_PT_PER_RADIUS * radius, tex_per_pt);
+        let f = glass_work_space(
+            backdrop_sample_blur(p, HAZE_SIGMA_PT_PER_RADIUS * radius * tex_per_pt),
+        );
         let c1 = params[4].y * min(c, f)
             + params[4].z * max(c, f)
             + (1.0 - params[4].y - params[4].z) * c;
@@ -350,11 +257,11 @@ fn glass_body(
     if params[1].z > 0.0 {
         let rim_weight = params[1].z * gsat((d - params[1].x) / (params[1].y - params[1].x));
         let o2 = lobe_at(d, params[0].w, params[0].z);
-        let s_rim = blurred_tap(
+        let s_rim = glass_work_space(backdrop_sample_blur(
             p + n * (o2 * u),
-            BLUR_SIGMA_PT_PER_RADIUS * params[1].w * blur_gain(params[2], params[3], d + o2),
-            tex_per_pt,
-        );
+            BLUR_SIGMA_PT_PER_RADIUS * params[1].w * blur_gain(params[2], params[3], d + o2)
+                * tex_per_pt,
+        ));
         c = mix(c, s_rim, rim_weight);
     }
 
@@ -376,7 +283,10 @@ fn glass_body(
     let o_b = lobe_at(d, params[8].y, params[8].x);
     let ambient_sample = apply_grade(
         vec3<f32>(params[9].z, params[9].w, params[10].x),
-        tap(p + n * (o_b * u), params[8].z, k_tex),
+        glass_work_space(backdrop_sample_blur(
+            p + n * (o_b * u),
+            ambient_sigma(params[8].z * k_tex),
+        )),
     );
     let gate = dot(LUMA_GATE_W, c);
     let k = select(1.0 - gate, gate, params[7].w > 0.5);

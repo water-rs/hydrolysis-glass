@@ -9,6 +9,11 @@
 //! `shaders/material.wgsl` retargeted onto the `BackdropPixel`
 //! contract — against the group's shared capture and union field.
 //!
+//! Every blurred read of the engine form is `backdrop_sample_blur` on a
+//! Gaussian pyramid, which every glass class registers: the Gaussian of
+//! each sample's deviation (§3, §4.4 and, as [`ambient_sigma`], §4.7) in
+//! 16 filtered fetches, with no loops.
+//!
 //! Two contract choices live here:
 //!
 //! - **Capture scale.** A capture class is a registered token, so its
@@ -34,16 +39,17 @@
 
 use cherenkov_record::kurbo::{Rect as KRect, RoundedRect, RoundedRectRadii};
 use cherenkov_record::{
-    BackdropShaderSource, BlendSpace, CaptureClass, CaptureLevels, CaptureScale, ContinuousRect,
-    Fixed, Interpolation, LinearGradient, MaterialCapture, MaterialEffect, MaterialGrouping,
-    MaterialRegistry, MaterialShader, OuterExtent, Paint, Recorder, ShapeData, UnionSmoothing,
+    BackdropShaderSource, BlendSpace, CaptureClass, CaptureLevels, CapturePyramid, CaptureScale,
+    ContinuousRect, Fixed, Interpolation, LinearGradient, MaterialCapture, MaterialEffect,
+    MaterialGrouping, MaterialRegistry, MaterialShader, OuterExtent, Paint, Recorder, ShapeData,
+    UnionSmoothing,
 };
 
 use crate::material::geometry::{
     CONTAINER_UNION_SMOOTHING, CONTINUOUS_EXPONENT, CornerCurve, Element, SMOOTHING_TO_UNION_K,
     STANDALONE_UNION_SMOOTHING, Shape,
 };
-use crate::material::recipe::{Recipe, blur_sigma, haze_sigma, sigma_reach};
+use crate::material::recipe::{Recipe, ambient_sigma, blur_read_reach, blur_sigma, haze_sigma};
 
 use super::palette::{Rgba, working};
 use super::surfaces::Wash;
@@ -70,18 +76,56 @@ const CONTAINER_CLASS_BASE: u32 = 0x200;
 /// deepest level, so the classes take the engine's maximum.
 const LEVELS: u32 = CaptureLevels::MAX;
 
+/// The device pixels per pt the declared reach is derived at: the
+/// recording bound.
+const REACH_PX_PER_PT: f32 = 4.0;
+/// The largest primary-lobe displacement, pt (§5).
+const PRIMARY_LOBE_PT: f32 = 60.0;
+/// The largest blur radius, at gain 1 (§4.3).
+const LARGEST_BLUR_RADIUS: f32 = 5.0;
+/// The haze's largest radius (§4.4).
+const LARGEST_HAZE_RADIUS: f32 = 8.0;
+/// The ambient pickup's lobe and blur radius, `0.35·m` at the
+/// measured-range bound `m = 200.33` (§4.7): pt for the lobe, recipe
+/// capture texels for the blur.
+const LARGEST_AMBIENT: f32 = 0.35 * 200.33;
+
 /// The sampling reach the shader declares, device pixels: the largest
-/// displacement a `backdrop_sample*` coordinate takes from the member
-/// pixel at a 4 px/pt recording bound — the farther of the ambient lobe
-/// (`0.35·m` at the measured-range bound `m = 200.33`, ≈70.1 pt) and the
-/// primary lobe (60 pt) plus the §3 blur's tap grid at the largest blur
-/// radius (5 at gain 1, [`sigma_reach`] of [`blur_sigma`] on the smallest
-/// class's 8 px texel, 2 pt at that bound) — and the haze's Gaussian at
-/// the pixel itself (radius 8, [`sigma_reach`] of [`haze_sigma`] on the
-/// same texel).
-const SHADER_REACH: f32 = (60.0 * 4.0 + sigma_reach(blur_sigma(5.0), 2.0) * 4.0)
-    .max(0.35 * 200.33 * 4.0)
-    .max(sigma_reach(haze_sigma(8.0), 2.0) * 4.0);
+/// displacement a `backdrop_sample_blur` coordinate takes from the member
+/// pixel at a 4 px/pt recording bound plus the footprint of the read
+/// there, whichever sample and capture class is the farthest.
+///
+/// The reads are the primary sample (lobe 60 pt, blur radius 5 at gain 1:
+/// [`blur_sigma`] pt), the haze at the pixel itself (radius 8:
+/// [`haze_sigma`] pt) and the ambient sample (lobe `0.35·m` pt, blur
+/// `0.35·m` capture texels read as [`ambient_sigma`] texels).
+///
+/// On a class of capture scale `scale` a pt deviation is `σ_pt · scale · 4`
+/// texels at the 4 px/pt bound, and a read of `σ` texels reaches
+/// [`blur_read_reach`] of `σ` texels, that is `/ scale` device pixels. The
+/// ambient radius counts texels of the recipe's own capture, taken to be
+/// the class's (a recipe sits on the lattice), so it is `0.35·m` texels on
+/// every class. A finer class reaches farther for the same length, as the
+/// footprint's constant term (4.5 texels) is longer on it, so the reach is
+/// the maximum over [`CAPTURE_SCALES`].
+fn shader_reach() -> f32 {
+    let top = LEVELS - 1;
+    CAPTURE_SCALES
+        .iter()
+        .flat_map(|&scale| {
+            let texels_per_pt = scale * REACH_PX_PER_PT;
+            let device = |sigma_texels: f32| blur_read_reach(sigma_texels, top) / scale;
+            [
+                PRIMARY_LOBE_PT.mul_add(
+                    REACH_PX_PER_PT,
+                    device(blur_sigma(LARGEST_BLUR_RADIUS) * texels_per_pt),
+                ),
+                device(haze_sigma(LARGEST_HAZE_RADIUS) * texels_per_pt),
+                LARGEST_AMBIENT.mul_add(REACH_PX_PER_PT, device(ambient_sigma(LARGEST_AMBIENT))),
+            ]
+        })
+        .fold(0.0, f32::max)
+}
 
 /// The blend distance `k` the engine's quadratic smooth minimum folds a
 /// container's member fields with, pt, and the one every standalone
@@ -131,14 +175,14 @@ pub fn capture_class(container: bool, recipe_scale: f32) -> CaptureClass {
 
 /// The `backdrop_effect` source the shader key registers: the recipe's
 /// engine form, after the §3 blur law it shares with the standalone
-/// pass, with the sampling reach its lobes can take.
+/// pass, with the sampling reach its lobes and blur reads can take.
 fn shader_source() -> BackdropShaderSource {
     BackdropShaderSource::wgsl(concat!(
-        include_str!("../../shaders/blur.wgsl"),
+        include_str!("../../shaders/blur_law.wgsl"),
         "\n",
         include_str!("../../shaders/material_engine.wgsl"),
     ))
-    .reach(SHADER_REACH)
+    .reach(shader_reach())
 }
 
 /// Registers the glass backdrop shader and every capture class the
@@ -164,6 +208,7 @@ pub fn register(registry: &mut MaterialRegistry) {
                 MaterialCapture {
                     scale: CaptureScale::new(scale).expect("the lattice stays inside (0, 1]"),
                     levels: CaptureLevels::new(LEVELS).expect("the level count is inside 1..=MAX"),
+                    pyramid: CapturePyramid::Gaussian,
                     grouping: MaterialGrouping::Union {
                         smoothing: UnionSmoothing::new(union_smoothing(container))
                             .expect("the union smoothings are positive"),
