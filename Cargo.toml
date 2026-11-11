@@ -23,21 +23,20 @@ verification = []
 
 [dependencies]
 bytemuck = { version = "1", features = ["derive"] }
-# The engine's recording contract — `Draw`/`Recorder`, `Paint` and
-# `WorkingColor`, `Shadow`, `Group`, and `kurbo` — reached through
-# `cherenkov`'s re-exports so the theme's types are the engine's types.
-cherenkov = "0.0.0"
-# The material recording contract — `MaterialRegistry`,
-# `Recorder::backdrop_material`, `MaterialEffect`, `CaptureClass` — lives
-# in the moved layer-tree crate `cherenkov` does not re-export.
+# The recording contract the theme spells its chrome in — `Draw`/`Recorder`,
+# `Paint`, `Shadow`, `Group`, `kurbo` and the material contract
+# (`MaterialRegistry`, `Recorder::backdrop_material`, `MaterialEffect`,
+# `CaptureClass`) — the render-target-neutral layer, never the engine.
 cherenkov-record = "0.0.0"
 hydrolysis = "0.3.1"
-nami = "0.12"
+nami = "0.13"
 waterui = { version = "0.5.2", default-features = false }
-waterui-backend-core = { version = "0.5.2", default-features = false, features = ["widgets", "gestures"] }
 waterui-controls = "0.5.1"
 waterui-core = "0.5.1"
 waterui-form = "0.5.1"
+# `WorkingColor`, the theme's working-space colour term. The recording
+# layer alone is needed, so the engine features stay off.
+waterui-graphics = { version = "0.5.1", default-features = false }
 wgpu = { version = "30.0.1", default-features = false, features = ["wgsl"] }
 
 [dev-dependencies]
@@ -76,90 +75,95 @@ multiple_crate_versions = "allow"
 # here so it builds the same sources as water-rs/waterui at the pinned rev.
 [patch.crates-io]
 
-# The framework revision this crate builds against: water-rs/waterui's `dev`
-# at `0fd2e92b`, whose recording contract carries the backdrop materials this
-# theme declares (water-rs/waterui#1786, #1787, #1788 and their group-field,
-# recording-scale and blend-space followers #2428–#2430). `hydrolysis` moved
-# into the repository at `backends/hydrolysis` and the
-# `cherenkov`/`filtrate` engine family lives under `graphics/` (water-rs/
-# waterui#1449), so every framework crate resolves to this one rev — a
-# registry `waterui-core` beside the pinned sources gives two `View` traits
-# in one graph.
-waterui = { git = "https://github.com/water-rs/waterui", rev = "0fd2e92ba57b259a4eb6b63d3b35d55158d7f612" }
-waterui-assets = { git = "https://github.com/water-rs/waterui", rev = "0fd2e92ba57b259a4eb6b63d3b35d55158d7f612" }
-waterui-assets-core = { git = "https://github.com/water-rs/waterui", rev = "0fd2e92ba57b259a4eb6b63d3b35d55158d7f612" }
-waterui-backend-core = { git = "https://github.com/water-rs/waterui", rev = "0fd2e92ba57b259a4eb6b63d3b35d55158d7f612" }
-waterui-controls = { git = "https://github.com/water-rs/waterui", rev = "0fd2e92ba57b259a4eb6b63d3b35d55158d7f612" }
-waterui-core = { git = "https://github.com/water-rs/waterui", rev = "0fd2e92ba57b259a4eb6b63d3b35d55158d7f612" }
-waterui-dylib = { git = "https://github.com/water-rs/waterui", rev = "0fd2e92ba57b259a4eb6b63d3b35d55158d7f612" }
-waterui-form = { git = "https://github.com/water-rs/waterui", rev = "0fd2e92ba57b259a4eb6b63d3b35d55158d7f612" }
-waterui-graphics = { git = "https://github.com/water-rs/waterui", rev = "0fd2e92ba57b259a4eb6b63d3b35d55158d7f612" }
-waterui-icon = { git = "https://github.com/water-rs/waterui", rev = "0fd2e92ba57b259a4eb6b63d3b35d55158d7f612" }
-waterui-inspector-protocol = { git = "https://github.com/water-rs/waterui", rev = "0fd2e92ba57b259a4eb6b63d3b35d55158d7f612" }
-waterui-internal = { git = "https://github.com/water-rs/waterui", rev = "0fd2e92ba57b259a4eb6b63d3b35d55158d7f612" }
-waterui-layout = { git = "https://github.com/water-rs/waterui", rev = "0fd2e92ba57b259a4eb6b63d3b35d55158d7f612" }
-waterui-locale = { git = "https://github.com/water-rs/waterui", rev = "0fd2e92ba57b259a4eb6b63d3b35d55158d7f612" }
-waterui-macros = { git = "https://github.com/water-rs/waterui", rev = "0fd2e92ba57b259a4eb6b63d3b35d55158d7f612" }
-waterui-map = { git = "https://github.com/water-rs/waterui", rev = "0fd2e92ba57b259a4eb6b63d3b35d55158d7f612" }
-waterui-navigation = { git = "https://github.com/water-rs/waterui", rev = "0fd2e92ba57b259a4eb6b63d3b35d55158d7f612" }
-waterui-shape = { git = "https://github.com/water-rs/waterui", rev = "0fd2e92ba57b259a4eb6b63d3b35d55158d7f612" }
-waterui-text = { git = "https://github.com/water-rs/waterui", rev = "0fd2e92ba57b259a4eb6b63d3b35d55158d7f612" }
-waterui-url = { git = "https://github.com/water-rs/waterui", rev = "0fd2e92ba57b259a4eb6b63d3b35d55158d7f612" }
-waterui-watcher-set = { git = "https://github.com/water-rs/waterui", rev = "0fd2e92ba57b259a4eb6b63d3b35d55158d7f612" }
-waterui-webview = { git = "https://github.com/water-rs/waterui", rev = "0fd2e92ba57b259a4eb6b63d3b35d55158d7f612" }
-hydrolysis = { git = "https://github.com/water-rs/waterui", rev = "0fd2e92ba57b259a4eb6b63d3b35d55158d7f612" }
-# Mirrored from the framework's own patch: the sibling theme crate shares
-# `hydrolysis`, so any graph pulling it in must pin the same rev or it sees a
-# second `WidgetTheme`/`Style` pair.
-cherenkov = { git = "https://github.com/water-rs/waterui", rev = "0fd2e92ba57b259a4eb6b63d3b35d55158d7f612" }
-cherenkov-gpu = { git = "https://github.com/water-rs/waterui", rev = "0fd2e92ba57b259a4eb6b63d3b35d55158d7f612" }
-cherenkov-record = { git = "https://github.com/water-rs/waterui", rev = "0fd2e92ba57b259a4eb6b63d3b35d55158d7f612" }
-filtrate = { git = "https://github.com/water-rs/waterui", rev = "0fd2e92ba57b259a4eb6b63d3b35d55158d7f612" }
-filtrate-core = { git = "https://github.com/water-rs/waterui", rev = "0fd2e92ba57b259a4eb6b63d3b35d55158d7f612" }
-filtrate-derive = { git = "https://github.com/water-rs/waterui", rev = "0fd2e92ba57b259a4eb6b63d3b35d55158d7f612" }
+# The framework this crate builds against: water-rs/waterui's `dev`, whose
+# recording contract carries the backdrop materials this theme declares
+# (water-rs/waterui#1786, #1787, #1788 and their group-field, recording-scale
+# and blend-space followers #2428–#2430) and whose `hydrolysis::theme` holds
+# the widget theme contract (#1430). `hydrolysis` lives in the repository at
+# `backends/hydrolysis` and the `cherenkov`/`filtrate` engine family under
+# `graphics/` (water-rs/waterui#1449), so every framework crate resolves to
+# this one source — a registry `waterui-core` beside it gives two `View`
+# traits in one graph. `branch = "dev"` follows the branch; the commit it
+# resolved to is recorded by `Cargo.lock`.
+waterui = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-assets = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-assets-core = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-controls = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-core = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-dylib = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-form = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-graphics = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-icon = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-inspector-protocol = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-internal = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-layout = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-locale = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-macros = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-map = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-navigation = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-shape = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-text = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-url = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-watcher-set = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-webview = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+hydrolysis = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+# `cherenkov-record` is this crate's own crates.io requirement: it resolves
+# to the same source so the graph carries one `Recorder`/`Paint` pair. The
+# engine crates themselves — `cherenkov`, `cherenkov-gpu`, `cherenkov-cpu`,
+# `filtrate*` — enter only through hydrolysis's in-repository requirements
+# and need no entry of their own.
+cherenkov-record = { git = "https://github.com/water-rs/waterui", branch = "dev" }
 
-# The suite's vello baseline is the fork WaterUI and Hydrolysis ship, not
-# crates.io: `vello` carries the Mali Vulkan device-loss fix and the bump-
-# buffer re-render, and the sparse-strip crates plus `glifo` carry the
-# canonical-location hint-cache fix — mirrored from the framework's patch so
-# the cherenkov graph in this crate resolves the same sources.
+# Mirrored from the framework's own patch, which a dependency's manifest
+# does not carry downstream: the engine's shader build follows shaderloom's
+# `dev`; wgpu-external-frame shares wgpu-hal's glow context, so it links the
+# glow 0.18 of the wgpu branch below; clipboard-rs's branch admits the
+# `windows` 0.62 wgpu-hal resolves, keeping one set of ID3D12 types.
+shaderloom = { git = "https://github.com/water-rs/shaderloom", branch = "dev" }
+wgpu-external-frame = { git = "https://github.com/water-rs/wgpu-external-frame", branch = "dev" }
+clipboard-rs = { git = "https://github.com/water-rs/clipboard-rs", branch = "windows-0.62-signed" }
 
 # Extracted component crates at the revisions the framework's own patch table
-# pins at `0fd2e92b`: any of them that enters the graph must come from these
-# sources or a shared type splits across two copies.
+# pins: any of them that enters the graph must come from these sources or a
+# shared type splits across two copies.
 waterui-svg = { git = "https://github.com/water-rs/svg", rev = "16f99e021f735d0b1b31c95552b074e953d56418" }
-# suiteki's crates.io line implements nami-core 0.3's `Signal`; the pinned dev
-# commit implements 0.4's, which the graph's nami-core 0.4 requires.
-suiteki = { git = "https://github.com/water-rs/suiteki", rev = "7cf17bdba0e978d388a096b1916daebdc17253b4" }
+# suiteki's crates.io line implements nami-core 0.3's `Signal`; suiteki's
+# `dev` implements 0.5's (water-rs/suiteki#29), which the graph's nami-core
+# 0.5 requires. Mirrors the framework's own patch; the commit is recorded
+# by `Cargo.lock`.
+suiteki = { git = "https://github.com/water-rs/suiteki", branch = "dev" }
 
 # Every waterkit crate the codec/clipboard graph shares types across rides
-# the same rev — a registry `waterkit-core` beside the pinned `waterkit-codec`
-# gives two decoder types.
-waterkit-build = { git = "https://github.com/water-rs/waterkit", rev = "c3ea2a5ad27c6e4eae2168d7e595389b570b6b33" }
-waterkit-clipboard = { git = "https://github.com/water-rs/waterkit", rev = "c3ea2a5ad27c6e4eae2168d7e595389b570b6b33" }
-waterkit-core = { git = "https://github.com/water-rs/waterkit", rev = "c3ea2a5ad27c6e4eae2168d7e595389b570b6b33" }
-waterkit-dialog = { git = "https://github.com/water-rs/waterkit", rev = "c3ea2a5ad27c6e4eae2168d7e595389b570b6b33" }
-waterkit-fs = { git = "https://github.com/water-rs/waterkit", rev = "c3ea2a5ad27c6e4eae2168d7e595389b570b6b33" }
-waterkit-location = { git = "https://github.com/water-rs/waterkit", rev = "c3ea2a5ad27c6e4eae2168d7e595389b570b6b33" }
-waterkit-permission = { git = "https://github.com/water-rs/waterkit", rev = "c3ea2a5ad27c6e4eae2168d7e595389b570b6b33" }
+# the same source — a registry `waterkit-core` beside the patched
+# `waterkit-codec` gives two decoder types. The framework's own patch table
+# follows waterkit's `dev`, so these do too; the commit is recorded by
+# `Cargo.lock`.
+waterkit-build = { git = "https://github.com/water-rs/waterkit", branch = "dev" }
+waterkit-clipboard = { git = "https://github.com/water-rs/waterkit", branch = "dev" }
+waterkit-core = { git = "https://github.com/water-rs/waterkit", branch = "dev" }
+waterkit-dialog = { git = "https://github.com/water-rs/waterkit", branch = "dev" }
+waterkit-fs = { git = "https://github.com/water-rs/waterkit", branch = "dev" }
+waterkit-location = { git = "https://github.com/water-rs/waterkit", branch = "dev" }
+waterkit-permission = { git = "https://github.com/water-rs/waterkit", branch = "dev" }
 
 # Mirrored from the framework's own patch (water-rs/cherenkov#229, carried
 # into water-rs/waterui): wgpu 30.0.1's native display backend reads the
 # address of the colour-space globals instead of their value and crashes
 # whenever a surface negotiates a wide-gamut or HDR colour space
 # (gfx-rs/wgpu#10175, fixed on trunk, not yet released for v30).
-# The fork carries only that backport on the v30.0.1 tag; drop these entries
-# once wgpu-hal 30.0.2 ships it.
-naga = { git = "https://github.com/water-rs/wgpu", rev = "11e85956a78886d1a96d586f255ea9b0661da2cd" }
-naga-types = { git = "https://github.com/water-rs/wgpu", rev = "11e85956a78886d1a96d586f255ea9b0661da2cd" }
-wgpu = { git = "https://github.com/water-rs/wgpu", rev = "11e85956a78886d1a96d586f255ea9b0661da2cd" }
-wgpu-core = { git = "https://github.com/water-rs/wgpu", rev = "11e85956a78886d1a96d586f255ea9b0661da2cd" }
-wgpu-core-deps-apple = { git = "https://github.com/water-rs/wgpu", rev = "11e85956a78886d1a96d586f255ea9b0661da2cd" }
-wgpu-core-deps-emscripten = { git = "https://github.com/water-rs/wgpu", rev = "11e85956a78886d1a96d586f255ea9b0661da2cd" }
-wgpu-core-deps-windows-linux-android = { git = "https://github.com/water-rs/wgpu", rev = "11e85956a78886d1a96d586f255ea9b0661da2cd" }
-wgpu-hal = { git = "https://github.com/water-rs/wgpu", rev = "11e85956a78886d1a96d586f255ea9b0661da2cd" }
-wgpu-naga-bridge = { git = "https://github.com/water-rs/wgpu", rev = "11e85956a78886d1a96d586f255ea9b0661da2cd" }
-wgpu-types = { git = "https://github.com/water-rs/wgpu", rev = "11e85956a78886d1a96d586f255ea9b0661da2cd" }
+# The branch also carries the passthrough threadgroup-memory metadata the
+# engine's shaders are built with and moves wgpu-hal to glow 0.18; drop these
+# entries once a wgpu-hal release ships all three.
+naga = { git = "https://github.com/water-rs/wgpu", branch = "fix/metal-shared-memory-v30" }
+naga-types = { git = "https://github.com/water-rs/wgpu", branch = "fix/metal-shared-memory-v30" }
+wgpu = { git = "https://github.com/water-rs/wgpu", branch = "fix/metal-shared-memory-v30" }
+wgpu-core = { git = "https://github.com/water-rs/wgpu", branch = "fix/metal-shared-memory-v30" }
+wgpu-core-deps-apple = { git = "https://github.com/water-rs/wgpu", branch = "fix/metal-shared-memory-v30" }
+wgpu-core-deps-emscripten = { git = "https://github.com/water-rs/wgpu", branch = "fix/metal-shared-memory-v30" }
+wgpu-core-deps-windows-linux-android = { git = "https://github.com/water-rs/wgpu", branch = "fix/metal-shared-memory-v30" }
+wgpu-hal = { git = "https://github.com/water-rs/wgpu", branch = "fix/metal-shared-memory-v30" }
+wgpu-naga-bridge = { git = "https://github.com/water-rs/wgpu", branch = "fix/metal-shared-memory-v30" }
+wgpu-types = { git = "https://github.com/water-rs/wgpu", branch = "fix/metal-shared-memory-v30" }
 
 # Tests that render the material through the engine run the test binary
 # through `cargo nextest run` (preferred) or `cargo test`. `cargo-nextest`

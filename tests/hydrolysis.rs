@@ -39,6 +39,7 @@
 mod common;
 
 use common::*;
+use hydrolysis::theme::WidgetInteractionState;
 use hydrolysis_glass::material::geometry::STANDALONE_UNION_SMOOTHING;
 use hydrolysis_glass::{Appearance, Element, Glass, Group, Scene};
 use nami::Signal as _;
@@ -50,7 +51,6 @@ use waterui::layout::{PositionExt as _, absolute};
 use waterui::navigation::{NavigationView, Tab, Tabs};
 use waterui::text::text;
 use waterui::{AnyView, Binding, Color, View, ViewExt as _};
-use waterui_backend_core::widget::{WidgetInteractionState, WidgetTheme as _};
 use waterui_controls::{ButtonStyle, ControlSize, button::button, toggle::toggle};
 
 /// The control size every button in this file takes: the size
@@ -81,9 +81,9 @@ fn glass_button(x: f32, y: f32) -> impl View {
     clippy::cast_possible_truncation,
     reason = "the metrics are small positive point sizes"
 )]
-fn button_rect(glass: &Glass, x: f32, y: f32) -> [f32; 4] {
-    let m = glass.button_metrics(ButtonStyle::Glass, SIZE);
-    [x, y, (2.0 * m.padding_x) as f32, (2.0 * m.padding_y) as f32]
+fn button_rect(_glass: &Glass, x: f32, y: f32) -> [f32; 4] {
+    let m = hydrolysis_glass::theme::button::SizeGroup::of(SIZE).metrics();
+    [x, y, 2.0 * m.inset_x, 2.0 * m.inset_y]
 }
 
 /// The §7 backdrop as a view, for the backdrops a view tree can express
@@ -146,8 +146,8 @@ fn button_element(appearance: Appearance, rect: [f32; 4]) -> Element {
 }
 
 /// `[x, y, w, h]` pt as the engine's rect.
-fn kurbo_rect([x, y, w, h]: [f32; 4]) -> cherenkov::kurbo::Rect {
-    cherenkov::kurbo::Rect::new(
+fn kurbo_rect([x, y, w, h]: [f32; 4]) -> cherenkov_record::kurbo::Rect {
+    cherenkov_record::kurbo::Rect::new(
         f64::from(x),
         f64::from(y),
         f64::from(x + w),
@@ -376,7 +376,7 @@ fn app_chrome_over_the_backdrops() {
 /// container, so the frame carries the theme's bars as well as its
 /// buttons.
 fn app_chrome(backdrop: Backdrop) -> impl View {
-    let selection = Binding::container(0i32);
+    let selection = Binding::container(0usize);
     let page = move || {
         NavigationView::new(
             "Glass",
@@ -397,8 +397,8 @@ fn app_chrome(backdrop: Backdrop) -> impl View {
     Tabs::new(
         &selection,
         vec![
-            Tab::new(0i32, "Glass", page),
-            Tab::new(1i32, "Second", move || {
+            Tab::new("Glass", page),
+            Tab::new("Second", move || {
                 NavigationView::new("Second", backdrop_view(backdrop))
             }),
         ],

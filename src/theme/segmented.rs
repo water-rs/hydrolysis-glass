@@ -9,7 +9,7 @@
 
 use core::time::Duration;
 
-use cherenkov::{BlendSpace, Draw as _, Fixed, Group as LayerGroup, Recorder};
+use cherenkov_record::{BlendSpace, Draw as _, Fixed, Group as LayerGroup, Recorder};
 use waterui_controls::ControlSize;
 
 use crate::material::geometry::{CornerCurve, Element, Rect, Shape};

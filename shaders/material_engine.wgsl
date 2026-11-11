@@ -124,10 +124,10 @@ fn glass_unpremultiply(c: vec4<f32>) -> vec3<f32> {
 }
 
 // A premultiplied linear-P3 sample to the recipe's straight sRGB-encoded
-// working space. The engine module's own `srgb_encode_signed` and
-// `P3_TO_SRGB` do the conversion.
+// working space. The engine module's own `space_srgb_encode` and
+// `SPACE_P3_TO_SRGB` do the conversion.
 fn glass_work_space(c: vec4<f32>) -> vec3<f32> {
-    return srgb_encode_signed(P3_TO_SRGB * glass_unpremultiply(c));
+    return space_srgb_encode(SPACE_P3_TO_SRGB * glass_unpremultiply(c));
 }
 
 // §3: the mip level the ambient sample reads for a radius of `b` capture
@@ -542,9 +542,9 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
     // recovers it exactly from a premultiplied linear-P3 return whose
     // straight is `c·cov/a` — `a ≥ cov > 0` inside this branch, so the
     // divide is safe — because `move_space` round-trips
-    // `SRGB_TO_P3`/`srgb_decode_signed` back to that straight before
+    // `SPACE_SRGB_TO_P3`/`space_srgb_decode` back to that straight before
     // blending.
     let a = cov + (1.0 - cov) * cast_alpha;
-    let straight = SRGB_TO_P3 * srgb_decode_signed(c * (cov / a));
+    let straight = SPACE_SRGB_TO_P3 * space_srgb_decode(c * (cov / a));
     return vec4<f32>(straight * a, a);
 }
