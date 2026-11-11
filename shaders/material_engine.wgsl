@@ -124,10 +124,10 @@ fn glass_unpremultiply(c: vec4<f32>) -> vec3<f32> {
 }
 
 // A premultiplied linear-P3 sample to the recipe's straight sRGB-encoded
-// working space. The engine module's own `srgb_encode_signed` and
-// `P3_TO_SRGB` do the conversion.
+// working space. The engine module's own `space_srgb_encode` and
+// `SPACE_P3_TO_SRGB` do the conversion.
 fn glass_work_space(c: vec4<f32>) -> vec3<f32> {
-    return srgb_encode_signed(P3_TO_SRGB * glass_unpremultiply(c));
+    return space_srgb_encode(SPACE_P3_TO_SRGB * glass_unpremultiply(c));
 }
 
 // §3: the mip level the ambient sample reads for a radius of `b` capture
@@ -488,6 +488,11 @@ fn add_tint(c: vec3<f32>, rgb: vec3<f32>, a: vec2<f32>) -> vec3<f32> {
 fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32> {
     let u = px.scale;
     let d = px.sdf / u;
+    // The field's screen-space rate, taken before any branch on the
+    // pixel's own values: a derivative is defined only in uniform control
+    // flow, and after an early return the neighbours it differences may
+    // have left the quad.
+    let fw = fwidth(px.sdf);
 
     // §4.10: the cast shadow — plain black, no capture read, at the
     // shifted field. A zero falloff gives ±inf inside `gsat`, the
@@ -509,7 +514,7 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
     // field's edge. The composite's own coverage is the outer band's
     // (`w_own · AA(field < outer)`), so the silhouette's ramp is
     // evaluated here, as the standalone did on its field texture.
-    let cov = gsat(0.5 - px.sdf / fwidth(px.sdf));
+    let cov = gsat(0.5 - px.sdf / fw);
     if cov <= 0.0 {
         return vec4<f32>(0.0, 0.0, 0.0, cast_alpha);
     }
@@ -542,9 +547,9 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
     // recovers it exactly from a premultiplied linear-P3 return whose
     // straight is `c·cov/a` — `a ≥ cov > 0` inside this branch, so the
     // divide is safe — because `move_space` round-trips
-    // `SRGB_TO_P3`/`srgb_decode_signed` back to that straight before
+    // `SPACE_SRGB_TO_P3`/`space_srgb_decode` back to that straight before
     // blending.
     let a = cov + (1.0 - cov) * cast_alpha;
-    let straight = SRGB_TO_P3 * srgb_decode_signed(c * (cov / a));
+    let straight = SPACE_SRGB_TO_P3 * space_srgb_decode(c * (cov / a));
     return vec4<f32>(straight * a, a);
 }

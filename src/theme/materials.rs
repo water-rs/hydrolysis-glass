@@ -32,15 +32,11 @@
 //!   capture and one field; a single-member union degenerates to the
 //!   member's own field.
 
-use cherenkov::kurbo::{Rect as KRect, RoundedRect, RoundedRectRadii};
-use cherenkov::{
-    BlendSpace, ContinuousRect, Draw as _, Fixed, Group, Interpolation, LinearGradient, Recorder,
-    ShapeData,
-};
+use cherenkov_record::kurbo::{Rect as KRect, RoundedRect, RoundedRectRadii};
 use cherenkov_record::{
-    BackdropShaderSource, CaptureClass, CaptureLevels, CaptureScale, MaterialCapture,
-    MaterialEffect, MaterialGrouping, MaterialRegistry, MaterialShader, OuterExtent,
-    UnionSmoothing,
+    BackdropShaderSource, BlendSpace, CaptureClass, CaptureLevels, CaptureScale, ContinuousRect,
+    Fixed, Interpolation, LinearGradient, MaterialCapture, MaterialEffect, MaterialGrouping,
+    MaterialRegistry, MaterialShader, OuterExtent, Paint, Recorder, ShapeData, UnionSmoothing,
 };
 
 use crate::material::geometry::{
@@ -182,7 +178,7 @@ pub fn register(registry: &mut MaterialRegistry) {
 /// The Lamé smoothing matching the recipe's `CONTINUOUS_EXPONENT` corner:
 /// the engine's `ContinuousRect` maps smoothing to exponent `2 + 2·s`,
 /// so 2.02 is `s = 0.01`.
-const CONTINUOUS_SMOOTHING: f64 = (CONTINUOUS_EXPONENT as f64 - 2.0) * 0.5;
+pub const CONTINUOUS_SMOOTHING: f64 = (CONTINUOUS_EXPONENT as f64 - 2.0) * 0.5;
 
 /// Converts the element's silhouette to the engine's analytic shape.
 ///
@@ -381,10 +377,13 @@ pub fn record(recorder: &mut Recorder, element: &Element, container: bool) {
 /// a thousandth of the peak.
 const WASH_SEGMENTS: u16 = 32;
 
-/// Records the press wash of a button (§8.1): a white fill of the grown
-/// silhouette, composited in encoded space, over the glass body and below
-/// the label.
-pub fn record_wash(recorder: &mut Recorder, wash: &Wash) {
+/// The paint of a button's press wash (§8.1).
+///
+/// White, its alpha following [`Wash::alpha_at`] across the grown width,
+/// interpolated in encoded space. The look fills the grown silhouette with it, in a group composited in
+/// encoded space, over the glass body and below the label.
+#[must_use]
+pub fn wash_paint(wash: &Wash) -> Paint {
     let r = wash.shape.rect;
     let mut gradient = LinearGradient::new((f64::from(r.x), 0.0), (f64::from(r.x + r.w), 0.0))
         .interpolation(Interpolation::SrgbEncoded);
@@ -393,8 +392,5 @@ pub fn record_wash(recorder: &mut Recorder, wash: &Wash) {
         let white: Rgba = [1.0, 1.0, 1.0, wash.alpha_at(r.w.mul_add(t, r.x))];
         gradient = gradient.stop(t, working(white));
     }
-    recorder.group(
-        Group::new().blend_space(BlendSpace::SrgbEncoded),
-        |recorder| recorder.fill(Fixed(shape_data(&wash.shape)), gradient),
-    );
+    Paint::Linear(gradient)
 }

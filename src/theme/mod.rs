@@ -8,12 +8,16 @@
 //! through `Content::record_layered` realizes each surface as a backdrop
 //! member of the group its capture class names; [`materials::register`]
 //! declares the shader and the capture classes the members record under.
-//! Everything else — toggles, steppers, inputs, pickers, sliders, progress,
-//! badges, lists, tables, dividers and opaque menus — is recorded through the
-//! `Recorder` in [`chrome`].
+//! Buttons, switches, checkboxes, steppers, sliders and progress indicators
+//! are looks (`looks`): data whose values follow the widget's state, and
+//! whose glass bodies are backdrop fills over the same shader and capture
+//! classes. Everything else — inputs, pickers, badges, lists, tables,
+//! dividers and opaque menus — is recorded through the `Recorder` in
+//! [`chrome`].
 
 pub mod button;
 pub mod chrome;
+mod looks;
 pub mod materials;
 pub mod palette;
 pub mod segmented;
@@ -22,29 +26,27 @@ pub mod switch;
 
 use core::time::Duration;
 
-use cherenkov::kurbo::{BezPath, Point, Rect, RoundedRectRadii};
-use cherenkov::{Paint, Recorder, WorkingColor};
-use cherenkov_record::MaterialRegistry;
+use cherenkov_record::kurbo::{Point, Rect, RoundedRectRadii};
+use cherenkov_record::{MaterialRegistry, Paint, Recorder};
 use hydrolysis::Style;
+use hydrolysis::theme::{
+    BadgeMetrics, ButtonLook, ButtonSpec, CheckboxLook, DividerMetrics, IndicatorLook,
+    InputFieldMetrics, InteractionMotion, LinearProgressLook, ListDividerMetrics, ListMetrics,
+    ListRowMetrics, ListSectionMetrics, ListTrailingControlMetrics, NavigationMetrics,
+    NavigationMotion, PickerMetrics, ProgressSpec, RadioIndicatorState, RadioSelectionMotion,
+    SliderLook, SliderSpec, StepperLook, StepperSpec, SwitchLook, TabItemGeometry, TabItemLayout,
+    TableMetrics, TabsMetrics, TextCaretMotion, TextContextMenuMetrics, ToggleSpec,
+    WidgetInteractionState, WidgetTheme,
+};
 use waterui::Plugin as _;
 use waterui::animation::Animation;
 use waterui::color::{Color, ColorScheme};
 use waterui::interaction::InteractionState;
 use waterui::reactive::Signal as _;
-use waterui::text::font::{Body, Font, FontWeight, Footnote};
+use waterui::text::font::{Font, Footnote};
 use waterui::theme::{ColorSettings, FontSettings, Theme, installed_color_scheme};
-use waterui_backend_core::widget::{
-    BadgeMetrics, ButtonMetrics, DividerMetrics, InputFieldMetrics, InteractionMotion,
-    ListDividerMetrics, ListMetrics, ListRowMetrics, ListSectionMetrics,
-    ListTrailingControlMetrics, NavigationMetrics, NavigationMotion, PickerMetrics,
-    ProgressIndicatorStyle, ProgressMetrics, ProgressMotion, RadioIndicatorState,
-    RadioSelectionMotion, SliderMetrics, SliderValueIndicatorMetrics, StepperEnd, StepperMetrics,
-    TabItemLayout, TableMetrics, TabsMetrics, TextCaretMotion, TextContextMenuMetrics,
-    ToggleMetrics, WidgetInteractionState, WidgetTheme,
-};
 use waterui_controls::ControlSize;
 use waterui_controls::button::ButtonStyle;
-use waterui_controls::toggle::ToggleStyle;
 use waterui_core::{EasingCurve, Environment};
 use waterui_form::picker::PickerStyle;
 
@@ -235,9 +237,6 @@ impl Default for Glass {
 /// `MaterialScope` the host gives the recording.
 fn record_standalone(recorder: &mut Recorder, surface: &Surface) {
     materials::record(recorder, &surface.element, false);
-    if let Some(wash) = &surface.wash {
-        materials::record_wash(recorder, wash);
-    }
 }
 
 impl Style for Glass {
@@ -288,18 +287,11 @@ impl WidgetTheme for Glass {
             press_fade_in: button::Spring::PRESS.animation(),
             press_fade_out: button::Spring::RELEASE.animation(),
             press_grow: Animation::ease_out(PRESS_DURATION),
+            // `press_progress` drives the physical shape morph; the press
+            // spring is the contract's one animation for both directions.
+            press_shape: button::Spring::PRESS.animation(),
             minimum_press_duration: Duration::ZERO,
             touch_delay: Duration::ZERO,
-        }
-    }
-
-    fn progress_motion(&self) -> ProgressMotion {
-        ProgressMotion {
-            linear_determinate: Animation::ease_in_out(Duration::from_millis(250)),
-            circular_determinate: Animation::ease_in_out(Duration::from_millis(250)),
-            linear_indeterminate_cycle: LINEAR_INDETERMINATE_CYCLE,
-            circular_indeterminate_cycle: CIRCULAR_INDETERMINATE_CYCLE,
-            loading_cycle: LOADING_CYCLE,
         }
     }
 
@@ -320,207 +312,24 @@ impl WidgetTheme for Glass {
         }
     }
 
-    fn button_metrics(&self, _style: ButtonStyle, size: ControlSize) -> ButtonMetrics {
-        // The frame is the label plus the size group's insets and nothing
-        // more (§8.1), so the metrics carry no minimum size.
-        let m = button::SizeGroup::of(size).metrics();
-        ButtonMetrics::new(f64::from(m.inset_x), f64::from(m.inset_y), 0.0, 0.0)
-    }
-
-    fn icon_button_metrics(&self, style: ButtonStyle, size: ControlSize) -> ButtonMetrics {
-        // A symbol takes the same insets as a title (§8.1).
-        self.button_metrics(style, size)
-    }
-
-    fn button_label_color(&self, style: ButtonStyle, disabled: bool) -> Option<Color> {
-        let p = &self.palette;
-        let c = if surfaces::button_kind(style) == Some(button::Kind::Prominent) {
-            p.accent_foreground
-        } else if matches!(style, ButtonStyle::Link) {
-            p.accent
-        } else {
-            p.foreground
-        };
-        Some(if disabled {
-            Self::color(palette::over(
-                palette::alpha(c, self.disabled_content_alpha()),
-                p.background,
-            ))
-        } else {
-            Self::color(c)
-        })
-    }
-
-    fn button_label_font(&self, _style: ButtonStyle) -> Option<Font> {
-        // 17 pt regular on a 20.33 pt line: the regular and large size
-        // groups' label (§8.1). The hook carries no control size, so the
-        // compact groups' 15 pt label is not selectable here.
-        let m = button::SizeGroup::Regular.metrics();
-        Some(
-            Font::from(Body)
-                .size(m.text_size)
-                .weight(FontWeight::Normal)
-                .line_height(m.line_height),
-        )
-    }
-
     fn register_backdrop_shaders(&self, registry: &mut MaterialRegistry) {
         materials::register(registry);
     }
 
-    fn draw_button_chrome(
-        &self,
-        draw: &mut Recorder,
-        bounds: Rect,
-        style: ButtonStyle,
-        _icon_only: bool,
-        state: WidgetInteractionState,
-    ) {
-        // An icon-only button is laid out at its own frame (the metrics
-        // carry no minimum), so its chrome fills `bounds` like any other.
-        // The capsule the hook can express needs no control size; the
-        // size group only picks a rounded rectangle's default radius.
-        if let Some(surface) = self.button_surface(bounds, style, ControlSize::Medium, state) {
-            record_standalone(draw, &surface);
-        }
+    fn button(&self, spec: &ButtonSpec, env: &Environment) -> ButtonLook {
+        looks::button(self, spec, env)
     }
 
-    fn draw_button_state_layer(
-        &self,
-        draw: &mut Recorder,
-        bounds: Rect,
-        style: ButtonStyle,
-        _icon_only: bool,
-        state: WidgetInteractionState,
-    ) {
-        if surfaces::button_kind(style).is_some() {
-            return;
-        }
-        chrome::state_layer(
-            &self.palette,
-            draw,
-            bounds,
-            RoundedRectRadii::from_single_radius(bounds.height() * 0.5),
-            state,
-        );
+    fn switch(&self, spec: &ToggleSpec, env: &Environment) -> SwitchLook {
+        looks::switch(self, spec, env)
     }
 
-    fn draw_interaction_state_layer(
-        &self,
-        draw: &mut Recorder,
-        bounds: Rect,
-        radii: RoundedRectRadii,
-        color: WorkingColor,
-        state: WidgetInteractionState,
-    ) {
-        use cherenkov::Draw as _;
-        if state.state.contains(InteractionState::DISABLED) || state.state_layer_opacity <= 0.0 {
-            return;
-        }
-        draw.fill(
-            cherenkov::kurbo::RoundedRect::from_rect(bounds, radii),
-            color.with_alpha(state.state_layer_opacity),
-        );
+    fn checkbox(&self, spec: &ToggleSpec, env: &Environment) -> CheckboxLook {
+        looks::checkbox(self, spec, env)
     }
 
-    fn toggle_metrics(&self, style: ToggleStyle) -> ToggleMetrics {
-        match style {
-            ToggleStyle::Checkbox => ToggleMetrics::new(22.0, 22.0, 10.0),
-            // The frame is 61 x 28 at every control size (§8.2); the track
-            // overhangs it and takes no layout space. The specification
-            // gives no gap between a label and the track, so none is kept.
-            _ => ToggleMetrics::new(
-                f64::from(switch::FRAME[0]),
-                f64::from(switch::FRAME[1]),
-                0.0,
-            ),
-        }
-    }
-
-    fn toggle_value_animation(&self) -> Animation {
-        switch::TOGGLE_SPRING.animation()
-    }
-
-    fn draw_toggle_switch(
-        &self,
-        draw: &mut Recorder,
-        bounds: Rect,
-        progress: f32,
-        selected: bool,
-        state: WidgetInteractionState,
-    ) {
-        let switch = switch::Switch {
-            appearance: self.palette.appearance,
-            tint: None,
-            progress,
-            selected,
-            press: surfaces::press_progress(state, self.interaction_motion().pressed_opacity),
-            enabled: !state.state.contains(InteractionState::DISABLED),
-        };
-        switch::record(draw, surfaces::rect(bounds), &switch, self.translucency);
-    }
-
-    fn draw_toggle_checkbox(
-        &self,
-        draw: &mut Recorder,
-        bounds: Rect,
-        progress: f32,
-        state: WidgetInteractionState,
-    ) {
-        chrome::toggle_checkbox(&self.palette, draw, bounds, progress, state);
-    }
-
-    fn draw_toggle_checkbox_state_layer(
-        &self,
-        draw: &mut Recorder,
-        bounds: Rect,
-        _progress: f32,
-        state: WidgetInteractionState,
-    ) {
-        chrome::state_layer(
-            &self.palette,
-            draw,
-            bounds,
-            RoundedRectRadii::from_single_radius(bounds.width() * 0.3),
-            state,
-        );
-    }
-
-    fn stepper_metrics(&self) -> StepperMetrics {
-        StepperMetrics::new(32.0, 44.0, 32.0, 1.0, 12.0)
-    }
-
-    fn draw_stepper_button(
-        &self,
-        draw: &mut Recorder,
-        bounds: Rect,
-        end: StepperEnd,
-        state: WidgetInteractionState,
-    ) {
-        chrome::stepper_button(&self.palette, draw, bounds, end, state);
-    }
-
-    fn draw_stepper_decrement_icon(&self, draw: &mut Recorder, bounds: Rect) {
-        chrome::stepper_decrement_icon(&self.palette, draw, bounds);
-    }
-
-    fn draw_stepper_increment_icon(&self, draw: &mut Recorder, bounds: Rect) {
-        chrome::stepper_increment_icon(&self.palette, draw, bounds);
-    }
-
-    fn draw_stepper_button_state_layer(
-        &self,
-        draw: &mut Recorder,
-        bounds: Rect,
-        end: StepperEnd,
-        state: WidgetInteractionState,
-    ) {
-        let r = bounds.height() * 0.5;
-        let radii = match end {
-            StepperEnd::Decrement => RoundedRectRadii::new(r, 0.0, 0.0, r),
-            StepperEnd::Increment => RoundedRectRadii::new(0.0, r, r, 0.0),
-        };
-        chrome::state_layer(&self.palette, draw, bounds, radii, state);
+    fn stepper(&self, spec: &StepperSpec, env: &Environment) -> StepperLook {
+        looks::stepper(self, spec, env)
     }
 
     fn input_field_metrics(&self) -> InputFieldMetrics {
@@ -715,144 +524,20 @@ impl WidgetTheme for Glass {
         segmented::record(draw, &chrome);
     }
 
-    fn slider_metrics(&self, _size: ControlSize) -> SliderMetrics {
-        SliderMetrics::new(0.0, 8.0, 8.0, 120.0, 4.0, 28.0, 28.0)
+    fn slider(&self, spec: &SliderSpec, env: &Environment) -> SliderLook {
+        looks::slider(self, spec, env)
     }
 
-    fn draw_slider_track(
-        &self,
-        draw: &mut Recorder,
-        track_rect: Rect,
-        fill_rect: Rect,
-        _size: ControlSize,
-        state: WidgetInteractionState,
-    ) {
-        chrome::slider_track(&self.palette, draw, track_rect, fill_rect, state);
+    fn linear_progress(&self, spec: &ProgressSpec, env: &Environment) -> LinearProgressLook {
+        looks::linear_progress(self, spec, env)
     }
 
-    fn draw_slider_thumb(
-        &self,
-        draw: &mut Recorder,
-        center: Point,
-        radius: f64,
-        _size: ControlSize,
-        state: WidgetInteractionState,
-    ) {
-        chrome::slider_thumb(&self.palette, draw, center, radius, state);
+    fn circular_progress(&self, spec: &ProgressSpec, env: &Environment) -> IndicatorLook {
+        looks::circular_progress(self, spec, env)
     }
 
-    fn draw_slider_thumb_state_layer(
-        &self,
-        draw: &mut Recorder,
-        center: Point,
-        radius: f64,
-        _size: ControlSize,
-        state: WidgetInteractionState,
-    ) {
-        chrome::circular_state_layer(&self.palette, draw, center, radius * 1.4, state);
-    }
-
-    fn slider_value_indicator_metrics(&self) -> SliderValueIndicatorMetrics {
-        SliderValueIndicatorMetrics::new(10.0, 6.0, 8.0, 36.0, 28.0)
-    }
-
-    fn slider_value_indicator_color(&self) -> Color {
-        Self::color(self.palette.foreground)
-    }
-
-    fn slider_value_indicator_font(&self) -> Font {
-        Font::from(Footnote)
-    }
-
-    fn draw_slider_value_indicator(&self, draw: &mut Recorder, bounds: Rect) {
-        chrome::popup_panel(&self.palette, draw, bounds);
-    }
-
-    fn progress_metrics(&self, style: ProgressIndicatorStyle) -> ProgressMetrics {
-        match style {
-            ProgressIndicatorStyle::Linear => {
-                ProgressMetrics::linear(20.0, 6.0, 4.0, 0.0, 6.0, 120.0)
-            }
-            ProgressIndicatorStyle::Circular => ProgressMetrics::circular(28.0, 3.0),
-            ProgressIndicatorStyle::Loading => ProgressMetrics::loading(48.0, 28.0),
-        }
-    }
-
-    fn draw_progress_linear_track(
-        &self,
-        draw: &mut Recorder,
-        bounds: Rect,
-        active_end: Option<f64>,
-    ) {
-        chrome::progress_linear_track(&self.palette, draw, bounds, active_end);
-    }
-
-    fn draw_progress_linear_fill(&self, draw: &mut Recorder, bounds: Rect) {
-        chrome::progress_linear_fill(&self.palette, draw, bounds);
-    }
-
-    fn draw_progress_linear_indeterminate(
-        &self,
-        draw: &mut Recorder,
-        bounds: Rect,
-        elapsed: Duration,
-        _four_color: bool,
-    ) {
-        chrome::progress_linear_indeterminate(
-            &self.palette,
-            draw,
-            bounds,
-            elapsed,
-            LINEAR_INDETERMINATE_CYCLE,
-        );
-    }
-
-    fn draw_progress_circular_track(
-        &self,
-        draw: &mut Recorder,
-        center: Point,
-        radius: f64,
-        width: f64,
-        active_turns: Option<f64>,
-    ) {
-        chrome::progress_circular_track(&self.palette, draw, center, radius, width, active_turns);
-    }
-
-    fn draw_progress_circular_fill(&self, draw: &mut Recorder, path: &BezPath, width: f64) {
-        chrome::progress_circular_fill(&self.palette, draw, path, width);
-    }
-
-    fn draw_progress_loading(
-        &self,
-        draw: &mut Recorder,
-        bounds: Rect,
-        elapsed: Duration,
-        _four_color: bool,
-    ) {
-        let size = self
-            .progress_metrics(ProgressIndicatorStyle::Loading)
-            .loading_indicator_size;
-        chrome::progress_loading(&self.palette, draw, bounds, size, elapsed, LOADING_CYCLE);
-    }
-
-    fn draw_progress_circular_indeterminate(
-        &self,
-        draw: &mut Recorder,
-        center: Point,
-        radius: f64,
-        width: f64,
-        elapsed: Duration,
-        _four_color: bool,
-    ) {
-        chrome::progress_circular_indeterminate(
-            &self.palette,
-            draw,
-            center,
-            radius,
-            width,
-            elapsed,
-            CIRCULAR_INDETERMINATE_CYCLE,
-        );
+    fn loading_indicator(&self, spec: &ProgressSpec, env: &Environment) -> IndicatorLook {
+        looks::loading(self, spec, env)
     }
 
     fn navigation_metrics(&self) -> NavigationMetrics {
@@ -891,7 +576,7 @@ impl WidgetTheme for Glass {
     }
 
     fn tabs_metrics(&self, _layout: TabItemLayout) -> TabsMetrics {
-        TabsMetrics::new(60.0, 64.0, 12.0, 0.0, 0.0, 6.0)
+        TabsMetrics::new(60.0, 64.0, 12.0, 6.0)
     }
 
     fn draw_tabs_bar(&self, draw: &mut Recorder, surface: Rect) {
@@ -905,18 +590,18 @@ impl WidgetTheme for Glass {
         chrome::separator(&self.palette, draw, divider);
     }
 
-    fn draw_tabs_highlight(&self, draw: &mut Recorder, bounds: Rect, _layout: TabItemLayout) {
-        chrome::tabs_highlight(&self.palette, draw, bounds);
+    fn draw_tabs_highlight(&self, draw: &mut Recorder, item: TabItemGeometry) {
+        chrome::tabs_highlight(&self.palette, draw, item.bounds);
     }
 
     fn draw_tabs_button_state_layer(
         &self,
         draw: &mut Recorder,
-        bounds: Rect,
+        item: TabItemGeometry,
         _selected: bool,
         state: WidgetInteractionState,
-        _layout: TabItemLayout,
     ) {
+        let bounds = item.bounds;
         let r = bounds.height().min(bounds.width()) * 0.5;
         chrome::state_layer(
             &self.palette,
@@ -1059,11 +744,9 @@ impl WidgetTheme for Glass {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use cherenkov::{Content, LayoutSize};
-
-    fn with_recorder(body: impl FnOnce(&mut Recorder)) {
-        let _ = Content::record(&LayoutSize::new(), body);
-    }
+    use cherenkov_record::{Content, LayoutSize};
+    use hydrolysis::theme::{Fill, Inputs, SpecTint};
+    use waterui_core::layout::LayoutDirection;
 
     #[test]
     fn tokens_install_the_scheme() {
@@ -1077,19 +760,31 @@ mod tests {
         );
     }
 
+    fn environment(g: &Glass) -> Environment {
+        let mut env = Environment::new();
+        g.install_tokens(&mut env);
+        env
+    }
+
+    fn button_spec(style: ButtonStyle, size: ControlSize) -> ButtonSpec {
+        ButtonSpec::new(
+            style,
+            size,
+            false,
+            LayoutDirection::LeftToRight,
+            SpecTint::default(),
+        )
+    }
+
     #[test]
-    fn plain_button_draws_no_chrome() {
+    fn plain_button_draws_no_glass_body() {
         let g = Glass::light();
+        let env = environment(&g);
         let b = Rect::new(0.0, 0.0, 100.0, 40.0);
-        with_recorder(|r| {
-            g.draw_button_chrome(
-                r,
-                b,
-                ButtonStyle::Plain,
-                false,
-                WidgetInteractionState::NONE,
-            );
-        });
+        let plain = g.button(&button_spec(ButtonStyle::Plain, ControlSize::Small), &env);
+        assert!(matches!(plain.chrome().surface().fill(), Fill::Paint(_)));
+        let glass = g.button(&button_spec(ButtonStyle::Glass, ControlSize::Small), &env);
+        assert!(matches!(glass.chrome().surface().fill(), Fill::Backdrop(_)));
         assert!(
             g.button_surface(
                 b,
@@ -1098,15 +793,6 @@ mod tests {
                 WidgetInteractionState::NONE
             )
             .is_none()
-        );
-        assert!(
-            g.button_surface(
-                b,
-                ButtonStyle::Glass,
-                ControlSize::Small,
-                WidgetInteractionState::NONE
-            )
-            .is_some()
         );
     }
 
@@ -1129,35 +815,40 @@ mod tests {
     }
 
     #[test]
-    fn glass_button_records_a_backdrop_material() {
+    fn a_glass_button_is_a_backdrop_fill_of_the_standalone_surface() {
         let g = Glass::light();
-        let layered = layered_recorder(|r| {
-            g.draw_button_chrome(
-                r,
-                Rect::new(0.0, 0.0, 100.0, 40.0),
-                ButtonStyle::Glass,
-                false,
-                WidgetInteractionState::NONE,
-            );
-        });
-        assert!(layered.below.is_empty());
-        assert_eq!(layered.runs.len(), 1);
-        let material = &layered.runs[0].material;
-        assert_eq!(material.shader(), materials::GLASS_SHADER);
-        assert!(material.scope().is_solo());
-        // The button's recipe capture scale snaps up to the smallest
-        // registered class at or above it.
+        let env = environment(&g);
+        let look = g.button(&button_spec(ButtonStyle::Glass, ControlSize::Medium), &env);
+        let Fill::Backdrop(body) = look.chrome().surface().fill() else {
+            panic!("a glass button's body is a backdrop");
+        };
+        assert_eq!(body.shader(), materials::GLASS_SHADER);
+        let frame = Rect::new(0.0, 0.0, 100.0, 40.0);
         let surface = g
             .button_surface(
-                Rect::new(0.0, 0.0, 100.0, 40.0),
+                frame,
                 ButtonStyle::Glass,
                 ControlSize::Medium,
                 WidgetInteractionState::NONE,
             )
             .expect("glass surface");
+        // The button's recipe capture scale snaps up to the smallest
+        // registered class at or above it.
         assert_eq!(
-            material.capture(),
+            body.capture(),
             materials::capture_class(false, surface.element.recipe.capture_scale),
+        );
+        // At rest the effect is the standalone surface's own recipe.
+        assert_eq!(
+            body.effect()
+                .target(&Inputs::at_rest(frame, InteractionState::empty(), &())),
+            materials::effect(&surface.element),
+        );
+        // A press grows the silhouette the effect is stated for, and the
+        // chrome grows by the same press growth.
+        assert_eq!(
+            look.chrome().press().get_scale(),
+            Some(f64::from(button::GROWTH_PER_PRESS))
         );
     }
 

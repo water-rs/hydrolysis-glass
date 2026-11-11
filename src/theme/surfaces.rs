@@ -7,9 +7,9 @@
 //! and the standalone [`crate::GlassRenderer`] takes them as the frame's
 //! [`Group`]s over a captured backdrop.
 
-use cherenkov::kurbo::Rect as KRect;
+use cherenkov_record::kurbo::Rect as KRect;
+use hydrolysis::theme::WidgetInteractionState;
 use waterui::interaction::InteractionState;
-use waterui_backend_core::widget::WidgetInteractionState;
 use waterui_controls::button::ButtonStyle;
 
 use crate::material::geometry::{
@@ -224,7 +224,9 @@ pub fn button(
 
 /// A button silhouette grown `1 + 0.245·p` about its centre, the radii
 /// scaled the same.
-fn grown(shape: Shape, p: f32) -> Shape {
+/// `shape` grown uniformly about its centre by the press progress `p`.
+#[must_use]
+pub fn grown(shape: Shape, p: f32) -> Shape {
     let s = button::growth(p);
     Shape {
         rect: shape.rect.scaled_about_center(s),
@@ -323,7 +325,7 @@ pub fn group(surfaces: Vec<Surface>) -> Group {
 )]
 mod tests {
     use super::*;
-    use waterui_backend_core::widget::{PressWave, PressWaves};
+    use hydrolysis::theme::{PressWave, PressWaves};
 
     const P: Palette = Palette::LIGHT;
     const FRAME: KRect = KRect::new(10.0, 20.0, 86.0, 54.33);
