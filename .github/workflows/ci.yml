@@ -33,4 +33,10 @@ jobs:
         uses: tracel-ai/github-actions/install-dxc@295f2fdbae5271f4f8ad56d634e4ff6a95daafc8
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@nextest
-      - run: cargo nextest run --locked --no-fail-fast
+      # wgpu's instance takes `InstanceFlags::DEBUG` from `wgpu-types`'
+      # own `debug_assertions`, and that flag makes DXC skip optimization;
+      # turning only that crate's assertions off isolates the flag.
+      - run: >
+          cargo nextest run --locked --no-fail-fast
+          --config "profile.dev.package.wgpu-types.debug-assertions=false"
+          --config "profile.test.package.wgpu-types.debug-assertions=false"

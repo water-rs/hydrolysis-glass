@@ -138,24 +138,23 @@ fn lobe_at(d: f32, depth: f32, shift: f32) -> f32 {
 
 // §4.3: the piecewise blur gain through (d_i, g_i), held at the ends;
 // equal consecutive depths step.
-//
-// Evaluated straight through, every segment and then selected: D3D12's
-// WARP device stalls on a loop or a branch on the pixel's own values in
-// this shader.
 fn blur_gain(depths: vec4<f32>, gains: vec4<f32>, d: f32) -> f32 {
-    var g = gains.w;
-    g = select(g, gain_segment(depths.z, depths.w, gains.z, gains.w, d), d < depths.w);
-    g = select(g, gain_segment(depths.y, depths.z, gains.y, gains.z, d), d < depths.z);
-    g = select(g, gain_segment(depths.x, depths.y, gains.x, gains.y, d), d < depths.y);
-    return select(g, gains.x, d <= depths.x);
-}
-
-// One segment of `blur_gain`, from `(x0, y0)` to `(x1, y1)`, at `d`: a
-// segment no wider than 1e-6 steps to `y1`.
-fn gain_segment(x0: f32, x1: f32, y0: f32, y1: f32, d: f32) -> f32 {
-    let span = x1 - x0;
-    let t = (d - x0) / max(span, 1e-6);
-    return select(y0 + t * (y1 - y0), y1, span <= 1e-6);
+    let xs = array<f32, 4>(depths.x, depths.y, depths.z, depths.w);
+    let ys = array<f32, 4>(gains.x, gains.y, gains.z, gains.w);
+    if d <= xs[0] {
+        return ys[0];
+    }
+    for (var i = 0; i < 3; i += 1) {
+        if d < xs[i + 1] {
+            let span = xs[i + 1] - xs[i];
+            if span <= 1e-6 {
+                return ys[i + 1];
+            }
+            let t = (d - xs[i]) / span;
+            return ys[i] + t * (ys[i + 1] - ys[i]);
+        }
+    }
+    return ys[3];
 }
 
 // §4.6's grade: the BT.709 YCbCr construction — luma remapped onto
@@ -175,35 +174,24 @@ fn apply_grade(grade: vec3<f32>, c: vec3<f32>) -> vec3<f32> {
 
 fn ease_cubic(t: f32) -> f32 {
     // Cubic bezier with control points (0.61, 0.007) and (0.47, 0.99);
-    // x -> y by twelve bisection steps, unrolled and selected rather than
-    // looped and branched (see `blur_gain`).
-    var b = vec2<f32>(0.0, 1.0);
-    b = ease_bisect(b, t);
-    b = ease_bisect(b, t);
-    b = ease_bisect(b, t);
-    b = ease_bisect(b, t);
-    b = ease_bisect(b, t);
-    b = ease_bisect(b, t);
-    b = ease_bisect(b, t);
-    b = ease_bisect(b, t);
-    b = ease_bisect(b, t);
-    b = ease_bisect(b, t);
-    b = ease_bisect(b, t);
-    b = ease_bisect(b, t);
-    let s = 0.5 * (b.x + b.y);
+    // x -> y by bisection.
+    let p1 = vec2<f32>(0.60938, 0.00663);
+    let p2 = vec2<f32>(0.47124, 0.99115);
+    var lo = 0.0;
+    var hi = 1.0;
+    for (var i = 0; i < 12; i += 1) {
+        let mid = 0.5 * (lo + hi);
+        let u = 1.0 - mid;
+        let x = 3.0 * u * u * mid * p1.x + 3.0 * u * mid * mid * p2.x + mid * mid * mid;
+        if x < t {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    let s = 0.5 * (lo + hi);
     let u = 1.0 - s;
-    return 3.0 * u * u * s * EASE_P1.y + 3.0 * u * s * s * EASE_P2.y + s * s * s;
-}
-
-const EASE_P1: vec2<f32> = vec2<f32>(0.60938, 0.00663);
-const EASE_P2: vec2<f32> = vec2<f32>(0.47124, 0.99115);
-
-// One bisection step of `ease_cubic` on the bracket `b = (lo, hi)`.
-fn ease_bisect(b: vec2<f32>, t: f32) -> vec2<f32> {
-    let mid = 0.5 * (b.x + b.y);
-    let u = 1.0 - mid;
-    let x = 3.0 * u * u * mid * EASE_P1.x + 3.0 * u * mid * mid * EASE_P2.x + mid * mid * mid;
-    return select(vec2<f32>(b.x, mid), vec2<f32>(mid, b.y), x < t);
+    return 3.0 * u * u * s * p1.y + 3.0 * u * s * s * p2.y + s * s * s;
 }
 
 // The inscribed ellipse's normal at `pt`, like the standalone's field
@@ -354,26 +342,21 @@ fn highlight_light(d: f32, n: vec2<f32>, cov: f32, aperture: f32) -> vec4<f32> {
     // glow band
     let s2 = gsat(-d / band_h2);
     let band_glow = (1.0 - HL_INNER_FADE * s2) * (1.0 - s2) * cov;
-    // The two lights, written out rather than looped (see `blur_gain`).
-    let first = highlight_lobes(n, cs, cs2, HL_FIRST_BEARING);
-    let second = highlight_lobes(n, cs, cs2, HL_SECOND_BEARING);
-    let w1 = HL_FIRST_COLOUR.rgb * HL_FIRST_COLOUR.a * HL_FIRST_GAIN * 2.0;
-    let w2 = HL_SECOND_COLOUR.rgb * HL_SECOND_COLOUR.a * HL_SECOND_GAIN * 2.0;
-    let c_narrow = w1 * first.x + w2 * second.x;
-    let c_broad = (w1 * first.y + w2 * second.y) * HL_GLOW_GAIN;
+    let bearings = vec2<f32>(HL_FIRST_BEARING, HL_SECOND_BEARING);
+    let gains = vec2<f32>(HL_FIRST_GAIN, HL_SECOND_GAIN);
+    var c_narrow = vec3<f32>(0.0);
+    var c_broad = vec3<f32>(0.0);
+    for (var i = 0; i < 2; i += 1) {
+        let u_l = vec2<f32>(sin(bearings[i]), -cos(bearings[i]));
+        let q = gsat((dot(n, u_l) - cs) / (1.0 - cs));
+        let lobe = q / (1.0 + HL_KNEE * (1.0 - q));
+        let q2 = gsat((dot(n, u_l) - cs2) / (1.0 - cs2));
+        let lobe2 = q2 / (1.0 + HL_KNEE * (1.0 - q2));
+        let colour = select(HL_SECOND_COLOUR, HL_FIRST_COLOUR, i == 0);
+        c_narrow += colour.rgb * colour.a * gains[i] * 2.0 * lobe;
+        c_broad += colour.rgb * colour.a * gains[i] * HL_GLOW_GAIN * 2.0 * lobe2;
+    }
     return vec4<f32>(c_narrow * band_narrow + c_broad * band_glow, select(0.0, 1.0, d < 0.5));
-}
-
-// One light of `highlight_light` at `bearing`: its narrow lobe at the
-// aperture's cosine `cs` and its glow lobe at `cs2`.
-fn highlight_lobes(n: vec2<f32>, cs: f32, cs2: f32, bearing: f32) -> vec2<f32> {
-    let u_l = vec2<f32>(sin(bearing), -cos(bearing));
-    let q = gsat((dot(n, u_l) - cs) / (1.0 - cs));
-    let q2 = gsat((dot(n, u_l) - cs2) / (1.0 - cs2));
-    return vec2<f32>(
-        q / (1.0 + HL_KNEE * (1.0 - q)),
-        q2 / (1.0 + HL_KNEE * (1.0 - q2)),
-    );
 }
 
 // The highlight `light` (`highlight_light`) added to the accumulated
