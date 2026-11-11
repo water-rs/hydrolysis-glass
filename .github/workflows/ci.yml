@@ -1,8 +1,8 @@
 name: CI
 
-# Diagnostic only, never merged: the whole suite on Windows with the
-# engine shader written straight through, every test bounded at four
-# minutes.
+# Diagnostic only, never merged: the whole suite on Windows over the
+# pinned current WARP (water-rs/waterui#3093), with and without DXC
+# optimization, every test bounded at four minutes.
 
 on:
   pull_request:
@@ -22,21 +22,31 @@ env:
   RUST_LOG: "warn"
 
 jobs:
-  hang:
-    name: Windows suite
+  suite:
+    name: Windows suite / ${{ matrix.dxil }}
     runs-on: windows-latest
     timeout-minutes: 50
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - dxil: unoptimized
+            config: ""
+          - dxil: optimized
+            config: >-
+              --config profile.dev.package.wgpu-types.debug-assertions=false
+              --config profile.test.package.wgpu-types.debug-assertions=false
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - name: Install DirectX Shader Compiler
         uses: tracel-ai/github-actions/install-dxc@295f2fdbae5271f4f8ad56d634e4ff6a95daafc8
+      - name: Install current WARP
+        uses: water-rs/waterui/.github/actions/install-warp@dev
+        with:
+          into: |
+            target/debug/deps
+            target/debug
       - uses: Swatinem/rust-cache@v2
       - uses: taiki-e/install-action@nextest
-      # wgpu's instance takes `InstanceFlags::DEBUG` from `wgpu-types`'
-      # own `debug_assertions`, and that flag makes DXC skip optimization;
-      # turning only that crate's assertions off isolates the flag.
-      - run: >
-          cargo nextest run --locked --no-fail-fast
-          --config "profile.dev.package.wgpu-types.debug-assertions=false"
-          --config "profile.test.package.wgpu-types.debug-assertions=false"
+      - run: cargo nextest run --locked --no-fail-fast ${{ matrix.config }}
