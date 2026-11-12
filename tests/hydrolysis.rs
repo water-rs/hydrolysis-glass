@@ -165,11 +165,19 @@ fn kurbo_rect([x, y, w, h]: [f32; 4]) -> cherenkov_record::kurbo::Rect {
 /// channel at the worst pixel. The message names the worst pixel: a
 /// geometry mismatch lands there, on a silhouette edge, rather than in
 /// the mean.
+fn assert_agrees(label: &str, engine: &Image, reference: &Image) {
+    if let Err(message) = agreement(label, engine, reference) {
+        panic!("{message}");
+    }
+}
+
+/// [`assert_agrees`]'s comparison, with the verdict returned: `Err` names
+/// the worst pixel when `engine` is outside the tolerance of `reference`.
 #[allow(
     clippy::cast_possible_truncation,
     reason = "a pixel index inside a frame far below u32::MAX"
 )]
-fn assert_agrees(label: &str, engine: &Image, reference: &Image) {
+fn agreement(label: &str, engine: &Image, reference: &Image) -> Result<(), String> {
     assert_eq!(
         (engine.width, engine.height),
         (reference.width, reference.height),
@@ -202,13 +210,15 @@ fn assert_agrees(label: &str, engine: &Image, reference: &Image) {
         worst_at as u32 % engine.width,
         worst_at as u32 / engine.width,
     );
-    assert!(
-        mean < 0.02 && worst < 0.4,
-        "{label}: engine vs standalone mean |Δ| {mean}, worst {worst} at px ({wx}, {wy}) \
-         = engine {:?} vs standalone {:?}",
-        engine.pixels[worst_at],
-        reference.pixels[worst_at],
-    );
+    if mean < 0.02 && worst < 0.4 {
+        Ok(())
+    } else {
+        Err(format!(
+            "{label}: engine vs standalone mean |Δ| {mean}, worst {worst} at px ({wx}, {wy}) \
+             = engine {:?} vs standalone {:?}",
+            engine.pixels[worst_at], reference.pixels[worst_at],
+        ))
+    }
 }
 
 /// The two renderers evaluate the same material against the same
@@ -586,7 +596,7 @@ fn press_sequence() {
 
 /// Advances the mounted app to `t_ms` since the touch and exports that
 /// frame; the capturing pump itself takes the last frame of the interval.
-fn capture_at(app: &mut GlassApp, clock: &mut Duration, t_ms: u64, name: &str) {
+fn capture_at(app: &mut GlassApp, clock: &mut Duration, t_ms: u64, name: &str) -> Image {
     const FRAME: Duration = Duration::from_micros(16_667);
     let target = Duration::from_millis(t_ms);
     app.advance(target.saturating_sub(*clock + FRAME));
@@ -594,6 +604,7 @@ fn capture_at(app: &mut GlassApp, clock: &mut Duration, t_ms: u64, name: &str) {
     *clock = target;
     let path = image.save(name);
     assert!(path.is_file(), "{name}: PNG written");
+    image
 }
 
 /// §7, scene 8: the switch scene, the part a view tree can express through
@@ -877,19 +888,57 @@ fn slider_sequence() {
         move || absolute((backdrop_view(Backdrop::Black), slider_at(&shown, 400.0))),
         theme(Appearance::Dark),
     );
+    // The slider at rest at `v`: where the knob and the fill belong once the
+    // value has arrived there.
+    let at_rest = |v: f64| {
+        let shown = Binding::container(v);
+        GlassApp::mount(
+            move || absolute((backdrop_view(Backdrop::Black), slider_at(&shown, 400.0))),
+            theme(Appearance::Dark),
+        )
+        .snapshot()
+    };
+    let start = at_rest(0.2);
+    let end = at_rest(0.8);
     app.settle();
     value.set(0.8);
     let mut clock = Duration::ZERO;
-    for (t_ms, name) in [
+    let frames: Vec<(u64, Image)> = [
         (17, "t0000"),
         (50, "t0050"),
         (100, "t0100"),
         (200, "t0200"),
         (330, "t0330"),
         (600, "t0600"),
-    ] {
-        capture_at(&mut app, &mut clock, t_ms, &format!("slider_{name}"));
+    ]
+    .into_iter()
+    .map(|(t_ms, name)| {
+        (
+            t_ms,
+            capture_at(&mut app, &mut clock, t_ms, &format!("slider_{name}")),
+        )
+    })
+    .collect();
+    // The painted knob and fill follow the value (a look whose parts did
+    // not repaint holds every frame at the first one): no frame of the
+    // sequence is the slider at rest at 0.2, none before the last is it at
+    // rest at 0.8 (the spring is still within a pixel or two of its end at
+    // 0.6 s), and once the motion settles the slider is at rest at 0.8.
+    // (The first frame, one frame after the change, is the slider within a
+    // few points of rest at 0.2: inside the tolerance.)
+    for (t_ms, frame) in &frames[1..] {
+        assert!(
+            agreement("not at 0.2", frame, &start).is_err(),
+            "the frame at {t_ms} ms shows the slider still at 0.2"
+        );
     }
+    for (t_ms, frame) in &frames[..frames.len() - 1] {
+        assert!(
+            agreement("not yet at 0.8", frame, &end).is_err(),
+            "the frame at {t_ms} ms shows the slider already at 0.8"
+        );
+    }
+    assert_agrees("slider settled at 0.8", &app.snapshot(), &end);
 }
 
 /// The knob of a pressed slider is a glass lens (§8.3, Touch): a 300 pt
@@ -908,6 +957,87 @@ fn slider_lens_while_pressed() {
     app.advance(Duration::from_millis(600));
     let image = app.capture_now();
     assert!(image.save("slider_lens_pressed").is_file());
+}
+
+/// `image` reflected about its vertical centre line.
+fn flipped(image: &Image) -> Image {
+    let width = image.width as usize;
+    let pixels = image
+        .pixels
+        .chunks_exact(width)
+        .flat_map(|row| row.iter().rev().copied())
+        .collect();
+    Image {
+        width: image.width,
+        height: image.height,
+        pixels,
+    }
+}
+
+/// A right-to-left slider is the left-to-right slider reflected about the
+/// window's centre line: the fill grows from the right, the knob sits at
+/// `W − v·(W − 37)` and the held knob is still a glass lens (§8.3). The
+/// slider is 300 pt wide at x = 51 in the 402 pt window, so the frame is
+/// centred on the reflection axis, and the backdrop is reflected with it, so
+/// the left-to-right frame, flipped, is the frame the right-to-left slider
+/// must produce. The knob at 0.45 straddles the backdrop's seam, where a
+/// missing lens would show as a missing refraction.
+#[test]
+fn a_right_to_left_slider_is_the_mirror_of_a_left_to_right_one() {
+    use hydrolysis_glass::theme::slider::{KNOB_WIDTH, TRAVEL_INSET};
+    use waterui::layout::LayoutDirection;
+
+    const VALUE: f64 = 0.45;
+    const KNOB_Y: f32 = 415.5;
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "a distance of at most 300 pt, far inside f32"
+    )]
+    let along = VALUE.mul_add(300.0 - KNOB_WIDTH, TRAVEL_INSET) as f32;
+    let knob_x = 51.0 + along;
+    let window_width = SCENE_PT[0];
+
+    let held = |direction: LayoutDirection, backdrop: fn() -> AnyView, touch_x: f32| {
+        let value = Binding::container(VALUE);
+        let mut app = GlassApp::mount(
+            move || {
+                absolute((
+                    backdrop(),
+                    waterui::ViewExt::size(
+                        slider("Volume", &value).hide_label().with(direction),
+                        300.0,
+                        31.0,
+                    )
+                    .position_anchor(
+                        waterui::layout::UnitPoint::TOP_LEADING,
+                        51.0,
+                        400.0,
+                    ),
+                ))
+            },
+            theme(Appearance::Dark),
+        );
+        app.settle();
+        app.touch_down(touch_x, KNOB_Y);
+        app.advance(Duration::from_millis(600));
+        app.capture_now()
+    };
+
+    // Reflected, the blue | red backdrop reads red | blue, the split's own.
+    let reflected_split = || {
+        let red = Color::new(Srgb::new(SPLIT_RED[0], SPLIT_RED[1], SPLIT_RED[2]));
+        let blue = Color::new(Srgb::new(SPLIT_BLUE[0], SPLIT_BLUE[1], SPLIT_BLUE[2]));
+        AnyView::new(hstack((blue, red)).spacing(0.0))
+    };
+    let ltr = held(LayoutDirection::LeftToRight, reflected_split, knob_x);
+    let rtl = held(
+        LayoutDirection::RightToLeft,
+        || backdrop_view(Backdrop::Split),
+        window_width - knob_x,
+    );
+    flipped(&ltr).save("slider_lens_pressed_ltr_flipped");
+    rtl.save("slider_lens_pressed_rtl");
+    assert_agrees("right-to-left slider", &rtl, &flipped(&ltr));
 }
 
 /// A drag that begins on the knob moves the value by the touch's offset over
