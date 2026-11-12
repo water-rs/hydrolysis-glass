@@ -23,6 +23,23 @@ fn adapter_reports() {
     let h = Harness::new();
     assert_ne!(h.gpu().adapter_name, "");
     assert_ne!(h.gpu().backend, "");
+    // The image's system WARP misexecutes optimized DXIL and stalls the
+    // mounted tests (water-rs/waterui#3093). wgpu reports a NuGet WARP's
+    // version as 1.0.x and a system one's as 10.x (wgpu-hal's dx12
+    // adapter), so a suite that would run on the system one fails here
+    // instead of hanging.
+    if h.gpu().backend == "Dx12"
+        && h.gpu()
+            .adapter_name
+            .contains("Microsoft Basic Render Driver")
+    {
+        assert!(
+            h.gpu().driver.starts_with("1.0."),
+            "WARP {} is the system one, not the NuGet redistributable: \
+             stage d3d10warp.dll beside the test binaries",
+            h.gpu().driver,
+        );
+    }
 }
 
 #[test]
