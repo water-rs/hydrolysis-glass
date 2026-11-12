@@ -22,6 +22,8 @@ jobs:
   check:
     name: Check / ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    # A passing Windows run takes about 25 minutes.
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
