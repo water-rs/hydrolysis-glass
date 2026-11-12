@@ -231,19 +231,8 @@ impl Spring {
     /// The framework animation that plays this spring from the current
     /// value toward its target.
     ///
-    /// `Animation::spring` is normalised over its own fixed duration, so
-    /// the stiffness and damping handed to it are the spring's in that
-    /// time unit: `ω = ω0·T`, stiffness `ω²`, damping `2ζω`.
-    #[must_use]
-    pub fn animation(self) -> Animation {
-        let omega = self.omega0 * Animation::spring(1.0, 0.0).duration().as_secs_f32();
-        Animation::spring(omega * omega, 2.0 * self.zeta * omega)
-    }
-
-    /// The framework animation a look's [`Motion`](hydrolysis::theme::Motion)
-    /// runs this spring as: the engine integrates it in seconds, so the
-    /// stiffness and damping are the physical `ω0²` and `2ζω0`, with none of
-    /// [`Self::animation`]'s normalisation to the framework's fixed duration.
+    /// `Animation::spring` follows its step response in real seconds, so the
+    /// stiffness and damping are the physical `ω0²` and `2ζω0`.
     #[must_use]
     pub fn physical(self) -> Animation {
         Animation::spring(self.omega0 * self.omega0, 2.0 * self.zeta * self.omega0)
@@ -429,7 +418,7 @@ mod tests {
         reason = "the progress is a small multiple of 1, well inside f32"
     )]
     fn the_springs_reproduce_the_fitted_motion() {
-        let press = Spring::PRESS.animation();
+        let press = Spring::PRESS.physical();
         // From rest: peak 1.07 at 0.147 s, within 2 % of 1 after 0.23 s.
         near(
             press.progress(Duration::from_millis(147)) as f32,
@@ -437,7 +426,7 @@ mod tests {
             0.01,
         );
         near(press.progress(Duration::from_millis(230)) as f32, 1.0, 0.02);
-        let release = Spring::RELEASE.animation();
+        let release = Spring::RELEASE.physical();
         // From a settled press the release runs 1 -> 0: -0.27 at 0.215 s,
         // +0.07 at 0.43 s.
         near(

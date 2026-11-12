@@ -189,7 +189,7 @@ pub fn display_position(from: f32, to: f32, elapsed: Duration) -> f32 {
         clippy::cast_possible_truncation,
         reason = "the progress is within a small margin of 0..=1"
     )]
-    let progress = SELECTION.animation().progress(elapsed) as f32;
+    let progress = SELECTION.physical().progress(elapsed) as f32;
     (to - from).mul_add(progress, from)
 }
 
