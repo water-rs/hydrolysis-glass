@@ -34,8 +34,7 @@
 //!   [`MaterialGrouping::Union`] field: standalone members share the
 //!   standalone 8 pt smoothing, a container's members the 30 pt
 //!   container smoothing, carried onto the engine's quadratic smooth
-//!   minimum by [`SMOOTHING_TO_UNION_K`] so both renderers fuse the
-//!   same field. Members of one scope, canvas and class share one
+//!   minimum by [`union_blend`] so both renderers fuse the same field. Members of one scope, canvas and class share one
 //!   capture and one field; a single-member union degenerates to the
 //!   member's own field.
 
@@ -52,7 +51,7 @@ use cherenkov_record::{
 
 use crate::material::geometry::{
     CONTAINER_UNION_SMOOTHING, CONTINUOUS_EXPONENT, CornerCurve, Element, Rect,
-    SMOOTHING_TO_UNION_K, STANDALONE_UNION_SMOOTHING, Shape,
+    STANDALONE_UNION_SMOOTHING, Shape, union_blend,
 };
 use crate::material::recipe::{
     Grade, Highlight, Recipe, Tint, ambient_sigma, blur_read_reach, blur_sigma, haze_sigma,
@@ -139,16 +138,15 @@ fn shader_reach() -> f32 {
 /// member's field takes.
 ///
 /// The material's smoothing is [`CONTAINER_UNION_SMOOTHING`] /
-/// [`STANDALONE_UNION_SMOOTHING`]; [`SMOOTHING_TO_UNION_K`] carries it
-/// onto this family, so the engine's fused field has the standalone
-/// renderer's fillets rather than a second, looser union.
+/// [`STANDALONE_UNION_SMOOTHING`]; [`union_blend`] carries it onto the
+/// fold both renderers share, so the engine fuses the standalone
+/// renderer's field.
 const fn union_smoothing(container: bool) -> f32 {
-    let smoothing = if container {
+    union_blend(if container {
         CONTAINER_UNION_SMOOTHING
     } else {
         STANDALONE_UNION_SMOOTHING
-    };
-    smoothing * SMOOTHING_TO_UNION_K
+    })
 }
 
 /// The capture class an element records under: `container` selects the

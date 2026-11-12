@@ -31,7 +31,7 @@ pub const ATTRACTION_GAP_MARGIN: f32 = 6.0;
 /// **[chosen]**
 pub const ATTRACTION_GAP_FRACTION: f32 = 0.5;
 /// Factor by which a group's union smoothing grows while a member is
-/// grabbed (`τ` tracks drag state). **[chosen]**
+/// grabbed (the blend distance tracks drag state). **[chosen]**
 ///
 /// ×1.35 at full drag on the 30 pt container smoothing, which bridges the
 /// gap closed by an 8 pt pull across a 16 pt gap while the gap opening on

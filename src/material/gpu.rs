@@ -17,7 +17,7 @@
 //! math is defined on encoded values.
 
 use super::geometry::{
-    CONTINUOUS_EXPONENT, CornerCurve, Element, SMOOTHING_TO_TAU, STANDALONE_UNION_SMOOTHING,
+    CONTINUOUS_EXPONENT, CornerCurve, Element, STANDALONE_UNION_SMOOTHING, union_blend,
 };
 use super::recipe::{Recipe, blur_sigma, haze_sigma, sigma_reach};
 use bytemuck::{Pod, Zeroable};
@@ -1472,7 +1472,7 @@ impl GlassRenderer {
                     scene.size_pt[0],
                     scene.size_pt[1],
                     scene.px_per_pt,
-                    (group.smoothing * SMOOTHING_TO_TAU).max(1e-3),
+                    union_blend(group.smoothing),
                 ],
                 misc: [
                     elements.len() as f32,
