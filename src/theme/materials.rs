@@ -27,7 +27,9 @@
 //!   `class scale / recipe scale`, keeping each physical blur radius
 //!   the recipe's whatever step the member landed on. Members whose
 //!   recipes quantize to different steps belong to different classes and
-//!   cannot join one group — a contract limit, not a silent fallback.
+//!   cannot join one standalone group; inside a `.material_group()` the
+//!   container recipe ([`GlassContainer`], §5.6) resolves one class for
+//!   all members.
 //! - **Union.** Every glass class groups as a
 //!   [`MaterialGrouping::Union`] field: standalone members share the
 //!   standalone 8 pt smoothing, a container's members the 30 pt
@@ -37,12 +39,14 @@
 //!   capture and one field; a single-member union degenerates to the
 //!   member's own field.
 
+use core::cmp::Ordering;
+
 use cherenkov_record::kurbo::{Rect as KRect, RoundedRect, RoundedRectRadii};
 use cherenkov_record::{
     BackdropShaderSource, BlendSpace, CaptureClass, CaptureLevels, CapturePyramid, CaptureScale,
-    ContinuousRect, Fixed, Interpolation, LinearGradient, MaterialCapture, MaterialEffect,
-    MaterialGrouping, MaterialRegistry, MaterialShader, OuterExtent, Paint, Recorder, ShapeData,
-    UnionSmoothing,
+    ContainerRecipe, ContinuousRect, Fixed, GroupMember, Interpolation, LinearGradient,
+    MaterialCapture, MaterialEffect, MaterialGrouping, MaterialRegistry, MaterialShader,
+    OuterExtent, Paint, Recorder, ShapeData, UnionSmoothing,
 };
 
 use crate::material::geometry::{
@@ -195,6 +199,7 @@ fn shader_source() -> BackdropShaderSource {
 /// can feed back.
 pub fn register(registry: &mut MaterialRegistry) {
     registry.register_shader(GLASS_SHADER, shader_source());
+    registry.register_container_recipe(GLASS_SHADER, GlassContainer);
     for container in [false, true] {
         let base = if container {
             CONTAINER_CLASS_BASE
@@ -364,6 +369,129 @@ pub fn effect(element: &Element) -> MaterialEffect {
     )
 }
 
+/// Positions in [`effect`]'s uniform table that the container recipe
+/// reads or rewrites; `effect_slots_match_the_packing_table` pins them to
+/// the table.
+mod slot {
+    use core::ops::Range;
+
+    /// Primary lobe shift, pt (§5.6: the smallest member's).
+    pub const PRIMARY_SHIFT: usize = 0;
+    /// Primary lobe depth, pt (§5.6: the smallest member's).
+    pub const PRIMARY_DEPTH: usize = 1;
+    /// First blur depth `d0` (§5.6: the smallest member's).
+    pub const BLUR_DEPTH_0: usize = 8;
+    /// The recipe's continuous capture scale (§5.6: the largest member's).
+    pub const CAPTURE_SCALE: usize = 22;
+    /// Tint colour and alpha (§2: the member's own).
+    pub const TINT: Range<usize> = 52..56;
+    /// The member's rect `x, y, w, h` (§2: the member's own field).
+    pub const RECT: Range<usize> = 58..62;
+    /// Ellipse bend (§2: the member's own).
+    pub const ELLIPSE_BEND: usize = 62;
+    /// Whether the member is tinted (§2: the member's own).
+    pub const TINT_FLAG: usize = 63;
+}
+
+/// The glass material's container recipe (§5.6), registered for
+/// [`GLASS_SHADER`].
+///
+/// Each member's [`GroupMember::effect`] is its standalone recipe packed
+/// by [`effect`], and its `m` is the short side of its current shape's
+/// bounds (`Rect::m`, what the recipes key on). From them the container
+/// takes the capture scale and every other §5.1 value from the member
+/// with the largest `m`, and the primary shift, primary depth and first
+/// blur depth from the member with the smallest; each member keeps its
+/// own rect, tint and ellipse bend (§2). **[measured; the tint and the
+/// ellipse bend are chosen]**
+///
+/// Members of equal `m` may carry different recipes (families the
+/// specification has not observed mixed); the one whose uniforms order
+/// first, element by element, is the smallest of them and the one that
+/// orders last the largest, so the choice never depends on the members'
+/// order. **[chosen]**
+#[derive(Clone, Copy, Debug, Default)]
+pub struct GlassContainer;
+
+impl GlassContainer {
+    /// `m` of a member: the short side of its shape's bounds.
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a short side in pt is far inside f32"
+    )]
+    fn m(member: &GroupMember<'_>) -> f32 {
+        let bounds = member.shape.bounds();
+        bounds.width().min(bounds.height()) as f32
+    }
+
+    /// Orders members by `m`, then by their recipes' uniforms.
+    fn order(a: &GroupMember<'_>, b: &GroupMember<'_>) -> Ordering {
+        Self::m(a).total_cmp(&Self::m(b)).then_with(|| {
+            a.effect
+                .uniforms()
+                .iter()
+                .zip(b.effect.uniforms())
+                .map(|(x, y)| x.total_cmp(y))
+                .find(|ordering| ordering.is_ne())
+                .unwrap_or(Ordering::Equal)
+        })
+    }
+
+    /// The members with the largest and the smallest `m`.
+    ///
+    /// # Panics
+    /// On no members: a group has at least one.
+    fn extremes<'a, 'm>(
+        members: &'a [GroupMember<'m>],
+    ) -> (&'a GroupMember<'m>, &'a GroupMember<'m>) {
+        let largest = members.iter().max_by(|a, b| Self::order(a, b));
+        let smallest = members.iter().min_by(|a, b| Self::order(a, b));
+        largest
+            .zip(smallest)
+            .expect("a container group has at least one member")
+    }
+}
+
+impl ContainerRecipe for GlassContainer {
+    fn capture(&self, members: &[GroupMember<'_>]) -> CaptureClass {
+        let (largest, _) = Self::extremes(members);
+        capture_class(true, largest.effect.uniforms()[slot::CAPTURE_SCALE])
+    }
+
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "a rect in pt is far inside f32"
+    )]
+    fn effects(&self, members: &[GroupMember<'_>]) -> Vec<MaterialEffect> {
+        if members.is_empty() {
+            return Vec::new();
+        }
+        let (largest, smallest) = Self::extremes(members);
+        let mut shared = largest.effect.uniforms().to_vec();
+        for index in [slot::PRIMARY_SHIFT, slot::PRIMARY_DEPTH, slot::BLUR_DEPTH_0] {
+            shared[index] = smallest.effect.uniforms()[index];
+        }
+        members
+            .iter()
+            .map(|member| {
+                let own = member.effect.uniforms();
+                let mut uniforms = shared.clone();
+                for range in [slot::TINT, slot::ELLIPSE_BEND..slot::TINT_FLAG + 1] {
+                    uniforms[range.clone()].copy_from_slice(&own[range]);
+                }
+                let bounds = member.shape.bounds();
+                uniforms[slot::RECT].copy_from_slice(&[
+                    bounds.x0 as f32,
+                    bounds.y0 as f32,
+                    bounds.width() as f32,
+                    bounds.height() as f32,
+                ]);
+                MaterialEffect::new(uniforms).outer(largest.effect.outer_extent())
+            })
+            .collect()
+    }
+}
+
 /// Asserts the recipe fields `material_engine.wgsl` folds into constants:
 /// the border correction's measured row and the highlight's shared
 /// terms. A recipe that moved them needs the packing widened, not a
@@ -438,4 +566,202 @@ pub fn wash_paint(wash: &Wash) -> Paint {
         gradient = gradient.stop(t, working(white));
     }
     Paint::Linear(gradient)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::material::geometry::Rect;
+    use crate::material::recipe::{Appearance, Family, Tint, Translucency};
+
+    /// A regular dark element of `shape`, as the theme builds one.
+    fn element(shape: Shape) -> Element {
+        Element {
+            shape,
+            recipe: Recipe::for_size(
+                shape.m(),
+                Family::Regular,
+                Appearance::Dark,
+                Translucency::default(),
+            ),
+        }
+    }
+
+    fn circle() -> Element {
+        element(Shape::circle(30.0, 30.0, 30.0))
+    }
+
+    fn card() -> Element {
+        element(Shape::rounded_rect(
+            Rect::new(-120.0, 100.0, 300.0, 200.33),
+            40.0,
+            CornerCurve::Continuous,
+        ))
+    }
+
+    /// The members' recordings: shape and standalone effect.
+    fn recorded(elements: &[&Element]) -> Vec<(ShapeData, MaterialEffect)> {
+        elements
+            .iter()
+            .map(|e| (shape_data(&e.shape), effect(e)))
+            .collect()
+    }
+
+    fn members(recorded: &[(ShapeData, MaterialEffect)]) -> Vec<GroupMember<'_>> {
+        recorded
+            .iter()
+            .map(|(shape, effect)| GroupMember {
+                shape,
+                capture: CaptureClass::new(STANDALONE_CLASS_BASE),
+                effect,
+            })
+            .collect()
+    }
+
+    /// `element` drawn with the container recipe of `largest` and `smallest`
+    /// and its own tint and ellipse bend, through the standalone packing.
+    fn in_container(element: &Element, largest: &Element, smallest: &Element) -> MaterialEffect {
+        effect(&Element {
+            shape: element.shape,
+            recipe: Recipe {
+                tint: element.recipe.tint,
+                ellipse_bend: element.recipe.ellipse_bend,
+                ..Recipe::for_container(&largest.recipe, &smallest.recipe)
+            },
+        })
+    }
+
+    /// Both methods give the reversed result for the reversed members.
+    fn assert_order_independent(elements: &[&Element]) {
+        let forward = recorded(elements);
+        let backward: Vec<_> = forward.iter().rev().cloned().collect();
+        let (forward, backward) = (members(&forward), members(&backward));
+        assert_eq!(
+            GlassContainer.capture(&forward),
+            GlassContainer.capture(&backward)
+        );
+        let mut reversed = GlassContainer.effects(&backward);
+        reversed.reverse();
+        assert_eq!(GlassContainer.effects(&forward), reversed);
+    }
+
+    #[test]
+    fn effect_slots_match_the_packing_table() {
+        let mut e = card();
+        e.recipe = e.recipe.with_tint(Tint::flat([0.1, 0.2, 0.3], 0.4));
+        let effect = effect(&e);
+        let u = effect.uniforms();
+        let r = &e.recipe;
+        assert_eq!(u[slot::PRIMARY_SHIFT], r.primary_shift);
+        assert_eq!(u[slot::PRIMARY_DEPTH], r.primary_depth);
+        assert_eq!(u[slot::BLUR_DEPTH_0], r.blur_depths[0]);
+        assert_eq!(u[slot::CAPTURE_SCALE], r.capture_scale);
+        assert_eq!(u[slot::TINT], [0.1, 0.2, 0.3, 0.4]);
+        let rect = e.shape.rect;
+        assert_eq!(u[slot::RECT], [rect.x, rect.y, rect.w, rect.h]);
+        assert_eq!(u[slot::ELLIPSE_BEND], r.ellipse_bend);
+        assert_eq!(u[slot::TINT_FLAG], 1.0);
+    }
+
+    #[test]
+    fn a_mixed_pair_takes_the_largest_recipe_and_the_smallest_primary_lobe() {
+        let (circle, card) = (circle(), card());
+        assert!(card.recipe.capture_scale < circle.recipe.capture_scale);
+        let recorded = recorded(&[&circle, &card]);
+        let members = members(&recorded);
+        let effects = GlassContainer.effects(&members);
+
+        // The card's capture scale (0.25), in the container's class.
+        assert_eq!(
+            GlassContainer.capture(&members),
+            capture_class(true, card.recipe.capture_scale)
+        );
+        // Both members carry the circle's primary lobe (−30, 15) and blur
+        // depth 0, and the card's every other value.
+        for (own, shared) in [&circle, &card].into_iter().zip(&effects) {
+            let u = shared.uniforms();
+            assert_eq!(u[slot::PRIMARY_SHIFT], -30.0);
+            assert_eq!(u[slot::PRIMARY_DEPTH], 15.0);
+            assert_eq!(u[slot::BLUR_DEPTH_0], circle.recipe.blur_depths[0]);
+            assert_eq!(u[slot::CAPTURE_SCALE], card.recipe.capture_scale);
+            assert_eq!(u[slot::BLUR_DEPTH_0 + 1], card.recipe.blur_depths[1]);
+            assert_eq!(u[12], card.recipe.blur_gains[0]);
+            assert_eq!(u[48], card.recipe.cast_density);
+            assert_eq!(shared.outer_extent(), effect(&card).outer_extent());
+            // Per member: its own rect.
+            let rect = own.shape.rect;
+            assert_eq!(u[slot::RECT], [rect.x, rect.y, rect.w, rect.h]);
+        }
+        // The same terms the standalone renderer's `Recipe::for_container`
+        // gives, packed by the standalone packing.
+        assert_eq!(effects[0], in_container(&circle, &card, &circle));
+        assert_eq!(effects[1], in_container(&card, &card, &circle));
+    }
+
+    #[test]
+    fn a_member_keeps_its_own_tint_and_ellipse_bend() {
+        let mut tinted = circle();
+        tinted.recipe = tinted.recipe.with_tint(Tint::flat([0.9, 0.5, 0.1], 0.7));
+        let mut card = card();
+        card.recipe.ellipse_bend = 0.5;
+        let recorded = recorded(&[&tinted, &card]);
+        let effects = GlassContainer.effects(&members(&recorded));
+        assert_eq!(effects[0], in_container(&tinted, &card, &tinted));
+        assert_eq!(effects[1], in_container(&card, &card, &tinted));
+        assert_eq!(effects[0].uniforms()[slot::TINT_FLAG], 1.0);
+        assert_eq!(effects[1].uniforms()[slot::TINT_FLAG], 0.0);
+        assert_eq!(effects[0].uniforms()[slot::ELLIPSE_BEND], 0.0);
+        assert_eq!(effects[1].uniforms()[slot::ELLIPSE_BEND], 0.5);
+    }
+
+    #[test]
+    fn equal_members_reproduce_the_standalone_recipe() {
+        let a = element(Shape::capsule(Rect::new(0.0, 0.0, 100.0, 40.0)));
+        let b = element(Shape::capsule(Rect::new(0.0, 56.0, 100.0, 40.0)));
+        let recorded = recorded(&[&a, &b]);
+        let members = members(&recorded);
+        assert_eq!(
+            GlassContainer.effects(&members),
+            vec![effect(&a), effect(&b)]
+        );
+        assert_eq!(
+            GlassContainer.capture(&members),
+            capture_class(true, a.recipe.capture_scale)
+        );
+    }
+
+    #[test]
+    fn the_members_order_changes_nothing() {
+        let capsule = element(Shape::capsule(Rect::new(0.0, 0.0, 160.0, 80.0)));
+        assert_order_independent(&[&circle(), &card(), &capsule]);
+    }
+
+    #[test]
+    fn equal_sizes_with_different_recipes_resolve_by_content_not_order() {
+        let regular = element(Shape::circle(30.0, 30.0, 30.0));
+        let clear = Element {
+            shape: Shape::circle(100.0, 30.0, 30.0),
+            recipe: Recipe::for_size(
+                60.0,
+                Family::Clear,
+                Appearance::Dark,
+                Translucency::default(),
+            ),
+        };
+        assert_order_independent(&[&regular, &clear]);
+    }
+
+    #[test]
+    fn the_registry_holds_the_container_recipe_and_the_class_it_names() {
+        let mut registry = MaterialRegistry::new();
+        register(&mut registry);
+        let (circle, card) = (circle(), card());
+        let recorded = recorded(&[&circle, &card]);
+        let class = registry
+            .container_recipe(GLASS_SHADER)
+            .expect("registered")
+            .capture(&members(&recorded));
+        let capture = registry.capture_class(class).expect("a registered class");
+        assert!(matches!(capture.grouping, MaterialGrouping::Union { .. }));
+    }
 }
