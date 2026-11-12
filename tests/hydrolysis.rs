@@ -40,15 +40,18 @@ mod common;
 
 use common::*;
 use hydrolysis::theme::WidgetInteractionState;
-use hydrolysis_glass::material::geometry::CONTAINER_UNION_SMOOTHING;
+use hydrolysis_glass::material::geometry::{CONTAINER_UNION_SMOOTHING, Shape};
+use hydrolysis_glass::material::recipe::{Family, Translucency};
 use hydrolysis_glass::{Appearance, Element, Glass, Group, Scene};
 use nami::Signal as _;
 use std::time::Duration;
+use waterui::background::Glass as WaterGlass;
 use waterui::color::Srgb;
 use waterui::form::picker::picker;
 use waterui::layout::stack::hstack;
 use waterui::layout::{PositionExt as _, absolute};
 use waterui::navigation::{NavigationView, Tab, Tabs};
+use waterui::shape::{Circle, FixedRoundedRectangle};
 use waterui::text::text;
 use waterui::{AnyView, Binding, Color, View, ViewExt as _};
 use waterui_controls::slider::{Slider, slider};
@@ -165,6 +168,13 @@ fn kurbo_rect([x, y, w, h]: [f32; 4]) -> cherenkov_record::kurbo::Rect {
 /// channel at the worst pixel. The message names the worst pixel: a
 /// geometry mismatch lands there, on a silhouette edge, rather than in
 /// the mean.
+///
+/// Coverage carries none of that noise: both paths composite over an
+/// opaque backdrop, so both frames are opaque everywhere and their alpha
+/// agrees to the engine readback's 8-bit step. A member that leaves the
+/// frame translucent — its shadow or exterior scaling the backdrop's
+/// coverage rather than darkening it — fails here, however few pixels
+/// it touches.
 fn assert_agrees(label: &str, engine: &Image, reference: &Image) {
     if let Err(message) = agreement(label, engine, reference) {
         panic!("{message}");
@@ -178,6 +188,8 @@ fn assert_agrees(label: &str, engine: &Image, reference: &Image) {
     reason = "a pixel index inside a frame far below u32::MAX"
 )]
 fn agreement(label: &str, engine: &Image, reference: &Image) -> Result<(), String> {
+    /// The engine frame's alpha resolution: it is read back as RGBA8.
+    const ALPHA_STEP: f32 = 1.0 / 255.0;
     assert_eq!(
         (engine.width, engine.height),
         (reference.width, reference.height),
@@ -185,6 +197,8 @@ fn agreement(label: &str, engine: &Image, reference: &Image) -> Result<(), Strin
     );
     let mut worst = 0.0f32;
     let mut worst_at = 0usize;
+    let mut worst_alpha = 0.0f32;
+    let mut worst_alpha_at = 0usize;
     let mut sum = 0.0f64;
     for (i, (p, q)) in engine
         .pixels
@@ -200,6 +214,21 @@ fn agreement(label: &str, engine: &Image, reference: &Image) -> Result<(), Strin
             }
             sum += f64::from(d);
         }
+        let d = (p[3] - q[3]).abs();
+        if d > worst_alpha {
+            worst_alpha = d;
+            worst_alpha_at = i;
+        }
+    }
+    if worst_alpha > ALPHA_STEP {
+        return Err(format!(
+            "{label}: engine vs standalone coverage differs by {worst_alpha} at px ({}, {}) \
+             = engine {:?} vs standalone {:?}",
+            worst_alpha_at as u32 % engine.width,
+            worst_alpha_at as u32 / engine.width,
+            engine.pixels[worst_alpha_at],
+            reference.pixels[worst_alpha_at],
+        ));
     }
     #[expect(
         clippy::cast_precision_loss,
@@ -242,6 +271,44 @@ fn a_mounted_glass_button_matches_the_standalone_surface() {
         );
         let reference = standalone.render(Backdrop::White, &scene);
         reference.save(&format!("button_{name}_standalone"));
+        assert_agrees(name, &engine, &reference);
+    }
+}
+
+/// A large glass button across the black | white edge agrees with the
+/// standalone render of its surface: the edge is where the capture's blur
+/// and the refraction lobe show, and the black half is where anything the
+/// member writes outside its silhouette shows.
+#[test]
+fn a_mounted_glass_button_matches_the_standalone_surface_across_the_edge() {
+    /// The label block, pt: with a large button's insets the frame is
+    /// 200 × 70, centred on the scene's edge at x = 201.
+    const LABEL: [f32; 2] = [160.0, 40.0];
+    const AT: [f32; 2] = [101.0, 400.0];
+    let rect = [AT[0], AT[1], LABEL[0] + 40.0, LABEL[1] + 30.0];
+    let mut standalone = Harness::new();
+    for (appearance, name) in [(Appearance::Dark, "dark"), (Appearance::Light, "light")] {
+        let mut app = GlassApp::mount(
+            move || {
+                absolute((
+                    backdrop_view(Backdrop::Edge),
+                    blank_button(ControlSize::Large, LABEL, AT[0], AT[1]),
+                ))
+            },
+            theme(appearance),
+        );
+        let engine = app.export(&format!("button_edge_{name}_hydrolysis"));
+        let scene = Scene::new(
+            SCENE_PT,
+            PX_PER_PT,
+            vec![Group::single(sized_button_element(
+                appearance,
+                ControlSize::Large,
+                rect,
+            ))],
+        );
+        let reference = standalone.render(Backdrop::Edge, &scene);
+        reference.save(&format!("button_edge_{name}_standalone"));
         assert_agrees(name, &engine, &reference);
     }
 }
@@ -399,6 +466,99 @@ fn a_material_group_of_mixed_sizes_renders_with_the_container_recipe() {
     let reference = Harness::new().render(Backdrop::Split, &scene);
     reference.save("material_group_mixed_dark_standalone");
     assert_agrees("mixed-size material group", &grouped, &reference);
+}
+
+/// `glass` behind empty content of `frame`'s size, placed at its top-left
+/// corner `(x, y)`: the glass is the only thing drawn, on the content's
+/// frame. The background goes on the sized content, before the placement,
+/// which would otherwise be the frame the glass fills.
+fn glass_behind_blank(glass: WaterGlass, [x, y, w, h]: [f32; 4]) -> impl View {
+    Color::new(Srgb::new(0.0, 0.0, 0.0))
+        .opacity(0.0)
+        .width(w)
+        .height(h)
+        .background(glass)
+        .position_anchor(waterui::layout::UnitPoint::TOP_LEADING, x, y)
+}
+
+/// A `.background(Glass::regular())` behind content agrees with the
+/// standalone render of the regular capsule on the content's frame.
+#[test]
+fn a_glass_background_matches_the_standalone_element() {
+    const FRAME: [f32; 4] = [101.0, 400.0, 200.0, 80.0];
+    let mut app = GlassApp::mount(
+        || {
+            absolute((
+                backdrop_view(Backdrop::Edge),
+                glass_behind_blank(WaterGlass::regular(), FRAME),
+            ))
+        },
+        Glass::dark(),
+    );
+    let engine = app.export("glass_background_dark_hydrolysis");
+    let scene = Scene::new(
+        SCENE_PT,
+        PX_PER_PT,
+        vec![Group::single(element(
+            capsule(FRAME[0], FRAME[1], FRAME[2], FRAME[3]),
+            Family::Regular,
+            Appearance::Dark,
+            Translucency::default(),
+        ))],
+    );
+    let reference = Harness::new().render(Backdrop::Edge, &scene);
+    reference.save("glass_background_dark_standalone");
+    assert_agrees("glass background", &engine, &reference);
+}
+
+/// §5.6's verification scene mounted through Hydrolysis: a 60 pt circle and
+/// the 300 × 200.33 pt card (radius 40), 40 pt below it, each a
+/// `.background(Glass…)` over empty content in one `.material_group()`,
+/// agrees with the standalone renderer's container of the same two
+/// elements.
+#[test]
+fn a_glass_background_container_matches_the_standalone_scene() {
+    const CARD: [f32; 4] = [51.0, 120.0, 300.0, 200.33];
+    const CIRCLE: [f32; 4] = [171.0, 360.33, 60.0, 60.0];
+    let mut app = GlassApp::mount(
+        || {
+            absolute((
+                backdrop_view(Backdrop::Edge),
+                absolute((
+                    glass_behind_blank(
+                        WaterGlass::regular().shape(FixedRoundedRectangle::new(40.0)),
+                        CARD,
+                    ),
+                    glass_behind_blank(WaterGlass::regular().shape(Circle), CIRCLE),
+                ))
+                .material_group(),
+            ))
+        },
+        Glass::dark(),
+    );
+    let engine = app.export("glass_background_container_dark_hydrolysis");
+    let regular = |shape| {
+        element(
+            shape,
+            Family::Regular,
+            Appearance::Dark,
+            Translucency::default(),
+        )
+    };
+    let scene = Scene::new(
+        SCENE_PT,
+        PX_PER_PT,
+        vec![Group::container(
+            vec![
+                regular(rounded(CARD[0], CARD[1], CARD[2], CARD[3], 40.0)),
+                regular(Shape::circle(CIRCLE[0] + 30.0, CIRCLE[1] + 30.0, 30.0)),
+            ],
+            CONTAINER_UNION_SMOOTHING,
+        )],
+    );
+    let reference = Harness::new().render(Backdrop::Edge, &scene);
+    reference.save("glass_background_container_dark_standalone");
+    assert_agrees("glass background container", &engine, &reference);
 }
 
 /// A member's outer extent carries what it paints outside its

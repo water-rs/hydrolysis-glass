@@ -132,6 +132,26 @@ const fn tinted(mut e: Element, rgb: [f32; 3], alpha: f32) -> Element {
     e
 }
 
+/// The recipe of a glass background of `family` laid out at `frame`.
+///
+/// The family's recipe at the frame's `m`, with the §4.13 tint at its
+/// declared opacity when there is one. Interaction does not change it
+/// (§5.5).
+#[must_use]
+pub fn background_recipe(
+    palette: &Palette,
+    frame: KRect,
+    family: Family,
+    tint: Option<Rgba>,
+    translucency: Translucency,
+) -> Recipe {
+    let bounds = rect(frame);
+    let recipe = Recipe::for_element(bounds.w, bounds.h, family, palette.appearance, translucency);
+    tint.map_or(recipe, |[red, green, blue, opacity]| {
+        recipe.with_tint(Tint::declared([red, green, blue], opacity))
+    })
+}
+
 /// What a button is made of (§8.1).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct ButtonSpec {

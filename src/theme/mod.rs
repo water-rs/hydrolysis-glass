@@ -31,7 +31,7 @@ use cherenkov_record::kurbo::{Point, Rect, RoundedRectRadii};
 use cherenkov_record::{MaterialRegistry, Paint, Recorder};
 use hydrolysis::Style;
 use hydrolysis::theme::{
-    BadgeMetrics, ButtonLook, ButtonSpec, CheckboxLook, DividerMetrics, IndicatorLook,
+    BadgeMetrics, ButtonLook, ButtonSpec, CheckboxLook, DividerMetrics, GlassLook, IndicatorLook,
     InputFieldMetrics, InteractionMotion, LinearProgressLook, ListDividerMetrics, ListMetrics,
     ListRowMetrics, ListSectionMetrics, ListTrailingControlMetrics, NavigationMetrics,
     NavigationMotion, PickerMetrics, ProgressSpec, RadioIndicatorState, RadioSelectionMotion,
@@ -315,6 +315,14 @@ impl WidgetTheme for Glass {
 
     fn register_backdrop_shaders(&self, registry: &mut MaterialRegistry) {
         materials::register(registry);
+    }
+
+    fn glass_background(
+        &self,
+        glass: &waterui::background::Glass,
+        env: &Environment,
+    ) -> Option<GlassLook> {
+        Some(looks::glass_background(self, glass, env))
     }
 
     fn button(&self, spec: &ButtonSpec, env: &Environment) -> ButtonLook {

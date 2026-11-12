@@ -10,12 +10,14 @@
 //! capture classes [`materials::register`](super::materials::register)
 //! declares.
 
+mod background;
 mod button;
 mod progress;
 mod slider;
 mod stepper;
 mod toggle;
 
+pub(super) use background::look as glass_background;
 pub(super) use button::look as button;
 pub(super) use progress::{circular as circular_progress, linear as linear_progress, loading};
 pub(super) use slider::look as slider;
