@@ -455,8 +455,11 @@ fn material_fragment(v: FullscreenOut) -> @location(0) vec4<f32> {
         let res = mix(shadow, interior, cov);
         outc = res + backdrop * (1.0 - res.a);
     } else {
-        // Outside the silhouette: the cast shadow over the backdrop.
-        outc = backdrop * (1.0 - cast_alpha);
+        // Outside the silhouette: the cast shadow, premultiplied black at
+        // `cast_alpha`, source-over the backdrop — it darkens the colour
+        // and keeps the backdrop's coverage.
+        let shadow = vec4<f32>(0.0, 0.0, 0.0, cast_alpha);
+        outc = shadow + backdrop * (1.0 - cast_alpha);
     }
     return outc;
 }

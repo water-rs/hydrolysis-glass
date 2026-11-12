@@ -167,11 +167,20 @@ fn kurbo_rect([x, y, w, h]: [f32; 4]) -> cherenkov_record::kurbo::Rect {
 /// channel at the worst pixel. The message names the worst pixel: a
 /// geometry mismatch lands there, on a silhouette edge, rather than in
 /// the mean.
+///
+/// Coverage carries none of that noise: both paths composite over an
+/// opaque backdrop, so both frames are opaque everywhere and their alpha
+/// agrees to the engine readback's 8-bit step. A member that leaves the
+/// frame translucent — its shadow or exterior scaling the backdrop's
+/// coverage rather than darkening it — fails here, however few pixels
+/// it touches.
 #[allow(
     clippy::cast_possible_truncation,
     reason = "a pixel index inside a frame far below u32::MAX"
 )]
 fn assert_agrees(label: &str, engine: &Image, reference: &Image) {
+    /// The engine frame's alpha resolution: it is read back as RGBA8.
+    const ALPHA_STEP: f32 = 1.0 / 255.0;
     assert_eq!(
         (engine.width, engine.height),
         (reference.width, reference.height),
@@ -179,6 +188,8 @@ fn assert_agrees(label: &str, engine: &Image, reference: &Image) {
     );
     let mut worst = 0.0f32;
     let mut worst_at = 0usize;
+    let mut worst_alpha = 0.0f32;
+    let mut worst_alpha_at = 0usize;
     let mut sum = 0.0f64;
     for (i, (p, q)) in engine
         .pixels
@@ -194,7 +205,21 @@ fn assert_agrees(label: &str, engine: &Image, reference: &Image) {
             }
             sum += f64::from(d);
         }
+        let d = (p[3] - q[3]).abs();
+        if d > worst_alpha {
+            worst_alpha = d;
+            worst_alpha_at = i;
+        }
     }
+    assert!(
+        worst_alpha <= ALPHA_STEP,
+        "{label}: engine vs standalone coverage differs by {worst_alpha} at px ({}, {}) \
+         = engine {:?} vs standalone {:?}",
+        worst_alpha_at as u32 % engine.width,
+        worst_alpha_at as u32 / engine.width,
+        engine.pixels[worst_alpha_at],
+        reference.pixels[worst_alpha_at],
+    );
     #[expect(
         clippy::cast_precision_loss,
         reason = "a channel count well inside f64's exact integer range"
@@ -234,6 +259,44 @@ fn a_mounted_glass_button_matches_the_standalone_surface() {
         );
         let reference = standalone.render(Backdrop::White, &scene);
         reference.save(&format!("button_{name}_standalone"));
+        assert_agrees(name, &engine, &reference);
+    }
+}
+
+/// A large glass button across the black | white edge agrees with the
+/// standalone render of its surface: the edge is where the capture's blur
+/// and the refraction lobe show, and the black half is where anything the
+/// member writes outside its silhouette shows.
+#[test]
+fn a_mounted_glass_button_matches_the_standalone_surface_across_the_edge() {
+    /// The label block, pt: with a large button's insets the frame is
+    /// 200 × 70, centred on the scene's edge at x = 201.
+    const LABEL: [f32; 2] = [160.0, 40.0];
+    const AT: [f32; 2] = [101.0, 400.0];
+    let rect = [AT[0], AT[1], LABEL[0] + 40.0, LABEL[1] + 30.0];
+    let mut standalone = Harness::new();
+    for (appearance, name) in [(Appearance::Dark, "dark"), (Appearance::Light, "light")] {
+        let mut app = GlassApp::mount(
+            move || {
+                absolute((
+                    backdrop_view(Backdrop::Edge),
+                    blank_button(ControlSize::Large, LABEL, AT[0], AT[1]),
+                ))
+            },
+            theme(appearance),
+        );
+        let engine = app.export(&format!("button_edge_{name}_hydrolysis"));
+        let scene = Scene::new(
+            SCENE_PT,
+            PX_PER_PT,
+            vec![Group::single(sized_button_element(
+                appearance,
+                ControlSize::Large,
+                rect,
+            ))],
+        );
+        let reference = standalone.render(Backdrop::Edge, &scene);
+        reference.save(&format!("button_edge_{name}_standalone"));
         assert_agrees(name, &engine, &reference);
     }
 }
