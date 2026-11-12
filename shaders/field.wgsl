@@ -1,7 +1,7 @@
 // The field pass: rasterizes one group's shared signed-distance field.
 //
 // Output per pixel: (distance pt, normal.x, normal.y, owner index).
-// The fused distance is the log-sum-exp smooth minimum over the members;
+// The fused distance is the quadratic smooth minimum over the members;
 // the owner is the member with the smallest raw distance; the normal is the
 // fused field's gradient bent toward the owner's inscribed-ellipse normal by
 // its recipe's ellipse bend.
@@ -13,7 +13,7 @@ struct FieldElement {
 }
 
 struct FieldUniforms {
-    // scene width/height in pt, px per pt, tau (pt)
+    // scene width/height in pt, px per pt, union blend distance k (pt)
     scene: vec4<f32>,
     // member count, continuous exponent, region origin px
     misc: vec4<f32>,
@@ -52,30 +52,44 @@ struct Fused {
     owner: u32,
 }
 
+// Whether member `j` at distance `d` sorts after `(after_d, after_j)`:
+// ascending distance, exact ties in member order.
+fn sorts_after(d: f32, j: i32, after_d: f32, after_j: i32) -> bool {
+    return d > after_d || (d == after_d && j > after_j);
+}
+
 fn fused_distance(p: vec2<f32>) -> Fused {
-    let count = u32(field.misc.x);
-    let tau = max(field.scene.w, 1e-3);
-    var min_d = 1e30;
-    var owner = 0u;
-    for (var j = 0u; j < count; j += 1u) {
-        let d = shape_distance(members[j], p);
-        if d < min_d {
-            min_d = d;
-            owner = j;
-        }
-    }
+    let count = i32(field.misc.x);
+    let k = field.scene.w;
+    // Every member, folded in ascending distance order with the quadratic
+    // smooth minimum, as `UnionField` does: the fold is not associative,
+    // so the order is part of the field. Each step selects the next member
+    // in that order, so no member count bounds the pass.
     var out: Fused;
-    out.owner = owner;
-    if count <= 1u {
-        out.distance = max(min_d, NEGATIVE_SENTINEL);
-        return out;
+    var fused = 0.0;
+    var last_d = -3.4e38;
+    var last_j = -1;
+    for (var step = 0; step < count; step += 1) {
+        var next_d = 3.4e38;
+        var next_j = count;
+        for (var j = 0; j < count; j += 1) {
+            let d = shape_distance(members[j], p);
+            if sorts_after(d, j, last_d, last_j) && sorts_after(next_d, next_j, d, j) {
+                next_d = d;
+                next_j = j;
+            }
+        }
+        if step == 0 {
+            fused = next_d;
+            out.owner = u32(next_j);
+        } else {
+            let h = max(k - abs(fused - next_d), 0.0) / k;
+            fused = min(fused, next_d) - h * h * k * 0.25;
+        }
+        last_d = next_d;
+        last_j = next_j;
     }
-    var sum = 0.0;
-    for (var j = 0u; j < count; j += 1u) {
-        let d = shape_distance(members[j], p);
-        sum += exp((min_d - d) / tau);
-    }
-    out.distance = max(min_d - tau * log(sum), NEGATIVE_SENTINEL);
+    out.distance = max(fused, NEGATIVE_SENTINEL);
     return out;
 }
 

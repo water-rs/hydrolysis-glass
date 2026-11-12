@@ -1,0 +1,5 @@
+[profile.default]
+# The slowest test in a passing Windows run takes about 90 s on WARP; one
+# still running after ten minutes has hung, so nextest terminates it and
+# names it instead of holding the runner.
+slow-timeout = { period = "60s", terminate-after = 10 }
