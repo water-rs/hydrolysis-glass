@@ -424,21 +424,29 @@ mod tests {
     }
 
     #[test]
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "the progress is a small multiple of 1, well inside f32"
+    )]
     fn the_springs_reproduce_the_fitted_motion() {
         let press = Spring::PRESS.animation();
         // From rest: peak 1.07 at 0.147 s, within 2 % of 1 after 0.23 s.
-        near(press.progress(Duration::from_millis(147)), 1.07, 0.01);
-        near(press.progress(Duration::from_millis(230)), 1.0, 0.02);
+        near(
+            press.progress(Duration::from_millis(147)) as f32,
+            1.07,
+            0.01,
+        );
+        near(press.progress(Duration::from_millis(230)) as f32, 1.0, 0.02);
         let release = Spring::RELEASE.animation();
         // From a settled press the release runs 1 -> 0: -0.27 at 0.215 s,
         // +0.07 at 0.43 s.
         near(
-            1.0 - release.progress(Duration::from_millis(215)),
+            1.0 - release.progress(Duration::from_millis(215)) as f32,
             -0.27,
             0.01,
         );
         near(
-            1.0 - release.progress(Duration::from_millis(430)),
+            1.0 - release.progress(Duration::from_millis(430)) as f32,
             0.07,
             0.01,
         );

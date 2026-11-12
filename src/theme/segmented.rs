@@ -185,7 +185,12 @@ pub const SELECTION: Spring = Spring {
 /// `from` to index `to` with the thumb at rest.
 #[must_use]
 pub fn display_position(from: f32, to: f32, elapsed: Duration) -> f32 {
-    (to - from).mul_add(SELECTION.animation().progress(elapsed), from)
+    #[expect(
+        clippy::cast_possible_truncation,
+        reason = "the progress is within a small margin of 0..=1"
+    )]
+    let progress = SELECTION.animation().progress(elapsed) as f32;
+    (to - from).mul_add(progress, from)
 }
 
 /// How far a touch may move and still be a tap, pt **[chosen]**.
