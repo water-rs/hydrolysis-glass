@@ -33,8 +33,9 @@
 //! - **Union.** Every glass class groups as a
 //!   [`MaterialGrouping::Union`] field: standalone members share the
 //!   standalone 8 pt smoothing, a container's members the 30 pt
-//!   container smoothing, carried onto the engine's quadratic smooth
-//!   minimum by [`union_blend`] so both renderers fuse the same field. Members of one scope, canvas and class share one
+//!   container smoothing, as the blend distance of the engine's
+//!   quadratic smooth minimum, which the standalone renderer's field
+//!   folds with too. Members of one scope, canvas and class share one
 //!   capture and one field; a single-member union degenerates to the
 //!   member's own field.
 
@@ -51,7 +52,7 @@ use cherenkov_record::{
 
 use crate::material::geometry::{
     CONTAINER_UNION_SMOOTHING, CONTINUOUS_EXPONENT, CornerCurve, Element, Rect,
-    STANDALONE_UNION_SMOOTHING, Shape, union_blend,
+    STANDALONE_UNION_SMOOTHING, Shape,
 };
 use crate::material::recipe::{
     Grade, Highlight, Recipe, Tint, ambient_sigma, blur_read_reach, blur_sigma, haze_sigma,
@@ -137,16 +138,16 @@ fn shader_reach() -> f32 {
 /// container's member fields with, pt, and the one every standalone
 /// member's field takes.
 ///
-/// The material's smoothing is [`CONTAINER_UNION_SMOOTHING`] /
-/// [`STANDALONE_UNION_SMOOTHING`]; [`union_blend`] carries it onto the
-/// fold both renderers share, so the engine fuses the standalone
+/// It is the material's smoothing, [`CONTAINER_UNION_SMOOTHING`] or
+/// [`STANDALONE_UNION_SMOOTHING`]: the fold both renderers share blends
+/// over exactly that distance, so the engine fuses the standalone
 /// renderer's field.
 const fn union_smoothing(container: bool) -> f32 {
-    union_blend(if container {
+    if container {
         CONTAINER_UNION_SMOOTHING
     } else {
         STANDALONE_UNION_SMOOTHING
-    })
+    }
 }
 
 /// The capture class an element records under: `container` selects the

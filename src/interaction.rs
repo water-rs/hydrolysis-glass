@@ -33,10 +33,11 @@ pub const ATTRACTION_GAP_FRACTION: f32 = 0.5;
 /// Factor by which a group's union smoothing grows while a member is
 /// grabbed (the blend distance tracks drag state). **[chosen]**
 ///
-/// ×1.35 at full drag on the 30 pt container smoothing, which bridges the
-/// gap closed by an 8 pt pull across a 16 pt gap while the gap opening on
-/// the far side (≈19 pt after the neighbour's lean) stays open.
-pub const DRAG_SMOOTHING_GAIN: f32 = 0.35;
+/// ×1.2 at full drag on the 30 pt container smoothing: a blend distance
+/// of 36 pt bridges gaps up to half of it, so the gap closed by an 8 pt
+/// pull across a 16 pt gap fuses while the gap opening on the far side
+/// (≈19 pt after the neighbour's lean) stays open by about 0.5 pt.
+pub const DRAG_SMOOTHING_GAIN: f32 = 0.2;
 
 /// Exponential approach of `current` towards `target` by `rate`.
 #[must_use]

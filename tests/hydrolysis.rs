@@ -245,7 +245,7 @@ fn a_mounted_glass_button_matches_the_standalone_surface() {
 fn a_material_group_fuses_neighbouring_chrome() {
     const AT: [f32; 2] = [101.0, 400.0];
     /// The gap between the two buttons, pt. The container union blends
-    /// over `k = 0.9 · 30 pt`, which bridges a gap of up to 13.5 pt, so a
+    /// over `k = 30 pt`, which bridges a gap of up to `k/2` = 15 pt, so a
     /// 2 pt gap puts the midpoint inside the fused field and outside
     /// both silhouettes.
     const GAP: f32 = 2.0;

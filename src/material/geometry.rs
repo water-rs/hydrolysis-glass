@@ -39,30 +39,6 @@ pub const STANDALONE_UNION_SMOOTHING: f32 = 8.0;
 /// Union smoothing of a container's shared field, pt. **[measured]**
 pub const CONTAINER_UNION_SMOOTHING: f32 = 30.0;
 
-/// Fraction of the union smoothing that is the blend distance `k` of the
-/// union's quadratic smooth minimum.
-///
-/// At `0.9` the 30 pt container smoothing bridges the zero contour
-/// 2.19 pt into each of the §7 container's 16 pt gaps while their
-/// midpoints stay 1.25 pt outside, so the gaps stay open at rest (§2).
-/// **[chosen]**
-pub const SMOOTHING_TO_UNION_K: f32 = 0.9;
-
-/// The blend distance `k` of the union's quadratic smooth minimum for a
-/// union smoothing, pt.
-///
-/// A group's members fuse as `m ← min(m, d) − h²·k/4` with
-/// `h = max(k − |m − d|, 0)/k`, folded over the member distances in
-/// ascending order — the family Cherenkov's `BackdropUnion` folds a
-/// group's fields with, so the standalone renderer and the engine fuse
-/// one field. Its blend is confined to where two members' fields lie
-/// within `k` of each other (§2: the members are joined over the
-/// smoothing distance); beyond that the union is the members' own fields.
-#[must_use]
-pub const fn union_blend(smoothing: f32) -> f32 {
-    smoothing * SMOOTHING_TO_UNION_K
-}
-
 /// An axis-aligned rectangle in points.
 #[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub struct Rect {
@@ -282,8 +258,16 @@ pub struct FieldSample {
 }
 
 /// A shared field over a group's member elements: the quadratic smooth
-/// minimum of the members' fields ([`union_blend`]) with ownership from
-/// the nearest member.
+/// minimum of the members' fields with ownership from the nearest member.
+///
+/// The members fuse as `m ← min(m, d) − h²·k/4` with
+/// `h = max(k − |m − d|, 0)/k`, folded over the member distances in
+/// ascending order — the family Cherenkov's `BackdropUnion` folds a
+/// group's fields with, so the standalone renderer and the engine fuse
+/// one field. The blend distance `k` is the union smoothing itself: the
+/// blend is confined to where two members' fields lie within it of each
+/// other (§2: the members are joined over the smoothing distance), and
+/// beyond it the union is the members' own fields.
 #[derive(Clone, Debug, PartialEq)]
 pub struct UnionField<'a> {
     members: &'a [Element],
@@ -302,11 +286,11 @@ impl<'a> UnionField<'a> {
         Self { members, smoothing }
     }
 
-    /// The blend distance `k` of the field's smooth minimum, pt
-    /// ([`union_blend`]).
+    /// The blend distance `k` of the field's smooth minimum: its union
+    /// smoothing, pt.
     #[must_use]
     pub const fn blend(&self) -> f32 {
-        union_blend(self.smoothing)
+        self.smoothing
     }
 
     /// Fused distance at `p`, clamped below at the negative sentinel.
@@ -450,7 +434,7 @@ mod tests {
             member(Shape::circle(182.0, 30.0, 30.0)),
         ];
         let field = UnionField::new(&circles, CONTAINER_UNION_SMOOTHING);
-        assert!((field.blend() - 27.0).abs() < 1e-5);
+        assert!((field.blend() - CONTAINER_UNION_SMOOTHING).abs() < 1e-5);
         // Midpoint of the 16 pt gap: still outside (positive) but pulled in.
         let mid = field.distance([68.0, 30.0]);
         let raw = circles[0].shape.distance([68.0, 30.0]);
