@@ -31,12 +31,13 @@ pub const ATTRACTION_GAP_MARGIN: f32 = 6.0;
 /// **[chosen]**
 pub const ATTRACTION_GAP_FRACTION: f32 = 0.5;
 /// Factor by which a group's union smoothing grows while a member is
-/// grabbed (`τ` tracks drag state). **[chosen]**
+/// grabbed (the blend distance tracks drag state). **[chosen]**
 ///
-/// ×1.35 at full drag on the 30 pt container smoothing, which bridges the
-/// gap closed by an 8 pt pull across a 16 pt gap while the gap opening on
-/// the far side (≈19 pt after the neighbour's lean) stays open.
-pub const DRAG_SMOOTHING_GAIN: f32 = 0.35;
+/// ×1.2 at full drag on the 30 pt container smoothing: a blend distance
+/// of 36 pt bridges gaps up to half of it, so the gap closed by an 8 pt
+/// pull across a 16 pt gap fuses while the gap opening on the far side
+/// (≈19 pt after the neighbour's lean) stays open by about 0.5 pt.
+pub const DRAG_SMOOTHING_GAIN: f32 = 0.2;
 
 /// Exponential approach of `current` towards `target` by `rate`.
 #[must_use]
@@ -381,8 +382,14 @@ mod tests {
         // The gap cap keeps neighbours from closing more than half the gap.
         let gap_right = 16.0 - 8.0; // the pull closed 8 of the 16 pt gap
         assert!(-right[0] <= 0.5 * (gap_right - 6.0) + 1e-3, "{right:?}");
-        // Smoothing grows while grabbed.
-        assert!(g.effective_smoothing() > CONTAINER_UNION_SMOOTHING * 1.3);
+        // Smoothing grows while grabbed: by settling, at least 85% of the
+        // way to its full-drag gain.
+        assert!(
+            g.effective_smoothing()
+                > CONTAINER_UNION_SMOOTHING * DRAG_SMOOTHING_GAIN.mul_add(0.85, 1.0),
+            "{}",
+            g.effective_smoothing()
+        );
         // Release: everything returns.
         g.members[1].controls.drag.set(None);
         g.settle(1e-4, 400);

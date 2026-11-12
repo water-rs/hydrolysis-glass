@@ -39,24 +39,6 @@ pub const STANDALONE_UNION_SMOOTHING: f32 = 8.0;
 /// Union smoothing of a container's shared field, pt. **[measured]**
 pub const CONTAINER_UNION_SMOOTHING: f32 = 30.0;
 
-/// Fraction of the union smoothing used as the log-sum-exp temperature τ,
-/// chosen so 30 pt of smoothing gives the τ ≈ 9 pt fitted to the
-/// container's fillets. **[chosen]**
-pub const SMOOTHING_TO_TAU: f32 = 0.3;
-
-/// Fraction of the union smoothing that is the blend distance `k` of a
-/// quadratic smooth minimum, the family Cherenkov's `BackdropUnion`
-/// folds a group's member fields with.
-///
-/// The fused field is the material's, not a renderer's: both unions must
-/// put the same fillet in the same place. A quadratic smooth minimum
-/// blends over a finite `k`, a log-sum-exp over all distances at the
-/// rate τ, so `k` is fitted rather than equal to the smoothing — at
-/// `k = 3τ` the two zero contours coincide across the §7 container's
-/// 16 pt gaps (both bridge in by 2.18 pt), which is `0.9` of the
-/// smoothing at [`SMOOTHING_TO_TAU`]. **[fitted]**
-pub const SMOOTHING_TO_UNION_K: f32 = 3.0 * SMOOTHING_TO_TAU;
-
 /// An axis-aligned rectangle in points.
 #[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub struct Rect {
@@ -275,8 +257,17 @@ pub struct FieldSample {
     pub owner: usize,
 }
 
-/// A shared field over a group's member elements: the log-sum-exp smooth
+/// A shared field over a group's member elements: the quadratic smooth
 /// minimum of the members' fields with ownership from the nearest member.
+///
+/// The members fuse as `m ← min(m, d) − h²·k/4` with
+/// `h = max(k − |m − d|, 0)/k`, folded over the member distances in
+/// ascending order — the family Cherenkov's `BackdropUnion` folds a
+/// group's fields with, so the standalone renderer and the engine fuse
+/// one field. The blend distance `k` is the union smoothing itself: the
+/// blend is confined to where two members' fields lie within it of each
+/// other (§2: the members are joined over the smoothing distance), and
+/// beyond it the union is the members' own fields.
 #[derive(Clone, Debug, PartialEq)]
 pub struct UnionField<'a> {
     members: &'a [Element],
@@ -295,10 +286,11 @@ impl<'a> UnionField<'a> {
         Self { members, smoothing }
     }
 
-    /// The log-sum-exp temperature τ.
+    /// The blend distance `k` of the field's smooth minimum: its union
+    /// smoothing, pt.
     #[must_use]
-    pub fn tau(&self) -> f32 {
-        (self.smoothing * SMOOTHING_TO_TAU).max(1e-3)
+    pub const fn blend(&self) -> f32 {
+        self.smoothing
     }
 
     /// Fused distance at `p`, clamped below at the negative sentinel.
@@ -308,27 +300,24 @@ impl<'a> UnionField<'a> {
     }
 
     fn distance_and_owner(&self, p: [f32; 2]) -> (f32, usize) {
-        let tau = self.tau();
-        // Two passes over the whole slice, as `field.wgsl` does: every
-        // member contributes, however many there are.
-        let mut min_d = f32::INFINITY;
-        let mut owner = 0;
-        for (j, member) in self.members.iter().enumerate() {
-            let d = member.shape.distance(p);
-            if d < min_d {
-                min_d = d;
-                owner = j;
-            }
-        }
-        if self.members.len() == 1 {
-            return (min_d.max(NEGATIVE_SENTINEL), owner);
-        }
-        let sum: f32 = self
+        let k = self.blend();
+        // Every member, however many, folded in ascending distance order
+        // with exact ties in member order, as `field.wgsl` does: the
+        // quadratic smooth minimum is not associative, so the order is
+        // part of the field.
+        let mut order: Vec<(f32, usize)> = self
             .members
             .iter()
-            .map(|member| ((min_d - member.shape.distance(p)) / tau).exp())
-            .sum();
-        (tau.mul_add(-sum.ln(), min_d).max(NEGATIVE_SENTINEL), owner)
+            .enumerate()
+            .map(|(j, member)| (member.shape.distance(p), j))
+            .collect();
+        order.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let (first, owner) = order[0];
+        let fused = order[1..].iter().fold(first, |m, &(d, _)| {
+            let h = (k - (m - d).abs()).max(0.0) / k;
+            (h * h * k).mul_add(-0.25, m.min(d))
+        });
+        (fused.max(NEGATIVE_SENTINEL), owner)
     }
 
     /// Distance, normal and owner at `p`.
@@ -445,7 +434,7 @@ mod tests {
             member(Shape::circle(182.0, 30.0, 30.0)),
         ];
         let field = UnionField::new(&circles, CONTAINER_UNION_SMOOTHING);
-        assert!((field.tau() - 9.0).abs() < 1e-5);
+        assert!((field.blend() - CONTAINER_UNION_SMOOTHING).abs() < 1e-5);
         // Midpoint of the 16 pt gap: still outside (positive) but pulled in.
         let mid = field.distance([68.0, 30.0]);
         let raw = circles[0].shape.distance([68.0, 30.0]);
@@ -456,9 +445,18 @@ mod tests {
         );
         // Ownership follows the nearest member.
         assert_eq!(field.sample([100.0, 30.0]).owner, 1);
-        // Deep inside a member the union equals that member's own field to within τ·ln(count) tails.
-        let inside = field.distance([30.0, 30.0]);
-        assert!((inside - circles[0].shape.distance([30.0, 30.0])).abs() < 0.01);
+        // Wherever no neighbour's field comes within `k` of a member's,
+        // the union is that member's own field: deep inside it, and on
+        // its silhouette away from the gap, which the union leaves where
+        // the member's own field puts it.
+        for p in [[30.0, 30.0], [0.0, 30.0]] {
+            let own = circles[0].shape.distance(p);
+            assert!(
+                (field.distance(p) - own).abs() < 1e-5,
+                "the union is the member's own field at {p:?}: {} vs {own}",
+                field.distance(p),
+            );
+        }
     }
 
     #[test]

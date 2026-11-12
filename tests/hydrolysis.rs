@@ -40,7 +40,7 @@ mod common;
 
 use common::*;
 use hydrolysis::theme::WidgetInteractionState;
-use hydrolysis_glass::material::geometry::STANDALONE_UNION_SMOOTHING;
+use hydrolysis_glass::material::geometry::CONTAINER_UNION_SMOOTHING;
 use hydrolysis_glass::{Appearance, Element, Glass, Group, Scene};
 use nami::Signal as _;
 use std::time::Duration;
@@ -51,7 +51,7 @@ use waterui::layout::{PositionExt as _, absolute};
 use waterui::navigation::{NavigationView, Tab, Tabs};
 use waterui::text::text;
 use waterui::{AnyView, Binding, Color, View, ViewExt as _};
-use waterui_controls::{ButtonStyle, ControlSize, button::button, toggle::toggle};
+use waterui_controls::{ButtonStyle, ControlSize, Label, button::button, toggle::toggle};
 
 /// The control size every button in this file takes: the size
 /// `draw_button_chrome` resolves the surface at, so the standalone
@@ -238,14 +238,14 @@ fn a_mounted_glass_button_matches_the_standalone_surface() {
 /// `.material_group()` fuses what it holds: two glass buttons under one
 /// group share a capture and a union field, so the frame agrees with the
 /// standalone render of the same two elements as one union at the
-/// standalone smoothing. The same pair outside a group are two solo
+/// container smoothing. The same pair outside a group are two solo
 /// members, each its own field — the gap between them reads differently,
 /// which is what the grouping is for.
 #[test]
 fn a_material_group_fuses_neighbouring_chrome() {
     const AT: [f32; 2] = [101.0, 400.0];
-    /// The gap between the two buttons, pt. The standalone union blends
-    /// over `k = 0.9 · 8 pt`, which bridges a gap of up to 3.6 pt, so a
+    /// The gap between the two buttons, pt. The container union blends
+    /// over `k = 30 pt`, which bridges a gap of up to `k/2` = 15 pt, so a
     /// 2 pt gap puts the midpoint inside the fused field and outside
     /// both silhouettes.
     const GAP: f32 = 2.0;
@@ -280,7 +280,7 @@ fn a_material_group_fuses_neighbouring_chrome() {
                 button_element(Appearance::Dark, first),
                 button_element(Appearance::Dark, second),
             ],
-            STANDALONE_UNION_SMOOTHING,
+            CONTAINER_UNION_SMOOTHING,
         )],
     );
     let reference = Harness::new().render(Backdrop::White, &fused);
@@ -301,6 +301,93 @@ fn a_material_group_fuses_neighbouring_chrome() {
         "the group's union field covers the {GAP} pt gap the solo members leave \
          (fused {fused_px:?} against solo {solo_px:?})",
     );
+}
+
+/// A glass button of `size` whose label is a transparent `label` pt
+/// block, so the frame is the label plus the size's insets and nothing
+/// else draws over the chrome, with its top-left corner at `(x, y)`.
+fn blank_button(size: ControlSize, label: [f32; 2], x: f32, y: f32) -> impl View {
+    button(Label::new("", move || {
+        Color::new(Srgb::new(0.0, 0.0, 0.0))
+            .opacity(0.0)
+            .width(label[0])
+            .height(label[1])
+    }))
+    .style(ButtonStyle::Glass)
+    .size(size)
+    .position_anchor(waterui::layout::UnitPoint::TOP_LEADING, x, y)
+}
+
+/// The surface the theme places for a glass button of `size` laid out at
+/// `rect`.
+fn sized_button_element(appearance: Appearance, size: ControlSize, rect: [f32; 4]) -> Element {
+    theme(appearance)
+        .button_surface(
+            kurbo_rect(rect),
+            ButtonStyle::Glass,
+            size,
+            WidgetInteractionState::NONE,
+        )
+        .expect("a glass button carries a surface")
+        .element
+}
+
+/// A container whose members differ in size renders with one recipe
+/// (§5.6): two glass buttons of different sizes under one
+/// `.material_group()` take the larger's capture and recipe values and
+/// the smaller's primary lobe, so the frame agrees with the standalone
+/// renderer's container of the same two elements.
+#[test]
+fn a_material_group_of_mixed_sizes_renders_with_the_container_recipe() {
+    /// The label block both buttons carry, pt: a regular button's frame
+    /// is this plus `24 × 14`, a large one's plus `40 × 30`.
+    const LABEL: [f32; 2] = [60.0, 20.33];
+    const GAP: f32 = 16.0;
+    const AT: [f32; 2] = [101.0, 400.0];
+    let regular = [AT[0], AT[1], LABEL[0] + 24.0, LABEL[1] + 14.0];
+    let large = [
+        regular[0] + regular[2] + GAP,
+        AT[1],
+        LABEL[0] + 40.0,
+        LABEL[1] + 30.0,
+    ];
+    let small_element = sized_button_element(Appearance::Dark, ControlSize::Medium, regular);
+    let large_element = sized_button_element(Appearance::Dark, ControlSize::Large, large);
+    // The premise: the two standalone recipes differ in the terms the
+    // container takes from the smallest member.
+    assert!(
+        large_element.recipe.primary_shift < small_element.recipe.primary_shift,
+        "the larger button's standalone primary shift ({}) is deeper than the smaller's ({})",
+        large_element.recipe.primary_shift,
+        small_element.recipe.primary_shift,
+    );
+
+    let mut grouped = GlassApp::mount(
+        move || {
+            absolute((
+                backdrop_view(Backdrop::Split),
+                absolute((
+                    blank_button(ControlSize::Medium, LABEL, regular[0], regular[1]),
+                    blank_button(ControlSize::Large, LABEL, large[0], large[1]),
+                ))
+                .material_group(),
+            ))
+        },
+        Glass::dark(),
+    );
+    let grouped = grouped.export("material_group_mixed_dark_hydrolysis");
+
+    let scene = Scene::new(
+        SCENE_PT,
+        PX_PER_PT,
+        vec![Group::container(
+            vec![small_element, large_element],
+            CONTAINER_UNION_SMOOTHING,
+        )],
+    );
+    let reference = Harness::new().render(Backdrop::Split, &scene);
+    reference.save("material_group_mixed_dark_standalone");
+    assert_agrees("mixed-size material group", &grouped, &reference);
 }
 
 /// A member's outer extent carries what it paints outside its

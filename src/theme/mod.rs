@@ -284,12 +284,12 @@ impl WidgetTheme for Glass {
             // The glass button's press progress is the newest press wave's
             // opacity, so the wave's fade-in and fade-out are the press
             // and release springs of §8.1, and a release starts at once.
-            press_fade_in: button::Spring::PRESS.animation(),
-            press_fade_out: button::Spring::RELEASE.animation(),
+            press_fade_in: button::Spring::PRESS.physical(),
+            press_fade_out: button::Spring::RELEASE.physical(),
             press_grow: Animation::ease_out(PRESS_DURATION),
             // `press_progress` drives the physical shape morph; the press
             // spring is the contract's one animation for both directions.
-            press_shape: button::Spring::PRESS.animation(),
+            press_shape: button::Spring::PRESS.physical(),
             minimum_press_duration: Duration::ZERO,
             touch_delay: Duration::ZERO,
         }
