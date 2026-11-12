@@ -779,6 +779,23 @@ mod tests {
         })
     }
 
+    /// Two effects equal to within a thousandth of a point or of a unit.
+    ///
+    /// The container recipe takes a member's rect from its live shape's
+    /// bounds, which the shape stores in f32 and so may differ from the
+    /// element's own rect by an f32 rounding (200.33002 against 200.33).
+    /// 1e-3 is about thirty f32 ulps at 200 and a thousandth of a point,
+    /// far below a visible difference.
+    fn assert_effects_close(actual: &MaterialEffect, expected: &MaterialEffect) {
+        const TOLERANCE: f32 = 1e-3;
+        assert_eq!(actual.outer_extent(), expected.outer_extent());
+        let (actual, expected) = (actual.uniforms(), expected.uniforms());
+        assert_eq!(actual.len(), expected.len());
+        for (i, (a, e)) in actual.iter().zip(expected).enumerate() {
+            assert!((a - e).abs() <= TOLERANCE, "uniform {i}: {a} vs {e}");
+        }
+    }
+
     /// Both methods give the reversed result for the reversed members.
     fn assert_order_independent(elements: &[&Element]) {
         let forward = recorded(elements);
@@ -845,12 +862,20 @@ mod tests {
             assert_eq!(r.cast_density, card.recipe.cast_density);
             assert_eq!(shared.outer_extent(), effect(&card).outer_extent());
             // Per member: its own rect.
-            assert_eq!(rect, own.shape.rect);
+            let close = |a: f32, b: f32| (a - b).abs() <= 1e-3;
+            assert!(
+                close(rect.x, own.shape.rect.x)
+                    && close(rect.y, own.shape.rect.y)
+                    && close(rect.w, own.shape.rect.w)
+                    && close(rect.h, own.shape.rect.h),
+                "{rect:?} vs {:?}",
+                own.shape.rect
+            );
         }
         // The same terms the standalone renderer's `Recipe::for_container`
         // gives, packed by the standalone packing.
-        assert_eq!(effects[0], in_container(&circle, &card, &circle));
-        assert_eq!(effects[1], in_container(&card, &card, &circle));
+        assert_effects_close(&effects[0], &in_container(&circle, &card, &circle));
+        assert_effects_close(&effects[1], &in_container(&card, &card, &circle));
     }
 
     #[test]
@@ -861,8 +886,8 @@ mod tests {
         card.recipe.ellipse_bend = 0.5;
         let recorded = recorded(&[&tinted, &card]);
         let effects = GlassContainer.effects(&members(&recorded));
-        assert_eq!(effects[0], in_container(&tinted, &card, &tinted));
-        assert_eq!(effects[1], in_container(&card, &card, &tinted));
+        assert_effects_close(&effects[0], &in_container(&tinted, &card, &tinted));
+        assert_effects_close(&effects[1], &in_container(&card, &card, &tinted));
         let [first, second] = [&effects[0], &effects[1]].map(|e| unpack(e).0);
         assert_eq!(Tint::flag(first.tint), 2.0);
         assert_eq!(second.tint, None);
