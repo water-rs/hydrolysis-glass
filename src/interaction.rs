@@ -382,8 +382,14 @@ mod tests {
         // The gap cap keeps neighbours from closing more than half the gap.
         let gap_right = 16.0 - 8.0; // the pull closed 8 of the 16 pt gap
         assert!(-right[0] <= 0.5 * (gap_right - 6.0) + 1e-3, "{right:?}");
-        // Smoothing grows while grabbed.
-        assert!(g.effective_smoothing() > CONTAINER_UNION_SMOOTHING * 1.3);
+        // Smoothing grows while grabbed: by settling, at least 85% of the
+        // way to its full-drag gain.
+        assert!(
+            g.effective_smoothing()
+                > CONTAINER_UNION_SMOOTHING * DRAG_SMOOTHING_GAIN.mul_add(0.85, 1.0),
+            "{}",
+            g.effective_smoothing()
+        );
         // Release: everything returns.
         g.members[1].controls.drag.set(None);
         g.settle(1e-4, 400);
