@@ -43,8 +43,9 @@ use hydrolysis::theme::WidgetInteractionState;
 use hydrolysis_glass::material::geometry::{CONTAINER_UNION_SMOOTHING, Shape};
 use hydrolysis_glass::material::recipe::{Family, Translucency};
 use hydrolysis_glass::{Appearance, Element, Glass, Group, Scene};
-use nami::Signal as _;
+use nami::{CustomBinding, Signal};
 use std::time::Duration;
+use waterui::animation::{Animation, NoAnimation};
 use waterui::background::Glass as WaterGlass;
 use waterui::color::Srgb;
 use waterui::form::picker::picker;
@@ -770,16 +771,34 @@ fn capture_at(app: &mut GlassApp, clock: &mut Duration, t_ms: u64, name: &str) -
 /// §7, scene 8: the switch scene, the part a view tree can express through
 /// the theme's hooks. Over black, grey 0.5 and white in both appearances:
 /// an off and an on switch, a disabled off and a disabled on switch, and a
-/// "Label" switch 300 pt wide. The tinted switches need a tint the
-/// `WidgetTheme` toggle hooks do not carry.
+/// "Label" switch 300 pt wide, and a red-tinted on, a red-tinted off and a
+/// blue-tinted on switch.
 #[test]
 fn switch_scene() {
     for backdrop in [Backdrop::Black, Backdrop::Grey, Backdrop::White] {
         for (appearance, name) in [(Appearance::Dark, "dark"), (Appearance::Light, "light")] {
+            let tinted = |on: bool, tint: [f32; 4], x: f32| {
+                toggle("", &Binding::bool(on))
+                    .switch()
+                    .hide_label()
+                    .tint(srgb(tint))
+                    .position_anchor(waterui::layout::UnitPoint::TOP_LEADING, x, 400.0)
+            };
             let mut app = GlassApp::mount(
                 move || {
                     absolute((
                         backdrop_view(backdrop),
+                        tinted(
+                            true,
+                            hydrolysis_glass::theme::slider::red_tint(appearance),
+                            60.0,
+                        ),
+                        tinted(
+                            false,
+                            hydrolysis_glass::theme::slider::red_tint(appearance),
+                            140.0,
+                        ),
+                        tinted(true, blue_tint(appearance), 220.0),
                         toggle("", &Binding::bool(false))
                             .switch()
                             .hide_label()
@@ -847,6 +866,348 @@ fn toggle_sequence() {
     value.set(false);
     capture_at(&mut app, &mut clock, 1100, "toggle_t1100");
     capture_at(&mut app, &mut clock, 1500, "toggle_t1500");
+}
+
+/// `rgba` as an sRGB colour, for a `.tint(...)`.
+fn srgb(rgba: [f32; 4]) -> Color {
+    Color::new(Srgb::new(rgba[0], rgba[1], rgba[2]))
+}
+
+/// The blue the §8.2 scene tints a switch with: (0, 145, 255) in dark
+/// appearance and (0, 136, 255) in light.
+const fn blue_tint(appearance: Appearance) -> [f32; 4] {
+    match appearance {
+        Appearance::Dark => [0.0, 145.0 / 255.0, 1.0, 1.0],
+        Appearance::Light => [0.0, 136.0 / 255.0, 1.0, 1.0],
+    }
+}
+
+/// The window the switch tests mount in, pt: small, so the switch is most of
+/// the frame and a displaced knob or a different fill is outside
+/// [`agreement`]'s tolerance.
+const SWITCH_WINDOW: [f32; 2] = [101.0, 44.0];
+/// The switch's frame is 61 pt wide, centred on the window's vertical centre
+/// line, so that reflecting the window reflects the frame onto itself.
+const SWITCH_AT: [f32; 2] = [20.0, 8.0];
+
+/// A switch bound to `value`, `direction`, in `tint` when it has one, alone
+/// over `backdrop` in a [`SWITCH_WINDOW`].
+fn switch_app(
+    appearance: Appearance,
+    backdrop: impl Fn() -> AnyView + Clone + 'static,
+    value: &Binding<bool>,
+    direction: waterui::layout::LayoutDirection,
+    tint: Option<Color>,
+) -> GlassApp {
+    let value = value.clone();
+    GlassApp::sized(
+        move || {
+            let switch = toggle("", &value).switch().hide_label().with(direction);
+            let switch = match tint.clone() {
+                Some(tint) => AnyView::new(switch.tint(tint)),
+                None => AnyView::new(switch),
+            };
+            absolute((
+                backdrop(),
+                switch.position_anchor(
+                    waterui::layout::UnitPoint::TOP_LEADING,
+                    SWITCH_AT[0],
+                    SWITCH_AT[1],
+                ),
+            ))
+        },
+        theme(appearance),
+        SWITCH_WINDOW,
+    )
+}
+
+/// A switch at rest showing `on`, over black.
+fn switch_at_rest(appearance: Appearance, on: bool, tint: Option<Color>) -> Image {
+    switch_app(
+        appearance,
+        || backdrop_view(Backdrop::Black),
+        &Binding::bool(on),
+        waterui::layout::LayoutDirection::LeftToRight,
+        tint,
+    )
+    .snapshot()
+}
+
+/// §8.2, Tint: the tint replaces the on fill only. A switch tinted with the
+/// default green is the untinted switch; an off switch ignores its tint; a
+/// red and a blue tint make an on switch different from the default and from
+/// each other. Every tinted state is exported for review.
+#[test]
+fn a_tint_replaces_the_on_fill_only() {
+    for (appearance, name) in [(Appearance::Dark, "dark"), (Appearance::Light, "light")] {
+        let green = srgb(hydrolysis_glass::theme::switch::default_tint(appearance));
+        let red = srgb(hydrolysis_glass::theme::slider::red_tint(appearance));
+        let blue = srgb(blue_tint(appearance));
+
+        let untinted_on = switch_at_rest(appearance, true, None);
+        let untinted_off = switch_at_rest(appearance, false, None);
+        assert_agrees(
+            &format!("{name}: the default tint as an explicit tint"),
+            &switch_at_rest(appearance, true, Some(green)),
+            &untinted_on,
+        );
+        let red_on = switch_at_rest(appearance, true, Some(red.clone()));
+        let red_off = switch_at_rest(appearance, false, Some(red));
+        let blue_on = switch_at_rest(appearance, true, Some(blue));
+        assert_agrees(
+            &format!("{name}: a tinted off switch is the untinted one"),
+            &red_off,
+            &untinted_off,
+        );
+        assert!(
+            agreement("red is not green", &red_on, &untinted_on).is_err(),
+            "{name}: a red tint leaves the on track green"
+        );
+        assert!(
+            agreement("blue is not red", &blue_on, &red_on).is_err(),
+            "{name}: a blue tint draws the red track"
+        );
+        red_on.save(&format!("switch_tint_{name}_red_on"));
+        red_off.save(&format!("switch_tint_{name}_red_off"));
+        blue_on.save(&format!("switch_tint_{name}_blue_on"));
+    }
+}
+
+/// A binding whose changes carry `change` as their metadata, as the changes
+/// of a value an app sets under an animation (or with animation disabled)
+/// do.
+#[derive(Clone)]
+struct Changing<M: Clone + 'static> {
+    binding: Binding<bool>,
+    change: M,
+}
+
+impl<M: Clone + 'static> Signal for Changing<M> {
+    type Output = bool;
+    type Guard = <Binding<bool> as Signal>::Guard;
+
+    fn snapshot(&self) -> bool {
+        self.binding.snapshot()
+    }
+
+    fn watch(&self, watcher: impl Fn(nami::watcher::Context<bool>) + 'static) -> Self::Guard {
+        let change = self.change.clone();
+        self.binding
+            .watch(move |context| watcher(context.with(change.clone())))
+    }
+}
+
+impl<M: Clone + 'static> CustomBinding for Changing<M> {
+    fn set(&self, value: bool) {
+        self.binding.set(value);
+    }
+}
+
+/// An off switch over black in dark appearance, bound through `bind`, set to
+/// on at t = 0 and captured at each of `times` (ms), the frames exported as
+/// `<name>_t<ms>`.
+fn switched_on(
+    name: &str,
+    bind: impl FnOnce(Binding<bool>) -> Binding<bool>,
+    times: &[u64],
+) -> Vec<Image> {
+    let value = Binding::bool(false);
+    let mut app = switch_app(
+        Appearance::Dark,
+        || backdrop_view(Backdrop::Black),
+        &bind(value.clone()),
+        waterui::layout::LayoutDirection::LeftToRight,
+        None,
+    );
+    app.settle();
+    value.set(true);
+    let mut clock = Duration::ZERO;
+    times
+        .iter()
+        .map(|&t| capture_at(&mut app, &mut clock, t, &format!("{name}_t{t:04}")))
+        .collect()
+}
+
+/// §8.2, Toggle motion: the switch's motion is its own. A change made under
+/// a linear 1.5 s animation moves the knob and the track exactly like one
+/// made with the default animation, and one that disables animation lands on
+/// the new end in the next frame. The default change passes through frames
+/// that are neither the off nor the on switch.
+#[test]
+fn the_switch_moves_by_its_own_spring_whatever_animation_a_change_names() {
+    const TIMES: [u64; 5] = [17, 50, 100, 150, 300];
+    let default = switched_on("switch_default_motion", |value| value, &TIMES);
+    let explicit = switched_on(
+        "switch_explicit_motion",
+        |value| {
+            Binding::custom(Changing {
+                binding: value,
+                change: Animation::linear(Duration::from_millis(1500)),
+            })
+        },
+        &TIMES,
+    );
+    for ((t, default), explicit) in TIMES.iter().zip(&default).zip(&explicit) {
+        assert_agrees(
+            &format!("a 1.5 s linear change at {t} ms"),
+            explicit,
+            default,
+        );
+    }
+
+    let off = switch_at_rest(Appearance::Dark, false, None);
+    let on = switch_at_rest(Appearance::Dark, true, None);
+    // (The first frame, one frame after the change, is the switch within a
+    // point of rest: inside the tolerance.)
+    for (t, frame) in TIMES.iter().zip(&default).skip(1).take(3) {
+        assert!(
+            agreement("not off", frame, &off).is_err(),
+            "the frame at {t} ms shows the switch still off"
+        );
+        assert!(
+            agreement("not on", frame, &on).is_err(),
+            "the frame at {t} ms shows the switch already on"
+        );
+    }
+
+    // No animation: the next frame is the settled switch.
+    let snapped = switched_on(
+        "switch_snapped",
+        |value| {
+            Binding::custom(Changing {
+                binding: value,
+                change: NoAnimation,
+            })
+        },
+        &[17],
+    );
+    assert_agrees("a change without animation", &snapped[0], &on);
+}
+
+/// §8.2, Toggle motion, frame by frame: the knob and the track move from
+/// frame to frame through the sequence, no two of its first frames are
+/// alike, and the switch settles on the on switch.
+#[test]
+fn a_toggle_passes_through_distinct_mid_transition_frames() {
+    const TIMES: [u64; 5] = [50, 100, 150, 200, 300];
+    let frames = switched_on("switch_mid", |value| value, &TIMES);
+    // 200 and 300 ms are within 1.5 pt of the end and of each other; the
+    // three before them are not.
+    for (i, a) in frames.iter().enumerate().take(3) {
+        for (j, b) in frames.iter().enumerate().skip(i + 1) {
+            assert!(
+                agreement("distinct", a, b).is_err(),
+                "the frames at {} and {} ms are alike",
+                TIMES[i],
+                TIMES[j]
+            );
+        }
+    }
+    let mut settled = switch_app(
+        Appearance::Dark,
+        || backdrop_view(Backdrop::Black),
+        &Binding::bool(true),
+        waterui::layout::LayoutDirection::LeftToRight,
+        None,
+    );
+    assert_agrees(
+        "the settled switch",
+        &settled.snapshot(),
+        &switch_at_rest(Appearance::Dark, true, None),
+    );
+}
+
+/// The blue | red split of §7 as a view, reflected: red | blue.
+fn reflected_split() -> AnyView {
+    let red = Color::new(Srgb::new(SPLIT_RED[0], SPLIT_RED[1], SPLIT_RED[2]));
+    let blue = Color::new(Srgb::new(SPLIT_BLUE[0], SPLIT_BLUE[1], SPLIT_BLUE[2]));
+    AnyView::new(hstack((blue, red)).spacing(0.0))
+}
+
+/// §8.2, Direction: a right-to-left switch is the left-to-right switch
+/// reflected about the window's centre line, off or on, at rest or held (a
+/// glass lens over the reflected backdrop), and a drag toward the trailing
+/// end switches it on whichever way that is.
+#[test]
+fn a_right_to_left_switch_is_the_mirror_of_a_left_to_right_one() {
+    use waterui::layout::LayoutDirection::{LeftToRight, RightToLeft};
+
+    let width = SWITCH_WINDOW[0];
+    let y = SWITCH_AT[1] + 14.0;
+    // The knob's centre: 2 + 18.5 pt in from the track's end, 22 pt further
+    // on when on.
+    let knob_x = |on: bool| SWITCH_AT[0] + 20.5 + if on { 22.0 } else { 0.0 };
+
+    for (on, held, name) in [
+        (false, false, "off"),
+        (true, false, "on"),
+        (false, true, "off_held"),
+        (true, true, "on_held"),
+    ] {
+        let render = |direction, backdrop: fn() -> AnyView, touch_x: f32| {
+            let mut app = switch_app(
+                Appearance::Dark,
+                backdrop,
+                &Binding::bool(on),
+                direction,
+                None,
+            );
+            app.settle();
+            if held {
+                app.touch_down(touch_x, y);
+                app.advance(Duration::from_millis(600));
+                app.capture_now()
+            } else {
+                app.snapshot()
+            }
+        };
+        let ltr = render(LeftToRight, reflected_split, knob_x(on));
+        let rtl = render(
+            RightToLeft,
+            || backdrop_view(Backdrop::Split),
+            width - knob_x(on),
+        );
+        flipped(&ltr).save(&format!("switch_{name}_ltr_flipped"));
+        rtl.save(&format!("switch_{name}_rtl"));
+        assert_agrees(
+            &format!("right-to-left switch, {name}"),
+            &rtl,
+            &flipped(&ltr),
+        );
+    }
+
+    // A drag of 14 pt, past the 10 pt slop and past the half-way point of
+    // the 22 pt travel, toward the trailing end turns the switch on; toward
+    // the leading end it leaves it off.
+    for (direction, toward_on) in [(LeftToRight, 14.0), (RightToLeft, -14.0)] {
+        for (sign, expect_on) in [(1.0, true), (-1.0, false)] {
+            let value = Binding::bool(false);
+            let mut app = switch_app(
+                Appearance::Dark,
+                || backdrop_view(Backdrop::Black),
+                &value,
+                direction,
+                None,
+            );
+            app.settle();
+            let from = if direction == LeftToRight {
+                knob_x(false)
+            } else {
+                width - knob_x(false)
+            };
+            app.touch_down(from, y);
+            app.touch_move(f32::mul_add(sign, toward_on, from), y);
+            app.advance(Duration::from_millis(50));
+            app.touch_up(f32::mul_add(sign, toward_on, from), y);
+            app.settle();
+            assert_eq!(
+                value.snapshot(),
+                expect_on,
+                "{direction:?}: a drag of {} pt",
+                sign * toward_on
+            );
+        }
+    }
 }
 
 /// A 300 pt segmented picker of `labels` with its top-left corner at

@@ -1107,7 +1107,7 @@ simulator]. The knob travels 22 pt.
   a 300 pt "Label" switch, whose label inks 39 × 13 pt like plain 17 pt
   regular text in the primary label colour].
 - **Direction.** In a right-to-left layout the switch is mirrored: off is
-  at the trailing end, which is then on the left [chosen: not observed].
+  at the leading end, which is then on the right [chosen: not observed].
 - **Hit region.** The frame, extended to at least 44 × 44 pt about its
   centre, and the label when there is one [chosen: touch hit-testing was
   not observed; 44 pt is a comfortable minimum touch target].
