@@ -40,15 +40,18 @@ mod common;
 
 use common::*;
 use hydrolysis::theme::WidgetInteractionState;
-use hydrolysis_glass::material::geometry::CONTAINER_UNION_SMOOTHING;
+use hydrolysis_glass::material::geometry::{CONTAINER_UNION_SMOOTHING, Shape};
+use hydrolysis_glass::material::recipe::{Family, Translucency};
 use hydrolysis_glass::{Appearance, Element, Glass, Group, Scene};
 use nami::Signal as _;
 use std::time::Duration;
+use waterui::background::Glass as WaterGlass;
 use waterui::color::Srgb;
 use waterui::form::picker::picker;
 use waterui::layout::stack::hstack;
 use waterui::layout::{PositionExt as _, absolute};
 use waterui::navigation::{NavigationView, Tab, Tabs};
+use waterui::shape::{Circle, FixedRoundedRectangle};
 use waterui::text::text;
 use waterui::{AnyView, Binding, Color, View, ViewExt as _};
 use waterui_controls::{ButtonStyle, ControlSize, Label, button::button, toggle::toggle};
@@ -388,6 +391,99 @@ fn a_material_group_of_mixed_sizes_renders_with_the_container_recipe() {
     let reference = Harness::new().render(Backdrop::Split, &scene);
     reference.save("material_group_mixed_dark_standalone");
     assert_agrees("mixed-size material group", &grouped, &reference);
+}
+
+/// `glass` behind empty content of `frame`'s size, placed at its top-left
+/// corner `(x, y)`: the glass is the only thing drawn, on the content's
+/// frame. The background goes on the sized content, before the placement,
+/// which would otherwise be the frame the glass fills.
+fn glass_behind_blank(glass: WaterGlass, [x, y, w, h]: [f32; 4]) -> impl View {
+    Color::new(Srgb::new(0.0, 0.0, 0.0))
+        .opacity(0.0)
+        .width(w)
+        .height(h)
+        .background(glass)
+        .position_anchor(waterui::layout::UnitPoint::TOP_LEADING, x, y)
+}
+
+/// A `.background(Glass::regular())` behind content agrees with the
+/// standalone render of the regular capsule on the content's frame.
+#[test]
+fn a_glass_background_matches_the_standalone_element() {
+    const FRAME: [f32; 4] = [101.0, 400.0, 200.0, 80.0];
+    let mut app = GlassApp::mount(
+        || {
+            absolute((
+                backdrop_view(Backdrop::Edge),
+                glass_behind_blank(WaterGlass::regular(), FRAME),
+            ))
+        },
+        Glass::dark(),
+    );
+    let engine = app.export("glass_background_dark_hydrolysis");
+    let scene = Scene::new(
+        SCENE_PT,
+        PX_PER_PT,
+        vec![Group::single(element(
+            capsule(FRAME[0], FRAME[1], FRAME[2], FRAME[3]),
+            Family::Regular,
+            Appearance::Dark,
+            Translucency::default(),
+        ))],
+    );
+    let reference = Harness::new().render(Backdrop::Edge, &scene);
+    reference.save("glass_background_dark_standalone");
+    assert_agrees("glass background", &engine, &reference);
+}
+
+/// §5.6's verification scene mounted through Hydrolysis: a 60 pt circle and
+/// the 300 × 200.33 pt card (radius 40), 40 pt below it, each a
+/// `.background(Glass…)` over empty content in one `.material_group()`,
+/// agrees with the standalone renderer's container of the same two
+/// elements.
+#[test]
+fn a_glass_background_container_matches_the_standalone_scene() {
+    const CARD: [f32; 4] = [51.0, 120.0, 300.0, 200.33];
+    const CIRCLE: [f32; 4] = [171.0, 360.33, 60.0, 60.0];
+    let mut app = GlassApp::mount(
+        || {
+            absolute((
+                backdrop_view(Backdrop::Edge),
+                absolute((
+                    glass_behind_blank(
+                        WaterGlass::regular().shape(FixedRoundedRectangle::new(40.0)),
+                        CARD,
+                    ),
+                    glass_behind_blank(WaterGlass::regular().shape(Circle), CIRCLE),
+                ))
+                .material_group(),
+            ))
+        },
+        Glass::dark(),
+    );
+    let engine = app.export("glass_background_container_dark_hydrolysis");
+    let regular = |shape| {
+        element(
+            shape,
+            Family::Regular,
+            Appearance::Dark,
+            Translucency::default(),
+        )
+    };
+    let scene = Scene::new(
+        SCENE_PT,
+        PX_PER_PT,
+        vec![Group::container(
+            vec![
+                regular(rounded(CARD[0], CARD[1], CARD[2], CARD[3], 40.0)),
+                regular(Shape::circle(CIRCLE[0] + 30.0, CIRCLE[1] + 30.0, 30.0)),
+            ],
+            CONTAINER_UNION_SMOOTHING,
+        )],
+    );
+    let reference = Harness::new().render(Backdrop::Edge, &scene);
+    reference.save("glass_background_container_dark_standalone");
+    assert_agrees("glass background container", &engine, &reference);
 }
 
 /// A member's outer extent carries what it paints outside its
