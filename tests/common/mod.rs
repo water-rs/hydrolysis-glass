@@ -24,6 +24,8 @@ pub const SCENE_PT: [f32; 2] = [402.0, 874.0];
 pub struct Gpu {
     pub adapter_name: String,
     pub backend: String,
+    /// The driver's version as wgpu reports it.
+    pub driver: String,
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
 }
@@ -61,6 +63,7 @@ impl Gpu {
         Self {
             adapter_name: info.name,
             backend: format!("{:?}", info.backend),
+            driver: info.driver,
             device,
             queue,
         }
