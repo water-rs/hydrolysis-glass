@@ -35,7 +35,7 @@ use super::super::slider::{
 };
 use super::super::switch::{self, KNOB_FILL};
 use super::super::{DRAG_DURATION, PRESS_DURATION};
-use super::{is_disabled, paint};
+use super::{focus_ring_paint, held, is_disabled, paint};
 
 /// The slider's motion: eased hover and focus, the press and release
 /// springs of §8.1 for the press that makes the lens, an eased drag, and a
@@ -50,11 +50,6 @@ fn motion() -> Motion {
         drag: Transition::symmetric(Animation::ease_out(DRAG_DURATION)),
         value: ValueMotion::Own(VALUE_SPRING.physical()),
     }
-}
-
-/// Whether a touch holds the slider's knob: the lens's `p` at 1.
-const fn held(state: InteractionState) -> bool {
-    state.contains(InteractionState::PRESSED) && !is_disabled(state)
 }
 
 /// The press progress a state drives toward: 1 held, 0 otherwise.
@@ -205,13 +200,8 @@ fn focus_ring(glass: &Glass) -> Custom<f64, impl DrivenSet<f64> + use<>> {
         );
         switch::capsule(knob.inflate(reach, reach))
     });
-    let ring_paint = Driven::new(move |inputs: &Inputs<'_, f64>| {
-        let focused =
-            inputs.state.contains(InteractionState::FOCUSED) && !is_disabled(inputs.state);
-        paint(alpha(accent, f32::from(u8::from(focused))))
-    });
     Custom::new(
-        (ring, ring_paint),
+        (ring, focus_ring_paint(accent)),
         |recorder, _frame, (ring, ring_paint)| {
             recorder.stroke(ring, Stroke::new(FOCUS_RING_WIDTH), ring_paint);
         },

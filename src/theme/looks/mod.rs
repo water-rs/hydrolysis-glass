@@ -1,5 +1,6 @@
 //! The glass widget looks: what the theme returns for a button, a switch,
-//! a checkbox, a stepper, a slider and a progress indicator, built from
+//! a checkbox, a stepper, a slider, a segmented control and a progress
+//! indicator, built from
 //! Hydrolysis's look vocabulary (`hydrolysis::theme`).
 //!
 //! A look is data: every value that follows the widget's interaction state,
@@ -13,6 +14,7 @@
 mod background;
 mod button;
 mod progress;
+mod segmented;
 mod slider;
 mod stepper;
 mod toggle;
@@ -20,13 +22,14 @@ mod toggle;
 pub(super) use background::look as glass_background;
 pub(super) use button::look as button;
 pub(super) use progress::{circular as circular_progress, linear as linear_progress, loading};
+pub(super) use segmented::look as segmented_picker;
 pub(super) use slider::look as slider;
 pub(super) use stepper::look as stepper;
 pub(super) use toggle::{checkbox, switch};
 
 use cherenkov_record::kurbo::Size;
 use cherenkov_record::{Paint, WorkingColor};
-use hydrolysis::theme::{HitRegion, Motion, Transition, ValueMotion};
+use hydrolysis::theme::{Driven, HitRegion, Inputs, Motion, Transition, ValueMotion};
 use waterui::animation::Animation;
 use waterui::color::working::to_srgb;
 use waterui::interaction::InteractionState;
@@ -56,6 +59,21 @@ fn rgba_of(color: WorkingColor) -> Rgba {
 /// Whether `state` is disabled.
 const fn is_disabled(state: InteractionState) -> bool {
     state.contains(InteractionState::DISABLED)
+}
+
+/// Whether a touch holds a control's knob or thumb: the lens's `p` at 1.
+const fn held(state: InteractionState) -> bool {
+    state.contains(InteractionState::PRESSED) && !is_disabled(state)
+}
+
+/// The paint of a focus ring in `accent`: opaque while the control has
+/// keyboard focus and is enabled, clear otherwise.
+fn focus_ring_paint<V: 'static>(accent: Rgba) -> Driven<Paint, V> {
+    Driven::new(move |inputs: &Inputs<'_, V>| {
+        let focused =
+            inputs.state.contains(InteractionState::FOCUSED) && !is_disabled(inputs.state);
+        paint(alpha(accent, f32::from(u8::from(focused))))
+    })
 }
 
 /// `color` at `opacity` of its alpha, the colour kept so that fading it
