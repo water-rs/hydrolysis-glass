@@ -547,6 +547,16 @@ impl GlassApp {
         });
     }
 
+    /// Slides the finger to `(x, y)` pt.
+    pub fn touch_move(&mut self, x: f32, y: f32) {
+        self.runtime.push_input_event(InputEvent::PointerMove {
+            id: 1,
+            kind: PointerKind::Touch,
+            x,
+            y,
+        });
+    }
+
     /// Lifts the finger at `(x, y)` pt.
     pub fn touch_up(&mut self, x: f32, y: f32) {
         self.runtime.push_input_event(InputEvent::PointerUp {

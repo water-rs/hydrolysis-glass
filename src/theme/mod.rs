@@ -21,6 +21,7 @@ mod looks;
 pub mod materials;
 pub mod palette;
 pub mod segmented;
+pub mod slider;
 pub mod surfaces;
 pub mod switch;
 
