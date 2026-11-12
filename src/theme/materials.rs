@@ -294,7 +294,7 @@ pub fn effect(element: &Element) -> MaterialEffect {
 ///
 /// # Panics
 /// As [`effect`].
-fn pack(recipe: &Recipe, rect: Rect) -> MaterialEffect {
+pub(super) fn pack(recipe: &Recipe, rect: Rect) -> MaterialEffect {
     assert_folded_constants(recipe);
     let r = recipe;
     let tint = r
