@@ -747,22 +747,46 @@ fn press_sequence() {
     capture_at(&mut app, &mut clock, 17, "press_t0000");
     capture_at(&mut app, &mut clock, 147, "press_t0147");
     capture_at(&mut app, &mut clock, 500, "press_t0500");
-    app.advance(Duration::from_millis(1000).saturating_sub(clock));
-    clock = Duration::from_millis(1000);
+    advance_to(&mut app, &mut clock, 1000);
     app.touch_up(centre.0, centre.1);
     capture_at(&mut app, &mut clock, 1215, "press_t1215");
     capture_at(&mut app, &mut clock, 1430, "press_t1430");
     capture_at(&mut app, &mut clock, 2000, "press_t2000");
 }
 
-/// Advances the mounted app to `t_ms` since the touch and exports that
-/// frame; the capturing pump itself takes the last frame of the interval.
+/// The harness's virtual frame, 60 Hz: the app's pump moves time only in
+/// whole frames of it.
+const FRAME: Duration = Duration::from_micros(16_667);
+
+/// How many frames take a sequence whose frames so far reach `clock` to the
+/// frame nearest `t_ms`.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "a sequence is a few seconds of frames at most, never negative"
+)]
+fn frames_until(clock: Duration, t_ms: u64) -> u32 {
+    let ahead = Duration::from_millis(t_ms).saturating_sub(clock);
+    (ahead.as_secs_f64() / FRAME.as_secs_f64()).round() as u32
+}
+
+/// Pumps the mounted app to the frame nearest `t_ms` since the sequence
+/// began, without reading it back. `clock` is the virtual time the frames
+/// pumped so far have reached.
+fn advance_to(app: &mut GlassApp, clock: &mut Duration, t_ms: u64) {
+    let frames = frames_until(*clock, t_ms);
+    app.advance(FRAME * frames);
+    *clock += FRAME * frames;
+}
+
+/// Pumps the mounted app to the frame nearest `t_ms` since the sequence
+/// began and exports that frame; the capturing pump itself takes the last
+/// frame of the interval. `clock` is as [`advance_to`]'s.
 fn capture_at(app: &mut GlassApp, clock: &mut Duration, t_ms: u64, name: &str) -> Image {
-    const FRAME: Duration = Duration::from_micros(16_667);
-    let target = Duration::from_millis(t_ms);
-    app.advance(target.saturating_sub(*clock + FRAME));
+    let frames = frames_until(*clock, t_ms).max(1);
+    app.advance(FRAME * (frames - 1));
     let image = app.capture_now();
-    *clock = target;
+    *clock += FRAME * frames;
     let path = image.save(name);
     assert!(path.is_file(), "{name}: PNG written");
     image
@@ -861,8 +885,7 @@ fn toggle_sequence() {
     capture_at(&mut app, &mut clock, 100, "toggle_t0100");
     capture_at(&mut app, &mut clock, 150, "toggle_t0150");
     capture_at(&mut app, &mut clock, 300, "toggle_t0300");
-    app.advance(Duration::from_millis(1000).saturating_sub(clock));
-    clock = Duration::from_millis(1000);
+    advance_to(&mut app, &mut clock, 1000);
     value.set(false);
     capture_at(&mut app, &mut clock, 1100, "toggle_t1100");
     capture_at(&mut app, &mut clock, 1500, "toggle_t1500");
@@ -977,28 +1000,28 @@ fn a_tint_replaces_the_on_fill_only() {
 /// of a value an app sets under an animation (or with animation disabled)
 /// do.
 #[derive(Clone)]
-struct Changing<M: Clone + 'static> {
-    binding: Binding<bool>,
+struct Changing<T: Clone + 'static, M: Clone + 'static> {
+    binding: Binding<T>,
     change: M,
 }
 
-impl<M: Clone + 'static> Signal for Changing<M> {
-    type Output = bool;
-    type Guard = <Binding<bool> as Signal>::Guard;
+impl<T: Clone + 'static, M: Clone + 'static> Signal for Changing<T, M> {
+    type Output = T;
+    type Guard = <Binding<T> as Signal>::Guard;
 
-    fn snapshot(&self) -> bool {
+    fn snapshot(&self) -> T {
         self.binding.snapshot()
     }
 
-    fn watch(&self, watcher: impl Fn(nami::watcher::Context<bool>) + 'static) -> Self::Guard {
+    fn watch(&self, watcher: impl Fn(nami::watcher::Context<T>) + 'static) -> Self::Guard {
         let change = self.change.clone();
         self.binding
             .watch(move |context| watcher(context.with(change.clone())))
     }
 }
 
-impl<M: Clone + 'static> CustomBinding for Changing<M> {
-    fn set(&self, value: bool) {
+impl<T: Clone + 'static, M: Clone + 'static> CustomBinding for Changing<T, M> {
+    fn set(&self, value: T) {
         self.binding.set(value);
     }
 }
@@ -1210,14 +1233,17 @@ fn a_right_to_left_switch_is_the_mirror_of_a_left_to_right_one() {
     }
 }
 
-/// A 300 pt segmented picker of `labels` with its top-left corner at
-/// `(51, y)`, `selected` segment selected.
+/// A 300 pt segmented picker of `labels` at `size`, laid out `direction`,
+/// with its top-left corner at `(51, y)`, its selection bound to
+/// `selection`.
 ///
-/// The picker's label is hidden: the scene is about the control, and a
+/// The picker's label is hidden: the scenes are about the control, and a
 /// heading would move its row.
-fn segmented(
+fn segmented_picker(
     labels: &'static [&'static str],
     selection: &Binding<i32>,
+    size: ControlSize,
+    direction: waterui::layout::LayoutDirection,
     disabled: bool,
     y: f32,
 ) -> impl View + use<> {
@@ -1229,21 +1255,91 @@ fn segmented(
     picker("Choice", items, selection)
         .hide_label()
         .segmented()
+        .size(size)
         .width(300.0)
         .disabled(disabled)
+        .with(direction)
         .position_anchor(waterui::layout::UnitPoint::TOP_LEADING, 51.0, y)
 }
 
+/// A regular, left-to-right [`segmented_picker`].
+fn segmented(
+    labels: &'static [&'static str],
+    selection: &Binding<i32>,
+    disabled: bool,
+    y: f32,
+) -> impl View + use<> {
+    segmented_picker(
+        labels,
+        selection,
+        ControlSize::Medium,
+        waterui::layout::LayoutDirection::LeftToRight,
+        disabled,
+        y,
+    )
+}
+
+/// The labels of the single-control segmented tests.
+const THREE: &[&str] = &["One", "Two", "Three"];
+/// The window the single-control segmented tests mount in, pt.
+const SEGMENTED_WINDOW: [f32; 2] = [402.0, 100.0];
+/// The top of the row of a single control, pt.
+const ROW_Y: f32 = 30.0;
+/// The vertical centre of a regular control's 31 pt row, pt.
+const ROW_MID: f32 = ROW_Y + 15.5;
+
+/// The centre of segment `index` of a 300 pt, three-segment control at
+/// x = 51, counted from the left: its segments are 100 pt wide.
+fn segment_x(index: u8) -> f32 {
+    f32::from(index).mul_add(100.0, 101.0)
+}
+
+/// A [`THREE`]-segment control alone over `backdrop` in a
+/// [`SEGMENTED_WINDOW`], its selection bound to `selection`.
+fn segmented_app(
+    appearance: Appearance,
+    backdrop: fn() -> AnyView,
+    selection: &Binding<i32>,
+    size: ControlSize,
+    direction: waterui::layout::LayoutDirection,
+    disabled: bool,
+) -> GlassApp {
+    let selection = selection.clone();
+    GlassApp::sized(
+        move || {
+            absolute((
+                backdrop(),
+                segmented_picker(THREE, &selection, size, direction, disabled, ROW_Y),
+            ))
+        },
+        theme(appearance),
+        SEGMENTED_WINDOW,
+    )
+}
+
+/// A regular, left-to-right, enabled [`segmented_app`] over black.
+fn plain_segmented_app(appearance: Appearance, selection: &Binding<i32>) -> GlassApp {
+    segmented_app(
+        appearance,
+        || backdrop_view(Backdrop::Black),
+        selection,
+        ControlSize::Medium,
+        waterui::layout::LayoutDirection::LeftToRight,
+        false,
+    )
+}
+
+/// A [`plain_segmented_app`] at rest with `selected` selected.
+fn segmented_at_rest(appearance: Appearance, selected: i32) -> Image {
+    plain_segmented_app(appearance, &Binding::container(selected)).snapshot()
+}
+
 /// §7, scene 12 (§8.4): the segmented controls over black, grey 0.5 and
-/// white in both appearances. The large size, the symbol labels, the red
-/// tint, the 300 pt width (a picker keeps its intrinsic width inside a
-/// frame) and the disabled look (the segmented picker passes no disabled
-/// state to its chrome) need inputs the `WidgetTheme` hooks, `PickerItem`
-/// and the picker's layout do not carry; symbols are stood in for by text
-/// glyphs.
+/// white in both appearances, the large size and a disabled control
+/// included. The red tint has no effect (§8.4, States) and `PickerItem` is
+/// text-only, so symbols are stood in for by text glyphs.
 #[test]
 fn segmented_scene() {
-    const THREE: &[&str] = &["One", "Two", "Three"];
     const TWO: &[&str] = &["One", "Two"];
     const FOUR: &[&str] = &["A", "Bb", "Ccc", "Dddd"];
     const LONG: &[&str] = &["Short", "A much longer label"];
@@ -1263,6 +1359,14 @@ fn segmented_scene() {
                         segmented(LONG, &first, false, 300.0),
                         segmented(GLYPHS, &first, false, 380.0),
                         segmented(THREE, &first, true, 460.0),
+                        segmented_picker(
+                            THREE,
+                            &second,
+                            ControlSize::Large,
+                            waterui::layout::LayoutDirection::LeftToRight,
+                            false,
+                            540.0,
+                        ),
                     ))
                 },
                 theme(appearance),
@@ -1272,41 +1376,122 @@ fn segmented_scene() {
     }
 }
 
-/// §7, scene 13 (§8.4): a 300 pt "One | Two | Three" control alone over
-/// black in dark appearance, its selection moved from the first to the
-/// third segment at t = 0, captured at 0, 0.05, 0.1, 0.2, 0.38 and 0.6 s.
-///
-/// The `WidgetTheme` contract has no hook for the selection's motion, so
-/// the thumb is at the new segment in every frame: the images show the
-/// jump the contract allows, not the selection spring of
-/// `theme::segmented`.
-#[test]
-fn selection_sequence() {
+/// A [`plain_segmented_app`] bound through `bind`, its selection moved from
+/// the first to the third segment at t = 0 and captured at each of `times`
+/// (ms), the frames exported as `<name>_t<ms>`.
+fn selection_moved(
+    appearance: Appearance,
+    name: &str,
+    bind: impl FnOnce(Binding<i32>) -> Binding<i32>,
+    times: &[u64],
+) -> Vec<Image> {
     let selection = Binding::container(0i32);
-    let shared = selection.clone();
-    let mut app = GlassApp::sized(
-        move || {
-            absolute((
-                backdrop_view(Backdrop::Black),
-                segmented(&["One", "Two", "Three"], &shared, false, 30.0),
-            ))
-        },
-        theme(Appearance::Dark),
-        [SCENE_PT[0], 100.0],
-    );
+    let mut app = plain_segmented_app(appearance, &bind(selection.clone()));
     app.settle();
     selection.set(2);
     let mut clock = Duration::ZERO;
-    for (t_ms, name) in [
-        (17, "t0000"),
-        (50, "t0050"),
-        (100, "t0100"),
-        (200, "t0200"),
-        (380, "t0380"),
-        (600, "t0600"),
-    ] {
-        capture_at(&mut app, &mut clock, t_ms, &format!("selection_{name}"));
+    times
+        .iter()
+        .map(|&t| capture_at(&mut app, &mut clock, t, &format!("{name}_t{t:04}")))
+        .collect()
+}
+
+/// §7, scene 13 (§8.4): a 300 pt "One | Two | Three" control alone over
+/// black in dark appearance, its selection moved from the first to the
+/// third segment at t = 0, captured one frame after the change and at
+/// 0.05, 0.1, 0.2, 0.38 and 0.6 s.
+#[test]
+fn selection_sequence() {
+    selection_moved(
+        Appearance::Dark,
+        "selection",
+        |selection| selection,
+        &[17, 50, 100, 200, 380, 600],
+    );
+}
+
+/// §8.4, Selection motion, frame by frame: the thumb leaves the first
+/// segment, passes through distinct positions and settles on the third,
+/// and every change moves it by the selection spring — one made under a
+/// linear 1.5 s animation moves exactly like the default, and one that
+/// disables animation still animates. Light appearance, where the opaque
+/// thumb makes a displacement of a point plain.
+#[test]
+fn every_selection_change_moves_the_thumb_by_the_selection_spring() {
+    const TIMES: [u64; 4] = [50, 100, 150, 200];
+    let start = segmented_at_rest(Appearance::Light, 0);
+    let end = segmented_at_rest(Appearance::Light, 2);
+    let default = selection_moved(
+        Appearance::Light,
+        "selection_light",
+        |selection| selection,
+        &TIMES,
+    );
+    for (t, frame) in TIMES.iter().zip(&default) {
+        assert!(
+            agreement("not at the first segment", frame, &start).is_err(),
+            "the frame at {t} ms shows the thumb still on the first segment"
+        );
+        assert!(
+            agreement("not at the third segment", frame, &end).is_err(),
+            "the frame at {t} ms shows the thumb already on the third segment"
+        );
     }
+    for (i, a) in default.iter().enumerate() {
+        for (j, b) in default.iter().enumerate().skip(i + 1) {
+            assert!(
+                agreement("distinct", a, b).is_err(),
+                "the frames at {} and {} ms are alike",
+                TIMES[i],
+                TIMES[j]
+            );
+        }
+    }
+
+    let explicit = selection_moved(
+        Appearance::Light,
+        "selection_light_explicit",
+        |selection| {
+            Binding::custom(Changing {
+                binding: selection,
+                change: Animation::linear(Duration::from_millis(1500)),
+            })
+        },
+        &TIMES,
+    );
+    let snapped = selection_moved(
+        Appearance::Light,
+        "selection_light_disabled",
+        |selection| {
+            Binding::custom(Changing {
+                binding: selection,
+                change: NoAnimation,
+            })
+        },
+        &TIMES,
+    );
+    for ((t, default), (explicit, snapped)) in TIMES
+        .iter()
+        .zip(&default)
+        .zip(explicit.iter().zip(&snapped))
+    {
+        assert_agrees(
+            &format!("a 1.5 s linear change at {t} ms"),
+            explicit,
+            default,
+        );
+        assert_agrees(
+            &format!("a change without animation at {t} ms"),
+            snapped,
+            default,
+        );
+    }
+
+    let selection = Binding::container(0i32);
+    let mut app = plain_segmented_app(Appearance::Light, &selection);
+    app.settle();
+    selection.set(2);
+    assert_agrees("the settled thumb", &app.snapshot(), &end);
 }
 
 /// A tap on a segment selects it, and a touch held on the selected
@@ -1314,34 +1499,297 @@ fn selection_sequence() {
 #[test]
 fn a_tap_selects_and_a_press_lenses_the_thumb() {
     let selection = Binding::container(0i32);
-    let shared = selection.clone();
-    let mut app = GlassApp::sized(
-        move || {
-            absolute((
-                backdrop_view(Backdrop::Black),
-                segmented(&["One", "Two", "Three"], &shared, false, 30.0),
-            ))
-        },
-        theme(Appearance::Dark),
-        [SCENE_PT[0], 100.0],
-    );
+    let mut app = plain_segmented_app(Appearance::Dark, &selection);
     app.settle();
-    // The second segment: x from 151 to 251, the control's row at y = 45.
-    app.touch_down(201.0, 46.0);
-    app.touch_up(201.0, 46.0);
+    app.touch_down(segment_x(1), ROW_MID);
+    app.touch_up(segment_x(1), ROW_MID);
     app.settle();
     assert_eq!(selection.snapshot(), 1, "a tap selects the touched segment");
     // The press, on the now selected segment.
-    app.touch_down(201.0, 46.0);
+    app.touch_down(segment_x(1), ROW_MID);
     let mut clock = Duration::ZERO;
     capture_at(&mut app, &mut clock, 500, "segmented_press_dark");
-    app.touch_up(201.0, 46.0);
+    app.touch_up(segment_x(1), ROW_MID);
     app.settle();
     assert_eq!(
         selection.snapshot(),
         1,
         "a touch on the selected segment keeps it"
     );
+}
+
+/// §8.4, Lens: the selected middle segment pressed and held until the press
+/// settles is a clear glass lens 1.15 times the thumb, reaching into both
+/// neighbouring segments over the container and the labels, its fill
+/// cleared; at rest no part is glass. Both appearances, exported for
+/// review.
+#[test]
+fn the_press_lens_reaches_over_the_neighbouring_segments() {
+    for (appearance, name) in [(Appearance::Dark, "dark"), (Appearance::Light, "light")] {
+        let rest = segmented_at_rest(appearance, 1);
+        rest.save(&format!("segmented_lens_{name}_rest"));
+        let mut app = plain_segmented_app(appearance, &Binding::container(1));
+        app.settle();
+        app.touch_down(segment_x(1), ROW_MID);
+        let mut clock = Duration::ZERO;
+        let held = capture_at(
+            &mut app,
+            &mut clock,
+            600,
+            &format!("segmented_lens_{name}_held"),
+        );
+        assert!(
+            agreement("held is not at rest", &held, &rest).is_err(),
+            "{name}: a held thumb is drawn as at rest"
+        );
+        // Released, the lens collapses and the thumb is flat again.
+        app.touch_up(segment_x(1), ROW_MID);
+        assert_agrees(&format!("{name}: released"), &app.snapshot(), &rest);
+    }
+}
+
+/// §8.4, Drag: a press on the selected segment drags the thumb by the
+/// touch's offset over the segment width, wherever the touch goes
+/// vertically, and the release settles on the nearest segment by the
+/// selection spring; a drag past the end holds the thumb on the last
+/// segment, and a drag from an unselected segment moves nothing.
+#[test]
+fn a_drag_moves_the_thumb_and_the_release_settles_on_the_nearest_segment() {
+    let selection = Binding::container(0i32);
+    let mut app = plain_segmented_app(Appearance::Light, &selection);
+    app.settle();
+
+    // 130 pt is 1.3 segments: the thumb follows to 1.3 and settles on 1.
+    app.touch_down(segment_x(0), ROW_MID);
+    app.touch_move(segment_x(0) + 30.0, ROW_MID);
+    app.touch_move(segment_x(0) + 130.0, ROW_MID + 60.0);
+    let mut clock = Duration::ZERO;
+    let dragged = capture_at(&mut app, &mut clock, 300, "segmented_drag_light");
+    assert_eq!(selection.snapshot(), 0, "a drag selects only at release");
+    assert!(
+        agreement(
+            "dragged is not at rest",
+            &dragged,
+            &segmented_at_rest(Appearance::Light, 0)
+        )
+        .is_err(),
+        "the dragged thumb is drawn on the first segment"
+    );
+    app.touch_up(segment_x(0) + 130.0, ROW_MID + 60.0);
+    let settling = capture_at(&mut app, &mut clock, 350, "segmented_drag_settling_light");
+    assert_eq!(
+        selection.snapshot(),
+        1,
+        "the release selects the nearest segment"
+    );
+    let at_one = segmented_at_rest(Appearance::Light, 1);
+    assert!(
+        agreement("settling", &settling, &at_one).is_err(),
+        "the thumb lands on the second segment in the frame after the release"
+    );
+    assert_agrees("settled on the second segment", &app.snapshot(), &at_one);
+
+    // Past the end: held on the last segment.
+    app.touch_down(segment_x(1), ROW_MID);
+    app.touch_move(segment_x(1) + 30.0, ROW_MID);
+    app.touch_move(900.0, ROW_MID);
+    app.advance(Duration::from_millis(100));
+    app.touch_up(900.0, ROW_MID);
+    app.settle();
+    assert_eq!(
+        selection.snapshot(),
+        2,
+        "a drag past the end settles on the last"
+    );
+
+    // From an unselected segment: the release lands outside the touched
+    // segment, so nothing is selected and the thumb never moved.
+    app.touch_down(segment_x(0), ROW_MID);
+    app.touch_move(segment_x(0) + 30.0, ROW_MID);
+    app.touch_move(segment_x(1), ROW_MID);
+    app.advance(Duration::from_millis(100));
+    app.touch_up(segment_x(1), ROW_MID);
+    app.settle();
+    assert_eq!(selection.snapshot(), 2, "a drag from an unselected segment");
+}
+
+/// §8.4, Direction: a right-to-left control is the left-to-right one
+/// reflected about the window's centre line, its first segment on the
+/// right, at rest and with the thumb held as a lens over the reflected
+/// backdrop; a tap on the leftmost segment selects the last item. The
+/// labels are empty here, since glyphs do not mirror; the labelled
+/// right-to-left control is exported for review.
+#[test]
+fn a_right_to_left_control_is_the_mirror_of_a_left_to_right_one() {
+    use waterui::layout::LayoutDirection::{LeftToRight, RightToLeft};
+    const BLANK: &[&str] = &["", "", ""];
+
+    let width = SEGMENTED_WINDOW[0];
+    for held in [false, true] {
+        let render = |direction, backdrop: fn() -> AnyView, touch_x: f32| {
+            let selection = Binding::container(0i32);
+            let mut app = GlassApp::sized(
+                move || {
+                    absolute((
+                        backdrop(),
+                        segmented_picker(
+                            BLANK,
+                            &selection,
+                            ControlSize::Medium,
+                            direction,
+                            false,
+                            ROW_Y,
+                        ),
+                    ))
+                },
+                theme(Appearance::Dark),
+                SEGMENTED_WINDOW,
+            );
+            app.settle();
+            if held {
+                app.touch_down(touch_x, ROW_MID);
+                app.advance(Duration::from_millis(600));
+                app.capture_now()
+            } else {
+                app.snapshot()
+            }
+        };
+        let ltr = render(LeftToRight, reflected_split, segment_x(0));
+        let rtl = render(
+            RightToLeft,
+            || backdrop_view(Backdrop::Split),
+            width - segment_x(0),
+        );
+        let name = if held { "held" } else { "rest" };
+        flipped(&ltr).save(&format!("segmented_{name}_ltr_flipped"));
+        rtl.save(&format!("segmented_{name}_rtl"));
+        assert_agrees(
+            &format!("right-to-left control, {name}"),
+            &rtl,
+            &flipped(&ltr),
+        );
+    }
+
+    let selection = Binding::container(0i32);
+    let mut app = segmented_app(
+        Appearance::Dark,
+        || backdrop_view(Backdrop::Black),
+        &selection,
+        ControlSize::Medium,
+        RightToLeft,
+        false,
+    );
+    app.export("segmented_rtl_labels_dark");
+    app.touch_down(segment_x(0), ROW_MID);
+    app.touch_up(segment_x(0), ROW_MID);
+    app.settle();
+    assert_eq!(
+        selection.snapshot(),
+        2,
+        "the leftmost segment is the last item"
+    );
+}
+
+/// The opaque frame `image` composited at `opacity` over the uniform grey
+/// `backdrop` in encoded space, the space §8.4 composites the control in.
+fn composited(image: &Image, backdrop: f32, opacity: f32) -> Image {
+    let pixels = image
+        .pixels
+        .iter()
+        .map(|p| {
+            let mix = |c: f32| c.mul_add(opacity, backdrop * (1.0 - opacity));
+            [mix(p[0]), mix(p[1]), mix(p[2]), 1.0]
+        })
+        .collect();
+    Image {
+        width: image.width,
+        height: image.height,
+        pixels,
+    }
+}
+
+/// §8.4, States: a disabled control is the enabled one composited over the
+/// backdrop at opacity 0.5 in encoded space, labels included, so its
+/// labels are 128 over black in dark appearance and 127 over white in
+/// light, where §8.4 measured them; a tap does not select.
+#[test]
+fn a_disabled_control_is_the_enabled_one_at_half_opacity() {
+    let black: fn() -> AnyView = || backdrop_view(Backdrop::Black);
+    let white: fn() -> AnyView = || backdrop_view(Backdrop::White);
+    for (appearance, name, backdrop, grey) in [
+        (Appearance::Dark, "dark", black, 0.0),
+        (Appearance::Light, "light", white, 1.0),
+    ] {
+        let selection = Binding::container(0i32);
+        let mut disabled = segmented_app(
+            appearance,
+            backdrop,
+            &selection,
+            ControlSize::Medium,
+            waterui::layout::LayoutDirection::LeftToRight,
+            true,
+        );
+        let image = disabled.export(&format!("segmented_disabled_{name}"));
+        disabled.touch_down(segment_x(2), ROW_MID);
+        disabled.touch_up(segment_x(2), ROW_MID);
+        disabled.settle();
+        assert_eq!(
+            selection.snapshot(),
+            0,
+            "{name}: a disabled control took a tap"
+        );
+        let enabled = segmented_app(
+            appearance,
+            backdrop,
+            &Binding::container(0i32),
+            ControlSize::Medium,
+            waterui::layout::LayoutDirection::LeftToRight,
+            false,
+        )
+        .snapshot();
+        let faded = composited(
+            &enabled,
+            grey,
+            hydrolysis_glass::theme::segmented::DISABLED_OPACITY,
+        );
+        faded.save(&format!("segmented_disabled_{name}_expected"));
+        assert_agrees(&format!("{name}: disabled"), &image, &faded);
+        assert!(
+            agreement("disabled is not enabled", &image, &enabled).is_err(),
+            "{name}: a disabled control is drawn as an enabled one"
+        );
+    }
+}
+
+/// §8.4, Geometry: the large and extra large sizes are the 48 pt group, a
+/// 49 pt container and a 45 pt thumb, with the same 13 pt labels; the
+/// regular group is 31 pt. Exported for review over black and white.
+#[test]
+fn the_large_size_is_the_48_point_group() {
+    for (appearance, name) in [(Appearance::Dark, "dark"), (Appearance::Light, "light")] {
+        let large = |size| {
+            segmented_app(
+                appearance,
+                || backdrop_view(Backdrop::Black),
+                &Binding::container(1i32),
+                size,
+                waterui::layout::LayoutDirection::LeftToRight,
+                false,
+            )
+            .export(&format!("segmented_{size:?}_{name}"))
+        };
+        let regular = segmented_at_rest(appearance, 1);
+        let lg = large(ControlSize::Large);
+        assert_agrees(
+            &format!("{name}: extra large is large"),
+            &large(ControlSize::ExtraLarge),
+            &lg,
+        );
+        assert!(
+            agreement("large is not regular", &lg, &regular).is_err(),
+            "{name}: the large control is drawn at the regular size"
+        );
+    }
 }
 
 /// `control` `width` pt wide and as tall as a slider (§8.3) with its
