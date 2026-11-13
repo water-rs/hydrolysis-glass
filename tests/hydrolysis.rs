@@ -2063,3 +2063,185 @@ fn a_drag_from_the_knob_moves_the_value() {
         "the value stays where the drag left it"
     );
 }
+
+/// Each appearance with the backdrop it is reviewed over: the dark theme
+/// over black, the light theme over white.
+const APPEARANCES: [(Appearance, Backdrop, &str); 2] = [
+    (Appearance::Dark, Backdrop::Black, "dark"),
+    (Appearance::Light, Backdrop::White, "light"),
+];
+
+/// The height of the widget scenes below, pt: room for the widgets and the
+/// popups they open, a fraction of the full scene.
+const WIDGET_SCENE_HEIGHT: f32 = 360.0;
+
+/// `view` 300 pt wide with its top-left corner at `(51, y)`.
+fn row(view: impl View, y: f32) -> impl View {
+    view.width(300.0)
+        .position_anchor(waterui::layout::UnitPoint::TOP_LEADING, 51.0, y)
+}
+
+/// A text field labelled "Name" bound to `value`, prompting "Your name".
+fn name_field(value: &str) -> waterui_controls::TextField {
+    waterui_controls::field(
+        "Name",
+        &Binding::container(waterui::Str::from(value.to_owned())),
+    )
+    .prompt("Your name")
+}
+
+/// The text field in both appearances: empty with its prompt, holding a
+/// value, and disabled.
+#[test]
+fn text_field_scene() {
+    for (appearance, backdrop, name) in APPEARANCES {
+        let mut app = GlassApp::sized(
+            move || {
+                absolute((
+                    backdrop_view(backdrop),
+                    row(name_field(""), 40.0),
+                    row(name_field("Hello"), 140.0),
+                    row(name_field("Hello"), 240.0).disabled(true),
+                ))
+            },
+            theme(appearance),
+            [SCENE_PT[0], WIDGET_SCENE_HEIGHT],
+        );
+        app.export(&format!("text_field_{name}"));
+    }
+}
+
+/// The text field's context menu, opened by a secondary click on a field
+/// holding a value: the menu look's panel and separators. The click
+/// focuses the field, whose caret blinks for as long as it holds focus, so
+/// the frame is read 400 ms after the click rather than settled.
+#[test]
+fn text_context_menu_scene() {
+    for (appearance, backdrop, name) in APPEARANCES {
+        let mut app = GlassApp::sized(
+            move || absolute((backdrop_view(backdrop), row(name_field("Hello"), 40.0))),
+            theme(appearance),
+            [SCENE_PT[0], WIDGET_SCENE_HEIGHT],
+        );
+        app.settle();
+        app.secondary_click(120.0, 70.0);
+        app.advance(Duration::from_millis(400));
+        let path = app.capture_now().save(&format!("text_context_menu_{name}"));
+        assert!(path.is_file(), "{name}: PNG written");
+    }
+}
+
+/// A picker of three fruits in `style` bound to `selection`.
+fn fruit_picker(
+    style: waterui::form::picker::PickerStyle,
+    selection: &Binding<i32>,
+) -> waterui::form::picker::Picker {
+    let items: Vec<_> = ["Apple", "Banana", "Cherry"]
+        .into_iter()
+        .zip(0i32..)
+        .map(|(l, i)| text(l).tag(i))
+        .collect();
+    picker("Fruit", items, selection).style(style)
+}
+
+/// The menu picker in both appearances: closed, disabled, and open on its
+/// popup, which is the menu look.
+#[test]
+fn menu_picker_scene() {
+    use waterui::form::picker::PickerStyle;
+    for (appearance, backdrop, name) in APPEARANCES {
+        for open in [false, true] {
+            let mut app = GlassApp::sized(
+                move || {
+                    let selection = Binding::container(1i32);
+                    absolute((
+                        backdrop_view(backdrop),
+                        row(fruit_picker(PickerStyle::Menu, &selection), 40.0),
+                        row(fruit_picker(PickerStyle::Menu, &selection), 280.0).disabled(true),
+                    ))
+                },
+                theme(appearance),
+                [SCENE_PT[0], WIDGET_SCENE_HEIGHT],
+            );
+            app.settle();
+            if open {
+                app.touch_down(200.0, 55.0);
+                app.touch_up(200.0, 55.0);
+            }
+            let state = if open { "open" } else { "closed" };
+            app.export(&format!("menu_picker_{state}_{name}"));
+        }
+    }
+}
+
+/// The radio group in both appearances, its second item selected, enabled
+/// and disabled.
+#[test]
+fn radio_group_scene() {
+    use waterui::form::picker::PickerStyle;
+    for (appearance, backdrop, name) in APPEARANCES {
+        let mut app = GlassApp::sized(
+            move || {
+                let selection = Binding::container(1i32);
+                absolute((
+                    backdrop_view(backdrop),
+                    row(fruit_picker(PickerStyle::Radio, &selection), 40.0),
+                    row(fruit_picker(PickerStyle::Radio, &selection), 200.0).disabled(true),
+                ))
+            },
+            theme(appearance),
+            [SCENE_PT[0], WIDGET_SCENE_HEIGHT],
+        );
+        app.export(&format!("radio_group_{name}"));
+    }
+}
+
+/// A navigation stack with one page pushed over its root, in both
+/// appearances: the navigation bar and its back button.
+#[test]
+fn navigation_bar_scene() {
+    use waterui::navigation::{NavigationPath, NavigationStack};
+    for (appearance, backdrop, name) in APPEARANCES {
+        let path = NavigationPath::<i32>::new();
+        path.push(1);
+        let mut app = GlassApp::sized(
+            move || {
+                NavigationStack::with_path(
+                    path.clone(),
+                    NavigationView::new("Root", backdrop_view(backdrop)),
+                )
+                .destination(move |_: i32| NavigationView::new("Detail", backdrop_view(backdrop)))
+            },
+            theme(appearance),
+            [SCENE_PT[0], WIDGET_SCENE_HEIGHT],
+        );
+        app.export(&format!("navigation_bar_{name}"));
+    }
+}
+
+/// A tab container of two tabs in both appearances, the first selected: the
+/// tab bar, its divider, the selected item's highlight and the items.
+#[test]
+fn tabs_scene() {
+    for (appearance, backdrop, name) in APPEARANCES {
+        let mut app = GlassApp::sized(
+            move || {
+                let selection = Binding::container(0usize);
+                Tabs::new(
+                    &selection,
+                    vec![
+                        Tab::new("First", move || {
+                            NavigationView::new("First", backdrop_view(backdrop))
+                        }),
+                        Tab::new("Second", move || {
+                            NavigationView::new("Second", backdrop_view(backdrop))
+                        }),
+                    ],
+                )
+            },
+            theme(appearance),
+            [SCENE_PT[0], WIDGET_SCENE_HEIGHT],
+        );
+        app.export(&format!("tabs_{name}"));
+    }
+}
