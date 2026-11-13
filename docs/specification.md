@@ -1519,7 +1519,9 @@ is dragged, which is the part of the control that shows the material.
   over the container and the labels: its fill is drawn at opacity
   `1 − max(p, 0)` over the glass [chosen: a lens that shows the labels it
   passes over, kept small enough to stay inside the neighbouring
-  segments].
+  segments]. The glass element is drawn at opacity `max(p, 0)`, so it
+  fades in and out with the press while the fill fades the other way
+  [chosen: no part is glass at rest].
 - **Drag.** While pressed, `s` follows the touch: it is the selected
   index plus the touch's horizontal offset divided by `W / n`, clamped to
   [0, n − 1]. At release the segment nearest to `s` becomes selected, and
