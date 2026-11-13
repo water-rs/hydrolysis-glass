@@ -8,13 +8,13 @@
 //! through `Content::record_layered` realizes each surface as a backdrop
 //! member of the group its capture class names; [`materials::register`]
 //! declares the shader and the capture classes the members record under.
-//! Buttons, switches, checkboxes, steppers, sliders, segmented controls and
-//! progress indicators are looks (`looks`): data whose values follow the
-//! widget's state, and
-//! whose glass bodies are backdrop fills over the same shader and capture
-//! classes. Everything else — inputs, pickers, badges, lists, tables,
-//! dividers and opaque menus — is recorded through the `Recorder` in
-//! [`chrome`].
+//! Buttons, switches, checkboxes, steppers, sliders, segmented controls,
+//! progress indicators, text fields, menus, menu pickers, radio groups,
+//! navigation bars and tab bars are looks (`looks`): data whose values
+//! follow the widget's state, and whose glass bodies are backdrop fills over
+//! the same shader and capture classes. Everything else — badges, lists,
+//! tables and dividers — is recorded through the `Recorder` in [`chrome`],
+//! whose drawing the looks reuse for their parts that are not glass.
 
 pub mod button;
 pub mod chrome;
@@ -28,17 +28,17 @@ pub mod switch;
 
 use core::time::Duration;
 
-use cherenkov_record::kurbo::{Point, Rect, RoundedRectRadii};
-use cherenkov_record::{MaterialRegistry, Paint, Recorder};
+use cherenkov_record::kurbo::{Point, Rect};
+use cherenkov_record::{MaterialRegistry, Recorder};
 use hydrolysis::Style;
 use hydrolysis::theme::{
     BadgeMetrics, ButtonLook, ButtonSpec, CheckboxLook, DividerMetrics, GlassLook, IndicatorLook,
-    InputFieldMetrics, InteractionMotion, LinearProgressLook, ListDividerMetrics, ListMetrics,
-    ListRowMetrics, ListSectionMetrics, ListTrailingControlMetrics, NavigationMetrics,
-    NavigationMotion, PickerMetrics, ProgressSpec, RadioIndicatorState, RadioSelectionMotion,
-    SegmentedLook, SegmentedSpec, SliderLook, SliderSpec, StepperLook, StepperSpec, SwitchLook,
-    TabItemGeometry, TabItemLayout, TableMetrics, TabsMetrics, TextCaretMotion,
-    TextContextMenuMetrics, ToggleSpec, WidgetInteractionState, WidgetTheme,
+    InteractionMotion, LinearProgressLook, ListDividerMetrics, ListMetrics, ListRowMetrics,
+    ListSectionMetrics, ListTrailingControlMetrics, MenuLook, MenuPickerLook, MenuSpec,
+    NavigationBarLook, NavigationSpec, PickerSpec, ProgressSpec, RadioGroupLook, SegmentedLook,
+    SegmentedSpec, SliderLook, SliderSpec, StepperLook, StepperSpec, SwitchLook, TableMetrics,
+    TabsLook, TabsSpec, TextFieldLook, TextFieldSpec, ToggleSpec, WidgetInteractionState,
+    WidgetTheme,
 };
 use waterui::Plugin as _;
 use waterui::animation::Animation;
@@ -49,12 +49,11 @@ use waterui::text::font::{Font, Footnote};
 use waterui::theme::{ColorSettings, FontSettings, Theme, installed_color_scheme};
 use waterui_controls::ControlSize;
 use waterui_controls::button::ButtonStyle;
-use waterui_core::{EasingCurve, Environment};
-use waterui_form::picker::PickerStyle;
+use waterui_core::Environment;
 
 use crate::material::gpu::Group;
 use crate::material::recipe::Translucency;
-use palette::{Palette, resolved, working};
+use palette::{Palette, resolved};
 use surfaces::Surface;
 
 /// Duration of the eased press response: the time an exponential ease at
@@ -270,23 +269,6 @@ impl WidgetTheme for Glass {
         }
     }
 
-    fn text_caret_motion(&self) -> TextCaretMotion {
-        TextCaretMotion {
-            fade_cycle_duration: Duration::from_millis(1_000),
-            frame_interval: Duration::from_millis(16),
-            min_opacity: 0.0,
-        }
-    }
-
-    fn navigation_motion(&self) -> NavigationMotion {
-        NavigationMotion {
-            transition_duration: NAVIGATION_DURATION,
-            transition_easing: EasingCurve::bezier(0.2, 0.0, 0.0, 1.0),
-            shared_axis_slide_distance: 30.0,
-            fade_through_threshold: 0.35,
-        }
-    }
-
     fn register_backdrop_shaders(&self, registry: &mut MaterialRegistry) {
         materials::register(registry);
     }
@@ -315,159 +297,20 @@ impl WidgetTheme for Glass {
         looks::stepper(self, spec, env)
     }
 
-    fn input_field_metrics(&self) -> InputFieldMetrics {
-        InputFieldMetrics::new(20.0, 120.0, 36.0, 12.0, 8.0)
+    fn text_field(&self, spec: &TextFieldSpec, env: &Environment) -> TextFieldLook {
+        looks::text_field(self, spec, env)
     }
 
-    fn input_placeholder_color(&self) -> Color {
-        Self::color(self.palette.muted_foreground)
+    fn menu(&self, spec: &MenuSpec, env: &Environment) -> MenuLook {
+        looks::menu(self, *spec, env)
     }
 
-    fn input_selection_paint(&self) -> Paint {
-        Paint::Solid(working(palette::alpha(self.palette.accent, 0.3)))
+    fn menu_picker(&self, spec: &PickerSpec, env: &Environment) -> MenuPickerLook {
+        looks::menu_picker(self, spec, env)
     }
 
-    fn input_caret_paint(&self, opacity: f32) -> Paint {
-        Paint::Solid(working(palette::alpha(self.palette.accent, opacity)))
-    }
-
-    fn draw_input_field(&self, draw: &mut Recorder, bounds: Rect, state: WidgetInteractionState) {
-        chrome::input_field(&self.palette, draw, bounds, state);
-    }
-
-    fn draw_input_field_state_layer(
-        &self,
-        draw: &mut Recorder,
-        bounds: Rect,
-        state: WidgetInteractionState,
-    ) {
-        chrome::state_layer(
-            &self.palette,
-            draw,
-            bounds,
-            RoundedRectRadii::from_single_radius(10.0),
-            state,
-        );
-    }
-
-    fn text_context_menu_metrics(&self) -> TextContextMenuMetrics {
-        TextContextMenuMetrics {
-            row_height: 40.0,
-            horizontal_padding: 16.0,
-            vertical_padding: 6.0,
-            min_width: 120.0,
-            max_width: 280.0,
-            width_per_char: 8.0,
-            corner_radius: chrome::MENU_CORNER_RADIUS,
-            separator_horizontal_inset: 0.0,
-            separator_thickness: chrome::HAIRLINE,
-        }
-    }
-
-    fn draw_text_context_menu_panel(&self, draw: &mut Recorder, bounds: Rect) {
-        chrome::popup_panel(&self.palette, draw, bounds);
-    }
-
-    fn draw_text_context_menu_separator(&self, draw: &mut Recorder, bounds: Rect) {
-        chrome::separator(&self.palette, draw, bounds);
-    }
-
-    fn picker_metrics(&self, _style: PickerStyle) -> PickerMetrics {
-        PickerMetrics {
-            min_width: 120.0,
-            min_height: 36.0,
-            horizontal_inset: 12.0,
-            vertical_inset: 8.0,
-            label_spacing: 8.0,
-            indicator_space: 24.0,
-            radio_indicator_size: 22.0,
-            radio_label_spacing: 10.0,
-            radio_row_spacing: 12.0,
-            popup_top_spacing: 6.0,
-            popup_row_height: 40.0,
-            popup_corner_radius: chrome::MENU_CORNER_RADIUS,
-        }
-    }
-
-    fn radio_selection_motion(&self) -> RadioSelectionMotion {
-        RadioSelectionMotion {
-            inner_grow: Animation::ease_out(PRESS_DURATION),
-            inner_opacity: Animation::ease_out(PRESS_DURATION),
-            outer_color: Animation::ease_out(PRESS_DURATION),
-        }
-    }
-
-    fn draw_picker_indicator(&self, draw: &mut Recorder, bounds: Rect) {
-        chrome::picker_indicator(&self.palette, draw, bounds);
-    }
-
-    fn draw_picker_state_layer(
-        &self,
-        draw: &mut Recorder,
-        bounds: Rect,
-        state: WidgetInteractionState,
-    ) {
-        chrome::state_layer(
-            &self.palette,
-            draw,
-            bounds,
-            RoundedRectRadii::from_single_radius(10.0),
-            state,
-        );
-    }
-
-    fn draw_picker_popup(&self, draw: &mut Recorder, popup_rect: Rect) {
-        chrome::popup_panel(&self.palette, draw, popup_rect);
-    }
-
-    fn draw_picker_popup_row_background(
-        &self,
-        draw: &mut Recorder,
-        row_rect: Rect,
-        selected: bool,
-    ) {
-        chrome::popup_row_background(&self.palette, draw, row_rect, selected);
-    }
-
-    fn draw_picker_popup_row_state_layer(
-        &self,
-        draw: &mut Recorder,
-        row_rect: Rect,
-        _selected: bool,
-        state: WidgetInteractionState,
-    ) {
-        chrome::state_layer(
-            &self.palette,
-            draw,
-            row_rect.inset(-4.0),
-            RoundedRectRadii::from_single_radius(8.0),
-            state,
-        );
-    }
-
-    fn draw_picker_separator(&self, draw: &mut Recorder, separator: Rect) {
-        chrome::separator(&self.palette, draw, separator);
-    }
-
-    fn draw_radio_indicator(
-        &self,
-        draw: &mut Recorder,
-        center: Point,
-        radius: f64,
-        state: RadioIndicatorState,
-    ) {
-        chrome::radio_indicator(&self.palette, draw, center, radius, state);
-    }
-
-    fn draw_radio_state_layer(
-        &self,
-        draw: &mut Recorder,
-        center: Point,
-        radius: f64,
-        _selected: bool,
-        state: WidgetInteractionState,
-    ) {
-        chrome::circular_state_layer(&self.palette, draw, center, radius * 1.6, state);
+    fn radio_group(&self, spec: &PickerSpec, env: &Environment) -> RadioGroupLook {
+        looks::radio_group(self, spec, env)
     }
 
     fn segmented_picker(&self, spec: &SegmentedSpec, env: &Environment) -> SegmentedLook {
@@ -490,76 +333,12 @@ impl WidgetTheme for Glass {
         looks::loading(self, spec, env)
     }
 
-    fn navigation_metrics(&self) -> NavigationMetrics {
-        NavigationMetrics {
-            automatic_bar_height: 44.0,
-            inline_bar_height: 44.0,
-            medium_bar_height: 96.0,
-            large_bar_height: 96.0,
-            inline_title_height: 44.0,
-            medium_title_height: 52.0,
-            large_title_height: 52.0,
-            title_leading_inset: 16.0,
-            title_trailing_inset: 16.0,
-            large_title_bottom_inset: 8.0,
-            horizontal_inset: 16.0,
-            item_spacing: 8.0,
-            search_height: 36.0,
-            search_vertical_inset: 8.0,
-            back_button_size: 44.0,
-            back_button_leading_inset: 8.0,
-            back_button_top_inset: 0.0,
-        }
+    fn navigation_bar(&self, spec: &NavigationSpec, env: &Environment) -> NavigationBarLook {
+        looks::navigation_bar(self, *spec, env)
     }
 
-    fn draw_navigation_bar(&self, draw: &mut Recorder, bounds: Rect, _background: &Paint) {
-        record_standalone(
-            draw,
-            &surfaces::toolbar(&self.palette, bounds, self.translucency),
-        );
-    }
-
-    fn draw_navigation_bar_separator(&self, _draw: &mut Recorder, _bounds: Rect) {}
-
-    fn draw_navigation_back_button(&self, draw: &mut Recorder, bounds: Rect) {
-        chrome::back_button(&self.palette, draw, bounds);
-    }
-
-    fn tabs_metrics(&self, _layout: TabItemLayout) -> TabsMetrics {
-        TabsMetrics::new(60.0, 64.0, 12.0, 6.0)
-    }
-
-    fn draw_tabs_bar(&self, draw: &mut Recorder, surface: Rect) {
-        record_standalone(
-            draw,
-            &surfaces::tab_bar(&self.palette, surface, self.translucency),
-        );
-    }
-
-    fn draw_tabs_bar_divider(&self, draw: &mut Recorder, divider: Rect) {
-        chrome::separator(&self.palette, draw, divider);
-    }
-
-    fn draw_tabs_highlight(&self, draw: &mut Recorder, item: TabItemGeometry) {
-        chrome::tabs_highlight(&self.palette, draw, item.bounds);
-    }
-
-    fn draw_tabs_button_state_layer(
-        &self,
-        draw: &mut Recorder,
-        item: TabItemGeometry,
-        _selected: bool,
-        state: WidgetInteractionState,
-    ) {
-        let bounds = item.bounds;
-        let r = bounds.height().min(bounds.width()) * 0.5;
-        chrome::state_layer(
-            &self.palette,
-            draw,
-            bounds,
-            RoundedRectRadii::from_single_radius(r),
-            state,
-        );
+    fn tabs(&self, spec: &TabsSpec, env: &Environment) -> TabsLook {
+        looks::tabs(self, *spec, env)
     }
 
     fn draw_scroll_indicator(&self, draw: &mut Recorder, bounds: Rect) {
@@ -806,12 +585,8 @@ mod tests {
     fn tab_bar_and_toolbar_record_backdrop_materials() {
         let g = Glass::light();
         let layered = layered_recorder(|r| {
-            g.draw_tabs_bar(r, Rect::new(0.0, 0.0, 390.0, 50.0));
-            g.draw_navigation_bar(
-                r,
-                Rect::new(0.0, 0.0, 390.0, 44.0),
-                &Paint::Solid(working(palette::alpha(Palette::LIGHT.surface, 0.8))),
-            );
+            record_standalone(r, &g.tab_bar_surface(Rect::new(0.0, 0.0, 390.0, 50.0)));
+            record_standalone(r, &g.toolbar_surface(Rect::new(0.0, 0.0, 390.0, 44.0)));
         });
         assert_eq!(layered.runs.len(), 2);
         for run in &layered.runs {

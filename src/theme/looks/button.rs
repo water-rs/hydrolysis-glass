@@ -18,12 +18,11 @@ use waterui_core::Environment;
 use crate::material::recipe::{Family, Recipe};
 
 use super::super::button::{BorderShape, GROWTH_PER_PRESS, Kind, SizeGroup};
-use super::super::chrome::{FOCUS_RING_GAP, FOCUS_RING_WIDTH, HOVER_ALPHA, PRESSED_ALPHA};
 use super::super::materials::{self, CONTINUOUS_SMOOTHING, GLASS_SHADER};
 use super::super::palette::{alpha, over};
 use super::super::surfaces::{self, Press, Wash};
 use super::super::{Glass, button};
-use super::{control_motion, hit_region, is_disabled, rgba_of};
+use super::{control_motion, hit_region, is_disabled, rgba_of, state_chrome};
 
 /// The look of a button in `spec`.
 ///
@@ -94,24 +93,7 @@ fn label_color(
 /// The chrome of a style with no body: a state layer over a capsule and a
 /// focus ring.
 fn plain_chrome(glass: &Glass) -> Chrome {
-    let palette = glass.palette;
-    Chrome::new(
-        ChromeSurface::clear(CornerShape::full()),
-        StateLayer::new(Glass::color(palette.state_layer)).opacities(
-            HOVER_ALPHA,
-            HOVER_ALPHA,
-            PRESSED_ALPHA,
-            PRESSED_ALPHA,
-        ),
-        PressFeedback::new().tint(),
-        FocusIndicator::Ring {
-            width: FOCUS_RING_WIDTH,
-            offset: FOCUS_RING_GAP,
-            color: Glass::color(palette.accent),
-        },
-        control_motion(),
-    )
-    .hit(hit_region())
+    state_chrome(glass, ChromeSurface::clear(CornerShape::full())).hit(hit_region())
 }
 
 /// The chrome of a glass or prominent button: the glass body as a backdrop
