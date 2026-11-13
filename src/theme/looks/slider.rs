@@ -77,6 +77,8 @@ pub(in super::super) fn look(glass: &Glass, spec: &SliderSpec, env: &Environment
     // A touch drags only from the knob and moves the value by its offset
     // from where it began (§8.3, Touch).
     let drag = DragMapping::Relative { knob_only: true };
+    // A disabled slider is the enabled one composited at opacity 0.5 in
+    // encoded space (§8.3, States).
     let mut look = SliderLook::new(layout, knob, drag, motion())
         .group_opacity(Driven::new(|inputs: &Inputs<'_, ()>| {
             if is_disabled(inputs.state) {
@@ -85,6 +87,7 @@ pub(in super::super) fn look(glass: &Glass, spec: &SliderSpec, env: &Environment
                 1.0
             }
         }))
+        .group_blend_space(BlendSpace::SrgbEncoded)
         .part(track(glass, spec, env))
         .part(knob_lens(glass))
         .part(knob_fill())

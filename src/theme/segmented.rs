@@ -10,7 +10,7 @@
 //! it.
 
 use cherenkov_record::MaterialEffect;
-use cherenkov_record::kurbo::{Point, Rect};
+use cherenkov_record::kurbo::Rect;
 use waterui::text::font::FontWeight;
 use waterui_controls::ControlSize;
 use waterui_core::contract_violation;
@@ -221,13 +221,6 @@ pub fn lens_capture_scale(
     lens_recipe(h, h, appearance, translucency).capture_scale
 }
 
-/// The point the pressed thumb's lens collapses to while no touch presses
-/// it: the thumb's centre.
-#[must_use]
-pub fn lens_centre(row: Rect, count: usize, s: f64) -> Point {
-    thumb_rect(row, count, s, 1.0).center()
-}
-
 #[cfg(test)]
 #[allow(
     clippy::suboptimal_flops,
@@ -331,7 +324,9 @@ mod tests {
         // third segment.
         let centre = |t_ms| {
             let s = display_position(0.0, 2.0, Duration::from_millis(t_ms));
-            lens_centre(Rect::new(0.0, 0.0, 300.0, 31.0), 3, s).x
+            thumb_rect(Rect::new(0.0, 0.0, 300.0, 31.0), 3, s, 1.0)
+                .center()
+                .x
         };
         near(centre(0), 50.0, 1e-3);
         near(centre(50), 89.5, 1.0);

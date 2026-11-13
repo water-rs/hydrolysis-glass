@@ -8,9 +8,7 @@
 //! to right: Hydrolysis mirrors it in a right-to-left layout.
 
 use cherenkov_record::kurbo::{Size, Stroke, Vec2};
-use cherenkov_record::{
-    BlendSpace, ContinuousRect, Draw as _, Group, Live, MaterialEffect, Paint, ShapeData,
-};
+use cherenkov_record::{BlendSpace, Draw as _, Group, Live, MaterialEffect, Paint, ShapeData};
 use hydrolysis::theme::{
     Custom, Driven, DrivenSet, HitRegion, Inputs, Motion, Segment, SegmentLabel, SegmentedDrag,
     SegmentedLayout, SegmentedLook, SegmentedSpec, SegmentedValue, Transition, ValueMotion,
@@ -22,7 +20,7 @@ use waterui_core::Environment;
 
 use super::super::Glass;
 use super::super::chrome::{FOCUS_RING_GAP, FOCUS_RING_WIDTH};
-use super::super::materials::{self, CONTINUOUS_SMOOTHING, GLASS_SHADER};
+use super::super::materials::{self, GLASS_SHADER};
 use super::super::segmented::{
     self, CONTAINER_OVERHANG, DISABLED_OPACITY, LABEL_SIZE, MIN_HIT_HEIGHT, SELECTION, SizeGroup,
     TAP_SLOP,
@@ -57,22 +55,6 @@ fn motion() -> Motion {
         press: Transition::new(Spring::PRESS.physical(), Spring::RELEASE.physical()),
         drag: Transition::symmetric(Animation::ease_out(DRAG_DURATION)),
         value: ValueMotion::Always(SELECTION.physical()),
-    }
-}
-
-/// The lens's motion: the control's, with the release spring's natural
-/// frequency critically damped. The lens collapses to the thumb's centre at
-/// rest, so the release spring's undershoot below a press of 0 would turn
-/// it inside out; critically damped, it shrinks to nothing as the fill
-/// returns.
-fn lens_motion() -> Motion {
-    let release = Spring {
-        omega0: Spring::RELEASE.omega0,
-        zeta: 1.0,
-    };
-    Motion {
-        press: Transition::new(Spring::PRESS.physical(), release.physical()),
-        ..motion()
     }
 }
 
@@ -115,6 +97,8 @@ pub(in super::super) fn look(
     SegmentedLook::new(layout, label, motion())
         .hit(hit)
         .drag(SegmentedDrag::new(spec.direction()))
+        // A disabled control is the enabled one composited at opacity 0.5 in
+        // encoded space, labels included (§8.4, States).
         .group_opacity(Driven::new(|inputs: &Inputs<'_, ()>| {
             if is_disabled(inputs.state) {
                 DISABLED_OPACITY
@@ -122,6 +106,7 @@ pub(in super::super) fn look(
                 1.0
             }
         }))
+        .group_blend_space(BlendSpace::SrgbEncoded)
         .part(body(glass, count))
         .part(focus_ring(glass, count))
         .over_labels(lens(glass, group, count))
@@ -186,13 +171,15 @@ fn body(
 }
 
 /// The lens a press makes of the thumb: a clear-family glass element over
-/// the container, the neighbouring segments and the labels (§8.4, Touch).
+/// the container, the neighbouring segments and the labels, the thumb scaled
+/// about its centre by `1 + 0.15·p` and drawn at opacity `max(p, 0)`, so it
+/// fades in and out with the press while the fill fades the other way
+/// (§8.4, Touch). At rest it is at opacity 0, which the engine skips with
+/// its capture: no part is glass.
 ///
-/// A backdrop part is recorded at rest as well, and nothing lies over the
-/// labels to hide it, so the lens is the thumb collapsed to its centre while
-/// no touch presses it and grows with the press to the thumb's
-/// `1 + 0.15·p` scale: at rest no part is glass. Its shape runs with
-/// [`lens_motion`].
+/// The part's opacity runs with the control's press and release springs;
+/// the release spring's undershoot below 0 takes the layer to an opacity at
+/// or below 0, which shows nothing, so the opacity is `max(p, 0)`.
 fn lens(
     glass: &Glass,
     group: SizeGroup,
@@ -204,20 +191,8 @@ fn lens(
         segmented::lens_capture_scale(group, appearance, translucency),
     );
     let shape = Driven::new(move |inputs: &Inputs<'_, SegmentedValue>| {
-        if held(inputs.state) {
-            switch::capsule(thumb(count, inputs))
-        } else {
-            let centre = segmented::lens_centre(inputs.frame, count, inputs.value.position);
-            ShapeData::Continuous(
-                ContinuousRect::new(
-                    cherenkov_record::kurbo::Rect::from_points(centre, centre),
-                    0.0,
-                )
-                .with_smoothing(CONTINUOUS_SMOOTHING),
-            )
-        }
-    })
-    .motion(lens_motion());
+        switch::capsule(thumb(count, inputs))
+    });
     let effect = Driven::new(
         move |inputs: &Inputs<'_, SegmentedValue>| -> MaterialEffect {
             segmented::lens_effect(inputs.frame, count, appearance, translucency)
@@ -229,6 +204,9 @@ fn lens(
             recorder.backdrop_material(shape, GLASS_SHADER, capture, effect);
         },
     )
+    .opacity(Driven::new(|inputs: &Inputs<'_, SegmentedValue>| {
+        f32::from(u8::from(held(inputs.state)))
+    }))
 }
 
 /// The focus ring around the thumb, visible while the control has keyboard
