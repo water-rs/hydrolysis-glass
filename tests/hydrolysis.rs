@@ -1542,10 +1542,50 @@ fn the_press_lens_reaches_over_the_neighbouring_segments() {
             agreement("held is not at rest", &held, &rest).is_err(),
             "{name}: a held thumb is drawn as at rest"
         );
-        // Released, the lens collapses and the thumb is flat again.
+        // Released, the lens fades out and the thumb is flat again.
         app.touch_up(segment_x(1), ROW_MID);
-        assert_agrees(&format!("{name}: released"), &app.snapshot(), &rest);
+        let released = app.snapshot();
+        released.save(&format!("segmented_lens_{name}_released"));
+        assert_agrees(&format!("{name}: released"), &released, &rest);
     }
+}
+
+/// §8.4, Lens, through the release: 0.1 s after the touch lifts, the
+/// release spring has `p` near 0.29, so the lens is partly faded and the
+/// fill partly back; at 0.15 s the spring undershoots below 0, where the
+/// lens is at opacity `max(p, 0) = 0` and the thumb, scaled by
+/// `1 + 0.15·p`, stays a thumb. Light appearance, where the opaque fill
+/// makes the fade plain; both frames exported for review.
+#[test]
+fn the_lens_fades_out_through_the_release() {
+    let mut app = plain_segmented_app(Appearance::Light, &Binding::container(1));
+    app.settle();
+    app.touch_down(segment_x(1), ROW_MID);
+    let mut clock = Duration::ZERO;
+    let held = capture_at(&mut app, &mut clock, 600, "segmented_lens_light_held");
+    app.touch_up(segment_x(1), ROW_MID);
+    let mut clock = Duration::ZERO;
+    let fading = capture_at(
+        &mut app,
+        &mut clock,
+        100,
+        "segmented_lens_light_release_t0100",
+    );
+    assert!(
+        agreement("fading is not held", &fading, &held).is_err(),
+        "the lens 0.1 s into the release is drawn as held"
+    );
+    capture_at(
+        &mut app,
+        &mut clock,
+        150,
+        "segmented_lens_light_release_t0150",
+    );
+    assert_agrees(
+        "settled after the release",
+        &app.snapshot(),
+        &segmented_at_rest(Appearance::Light, 1),
+    );
 }
 
 /// §8.4, Drag: a press on the selected segment drags the thumb by the
