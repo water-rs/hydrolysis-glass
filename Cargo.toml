@@ -1,0 +1,176 @@
+[workspace]
+resolver = "2"
+
+[package]
+name = "hydrolysis-glass"
+version = "0.1.0"
+edition = "2024"
+authors = ["Lexo Liu"]
+rust-version = "1.99"
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/water-rs/hydrolysis-glass"
+description = "Glass material widget theme for WaterUI Hydrolysis"
+keywords = ["ui", "theme", "glass", "waterui", "graphics"]
+categories = ["gui"]
+include = ["src/**", "shaders/**", "README.md", "LICENSE-*"]
+
+[features]
+default = []
+# GPU→CPU readback for the verification harness. Off for consumers:
+# nothing may build a readback path on the runtime API.
+verification = []
+
+[dependencies]
+bytemuck = { version = "1", features = ["derive"] }
+# The recording contract the theme spells its chrome in — `Draw`/`Recorder`,
+# `Paint`, `Shadow`, `Group`, `kurbo` and the material contract
+# (`MaterialRegistry`, `Recorder::backdrop_material`, `MaterialEffect`,
+# `CaptureClass`) — the render-target-neutral layer, never the engine.
+cherenkov-record = "0.0.0"
+hydrolysis = "0.3.1"
+nami = "0.13"
+waterui = { version = "0.5.2", default-features = false }
+waterui-controls = "0.5.1"
+waterui-core = "0.5.1"
+waterui-form = "0.5.1"
+# `WorkingColor`, the theme's working-space colour term. The recording
+# layer alone is needed, so the engine features stay off.
+waterui-graphics = { version = "0.5.1", default-features = false }
+wgpu = { version = "30.0.1", default-features = false, features = ["wgsl"] }
+
+[dev-dependencies]
+# The test harness exercises the `verification` surface.
+hydrolysis-glass = { path = ".", version = "0.1.0", features = ["verification"] }
+# `testing` carries Hydrolysis's headless offscreen runtime
+# (`HeadlessRuntime::new_for_tests`): the verification suite mounts real
+# `WaterUI` views under this theme on the backend's own render path and
+# reads the frames back, so what it checks is the app path, not a copy of
+# it. The feature adds no dependency of its own.
+hydrolysis = { version = "0.3.1", features = ["testing"] }
+pollster = "1.0"
+tracing = "0.1"
+# Writes the verification renders as PNG so a failing property can be looked at.
+image = { version = "0.25.10", default-features = false, features = ["png"] }
+
+[lints.rust]
+missing_docs = "warn"
+missing_debug_implementations = "warn"
+
+[lints.clippy]
+all = { level = "warn", priority = -1 }
+style = { level = "warn", priority = -1 }
+correctness = { level = "warn", priority = -1 }
+complexity = { level = "warn", priority = -1 }
+suspicious = { level = "warn", priority = -1 }
+perf = { level = "warn", priority = -1 }
+pedantic = { level = "warn", priority = -1 }
+nursery = { level = "warn", priority = -1 }
+cargo = { level = "warn", priority = -1 }
+undocumented_unsafe_blocks = "warn"
+multiple_crate_versions = "allow"
+
+# Third-party forks the framework itself patches; a registry dependency does
+# not carry its own patch table, so the ones this graph resolves are repeated
+# here so it builds the same sources as water-rs/waterui at the pinned rev.
+[patch.crates-io]
+
+# The framework this crate builds against: water-rs/waterui's `dev`, whose
+# recording contract carries the backdrop materials this theme declares
+# (water-rs/waterui#1786, #1787, #1788 and their group-field, recording-scale
+# and blend-space followers #2428–#2430) and whose `hydrolysis::theme` holds
+# the widget theme contract (#1430). `hydrolysis` lives in the repository at
+# `backends/hydrolysis` and the `cherenkov`/`filtrate` engine family under
+# `graphics/` (water-rs/waterui#1449), so every framework crate resolves to
+# this one source — a registry `waterui-core` beside it gives two `View`
+# traits in one graph. `branch = "dev"` follows the branch; the commit it
+# resolved to is recorded by `Cargo.lock`.
+waterui = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-assets = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-assets-core = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-controls = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-core = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-dylib = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-form = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-graphics = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-icon = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-inspector-protocol = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-internal = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-layout = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-locale = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-macros = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-map = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-navigation = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-shape = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-text = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-url = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-watcher-set = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+waterui-webview = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+hydrolysis = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+# `cherenkov-record` is this crate's own crates.io requirement: it resolves
+# to the same source so the graph carries one `Recorder`/`Paint` pair. The
+# engine crates themselves — `cherenkov`, `cherenkov-gpu`, `cherenkov-cpu`,
+# `filtrate*` — enter only through hydrolysis's in-repository requirements
+# and need no entry of their own.
+cherenkov-record = { git = "https://github.com/water-rs/waterui", branch = "dev" }
+
+# Mirrored from the framework's own patch, which a dependency's manifest
+# does not carry downstream: the engine's shader build follows shaderloom's
+# `dev`; wgpu-external-frame shares wgpu-hal's glow context, so it links the
+# glow 0.18 of the wgpu branch below; clipboard-rs's branch admits the
+# `windows` 0.62 wgpu-hal resolves, keeping one set of ID3D12 types.
+shaderloom = { git = "https://github.com/water-rs/shaderloom", branch = "main" }
+wgpu-external-frame = { git = "https://github.com/water-rs/wgpu-external-frame", branch = "main" }
+clipboard-rs = { git = "https://github.com/water-rs/clipboard-rs", branch = "windows-0.62-signed" }
+
+# Extracted component crates from the sources the framework's own patch table
+# names: any of them that enters the graph must come from these sources or a
+# shared type splits across two copies.
+waterui-svg = { git = "https://github.com/water-rs/svg", branch = "dev" }
+# suiteki's crates.io line implements nami-core 0.3's `Signal`; suiteki's
+# `dev` implements 0.5's (water-rs/suiteki#29), which the graph's nami-core
+# 0.5 requires. Mirrors the framework's own patch; the commit is recorded
+# by `Cargo.lock`.
+suiteki = { git = "https://github.com/water-rs/suiteki", branch = "main" }
+
+# Every waterkit crate the codec/clipboard graph shares types across rides
+# the same source — a registry `waterkit-core` beside the patched
+# `waterkit-codec` gives two decoder types. The framework's own patch table
+# follows waterkit's `dev`, so these do too; the commit is recorded by
+# `Cargo.lock`.
+waterkit-build = { git = "https://github.com/water-rs/waterkit", branch = "main" }
+waterkit-clipboard = { git = "https://github.com/water-rs/waterkit", branch = "main" }
+waterkit-core = { git = "https://github.com/water-rs/waterkit", branch = "main" }
+waterkit-dialog = { git = "https://github.com/water-rs/waterkit", branch = "main" }
+waterkit-fs = { git = "https://github.com/water-rs/waterkit", branch = "main" }
+waterkit-location = { git = "https://github.com/water-rs/waterkit", branch = "main" }
+waterkit-permission = { git = "https://github.com/water-rs/waterkit", branch = "main" }
+
+# Mirrored from the framework's own patch (water-rs/cherenkov#229, carried
+# into water-rs/waterui): wgpu 30.0.1's native display backend reads the
+# address of the colour-space globals instead of their value and crashes
+# whenever a surface negotiates a wide-gamut or HDR colour space
+# (gfx-rs/wgpu#10175, fixed on trunk, not yet released for v30).
+# The branch also carries the passthrough threadgroup-memory metadata the
+# engine's shaders are built with and moves wgpu-hal to glow 0.18; drop these
+# entries once a wgpu-hal release ships all three.
+naga = { git = "https://github.com/water-rs/wgpu", branch = "fix/metal-shared-memory-v30" }
+naga-types = { git = "https://github.com/water-rs/wgpu", branch = "fix/metal-shared-memory-v30" }
+wgpu = { git = "https://github.com/water-rs/wgpu", branch = "fix/metal-shared-memory-v30" }
+wgpu-core = { git = "https://github.com/water-rs/wgpu", branch = "fix/metal-shared-memory-v30" }
+wgpu-core-deps-apple = { git = "https://github.com/water-rs/wgpu", branch = "fix/metal-shared-memory-v30" }
+wgpu-core-deps-emscripten = { git = "https://github.com/water-rs/wgpu", branch = "fix/metal-shared-memory-v30" }
+wgpu-core-deps-windows-linux-android = { git = "https://github.com/water-rs/wgpu", branch = "fix/metal-shared-memory-v30" }
+wgpu-hal = { git = "https://github.com/water-rs/wgpu", branch = "fix/metal-shared-memory-v30" }
+wgpu-naga-bridge = { git = "https://github.com/water-rs/wgpu", branch = "fix/metal-shared-memory-v30" }
+wgpu-types = { git = "https://github.com/water-rs/wgpu", branch = "fix/metal-shared-memory-v30" }
+
+# Tests that render the material through the engine run the test binary
+# through `cargo nextest run` (preferred) or `cargo test`. `cargo-nextest`
+# stays a dev tool so a contributor builds with `cargo test` too.
+
+# The verification scenes render through a software rasterizer: dependencies
+# still build optimized in dev so the scene tests spend their time on the
+# GPU work, not on unoptimized support code.
+[profile.dev.package."*"]
+opt-level = 3
