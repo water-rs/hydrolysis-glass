@@ -4783,7 +4783,7 @@ dependencies = [
 [[package]]
 name = "waterui-svg"
 version = "0.4.0"
-source = "git+https://github.com/water-rs/svg?branch=dev#75b85fbb0e7f2add26bf598ef34fba497f56d84d"
+source = "git+https://github.com/water-rs/svg?branch=main#ad60d37ecb46b15f8d4eb29e83cbf6211ed57e9b"
 dependencies = [
  "suiteki",
  "tracing",
