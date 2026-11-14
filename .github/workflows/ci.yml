@@ -42,14 +42,31 @@ jobs:
         if: runner.os == 'Windows'
         uses: tracel-ai/github-actions/install-dxc@295f2fdbae5271f4f8ad56d634e4ff6a95daafc8
       - uses: Swatinem/rust-cache@v2
-      # The image's system WARP misexecutes optimized DXIL and stalls the
-      # Hydrolysis-mounted tests; the framework's pinned current WARP runs
-      # them (water-rs/waterui#3093). Staged after the cache restore: a
-      # restore that is not a full match pre-cleans the target directory,
-      # deleting every file directly in `target/debug` and every file in
-      # `deps` last written over a week ago, which the DLL is, since it
-      # keeps the package's own timestamp. Staged before it, the copies are
-      # gone by the time the tests load WARP, and they run on the image's.
+      - if: runner.os == 'Linux'
+        run: cargo fmt --all -- --check
+      - run: cargo clippy --locked --all-targets -- -D warnings
+      - uses: taiki-e/install-action@nextest
+      # Cargo 1.100's build-dir layout writes each test binary into its own
+      # `target/debug/build/hydrolysis-glass/<hash>/out/` directory instead
+      # of `target/debug/deps`. Build the test binaries first so those
+      # directories exist, and after `Swatinem/rust-cache` has finished any
+      # target-directory cleanup, then stage the pinned current WARP
+      # (water-rs/waterui#3093) into each of them before running the suite.
+      - name: Build test binaries
+        if: runner.os == 'Windows'
+        id: test-dirs
+        shell: pwsh
+        run: |
+          cargo nextest run --locked --no-run
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $dirs = @(Get-ChildItem target\debug\build\hydrolysis-glass\*\out -Directory |
+            ForEach-Object { $_.FullName })
+          if ($dirs.Count -eq 0) {
+            throw "No test output directories found under target\debug\build\hydrolysis-glass"
+          }
+          Add-Content -Path $env:GITHUB_OUTPUT -Value 'into<<EOF'
+          Add-Content -Path $env:GITHUB_OUTPUT -Value $dirs
+          Add-Content -Path $env:GITHUB_OUTPUT -Value 'EOF'
       - name: Install current WARP
         if: runner.os == 'Windows'
         uses: water-rs/waterui/.github/actions/install-warp@dev
@@ -57,10 +74,7 @@ jobs:
           into: |
             target/debug/deps
             target/debug
-      - if: runner.os == 'Linux'
-        run: cargo fmt --all -- --check
-      - run: cargo clippy --locked --all-targets -- -D warnings
-      - uses: taiki-e/install-action@nextest
+            ${{ steps.test-dirs.outputs.into }}
       - run: cargo nextest run --locked
       - run: cargo test --locked --doc
 
