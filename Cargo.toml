@@ -119,8 +119,8 @@ cherenkov-record = { git = "https://github.com/water-rs/waterui", branch = "dev"
 # `dev`; wgpu-external-frame shares wgpu-hal's glow context, so it links the
 # glow 0.18 of the wgpu branch below; clipboard-rs's branch admits the
 # `windows` 0.62 wgpu-hal resolves, keeping one set of ID3D12 types.
-shaderloom = { git = "https://github.com/water-rs/shaderloom", branch = "dev" }
-wgpu-external-frame = { git = "https://github.com/water-rs/wgpu-external-frame", branch = "dev" }
+shaderloom = { git = "https://github.com/water-rs/shaderloom", branch = "main" }
+wgpu-external-frame = { git = "https://github.com/water-rs/wgpu-external-frame", branch = "main" }
 clipboard-rs = { git = "https://github.com/water-rs/clipboard-rs", branch = "windows-0.62-signed" }
 
 # Extracted component crates from the sources the framework's own patch table
@@ -131,20 +131,20 @@ waterui-svg = { git = "https://github.com/water-rs/svg", branch = "dev" }
 # `dev` implements 0.5's (water-rs/suiteki#29), which the graph's nami-core
 # 0.5 requires. Mirrors the framework's own patch; the commit is recorded
 # by `Cargo.lock`.
-suiteki = { git = "https://github.com/water-rs/suiteki", branch = "dev" }
+suiteki = { git = "https://github.com/water-rs/suiteki", branch = "main" }
 
 # Every waterkit crate the codec/clipboard graph shares types across rides
 # the same source — a registry `waterkit-core` beside the patched
 # `waterkit-codec` gives two decoder types. The framework's own patch table
 # follows waterkit's `dev`, so these do too; the commit is recorded by
 # `Cargo.lock`.
-waterkit-build = { git = "https://github.com/water-rs/waterkit", branch = "dev" }
-waterkit-clipboard = { git = "https://github.com/water-rs/waterkit", branch = "dev" }
-waterkit-core = { git = "https://github.com/water-rs/waterkit", branch = "dev" }
-waterkit-dialog = { git = "https://github.com/water-rs/waterkit", branch = "dev" }
-waterkit-fs = { git = "https://github.com/water-rs/waterkit", branch = "dev" }
-waterkit-location = { git = "https://github.com/water-rs/waterkit", branch = "dev" }
-waterkit-permission = { git = "https://github.com/water-rs/waterkit", branch = "dev" }
+waterkit-build = { git = "https://github.com/water-rs/waterkit", branch = "main" }
+waterkit-clipboard = { git = "https://github.com/water-rs/waterkit", branch = "main" }
+waterkit-core = { git = "https://github.com/water-rs/waterkit", branch = "main" }
+waterkit-dialog = { git = "https://github.com/water-rs/waterkit", branch = "main" }
+waterkit-fs = { git = "https://github.com/water-rs/waterkit", branch = "main" }
+waterkit-location = { git = "https://github.com/water-rs/waterkit", branch = "main" }
+waterkit-permission = { git = "https://github.com/water-rs/waterkit", branch = "main" }
 
 # Mirrored from the framework's own patch (water-rs/cherenkov#229, carried
 # into water-rs/waterui): wgpu 30.0.1's native display backend reads the
