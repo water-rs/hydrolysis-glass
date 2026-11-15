@@ -80,7 +80,7 @@ jobs:
           Add-Content -Path $env:GITHUB_OUTPUT -Value 'EOF'
       - name: Install current WARP
         if: runner.os == 'Windows'
-        uses: water-rs/waterui/.github/actions/install-warp@dev
+        uses: water-rs/waterui/.github/actions/install-warp@main
         with:
           into: |
             target/debug/deps
