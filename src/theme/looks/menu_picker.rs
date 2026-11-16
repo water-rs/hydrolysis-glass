@@ -2,6 +2,7 @@
 //! chevron pair over it. The popup the field opens is the
 //! [menu look](super::menu).
 
+use cherenkov_record::kurbo::Rect;
 use hydrolysis::theme::{Custom, MenuPickerLayout, MenuPickerLook, PickerSpec};
 use waterui_core::Environment;
 
@@ -22,6 +23,14 @@ const LAYOUT: MenuPickerLayout = MenuPickerLayout {
     popup_gap: 6.0,
 };
 
+/// The band of a field at `frame` its chevrons draw in: the
+/// `indicator_space` Hydrolysis keeps clear of the value, inside the
+/// trailing inset, over the field's whole height.
+fn indicator_band(frame: Rect) -> Rect {
+    let x1 = frame.x1 - LAYOUT.horizontal_inset;
+    Rect::new(x1 - LAYOUT.indicator_space, frame.y0, x1, frame.y1)
+}
+
 /// The look of a menu picker's field in `spec`. The selected value keeps
 /// its own styling.
 pub(in super::super) fn look(
@@ -31,7 +40,7 @@ pub(in super::super) fn look(
 ) -> MenuPickerLook {
     let palette = glass.palette;
     let chevrons = Custom::<(), _>::new((), move |recorder, frame, ()| {
-        chrome::picker_indicator(&palette, recorder, frame);
+        chrome::picker_indicator(&palette, recorder, indicator_band(frame));
     });
     MenuPickerLook::new(text_field::container(glass).custom(chevrons), LAYOUT)
 }
