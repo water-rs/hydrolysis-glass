@@ -568,6 +568,31 @@ impl GlassApp {
         });
     }
 
+    /// Clicks the secondary mouse button at `(x, y)` pt: the gesture that
+    /// opens a context menu.
+    pub fn secondary_click(&mut self, x: f32, y: f32) {
+        self.runtime.push_input_event(InputEvent::PointerMove {
+            id: 2,
+            kind: PointerKind::Mouse,
+            x,
+            y,
+        });
+        self.runtime.push_input_event(InputEvent::PointerDown {
+            id: 2,
+            kind: PointerKind::Mouse,
+            x,
+            y,
+            button: PointerButton::Secondary,
+        });
+        self.runtime.push_input_event(InputEvent::PointerUp {
+            id: 2,
+            kind: PointerKind::Mouse,
+            x,
+            y,
+            button: PointerButton::Secondary,
+        });
+    }
+
     /// Advances virtual time by `duration`, pumping a frame per
     /// [`VIRTUAL_FRAME`] without reading any back.
     pub fn advance(&mut self, duration: Duration) {

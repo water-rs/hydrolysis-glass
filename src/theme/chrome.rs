@@ -1,19 +1,20 @@
 //! Drawing for the parts of the theme that are not glass.
 //!
-//! Toggles, steppers, inputs, pickers, sliders, progress, badges, lists,
-//! tables, dividers and the opaque menu panels take ordinary fills recorded
-//! through the engine's [`Recorder`]. Nothing here samples a backdrop, so
-//! nothing here is a stand-in for the material.
+//! Badges, lists, tables, dividers, scroll indicators and the parts of the
+//! looks that are not glass — the opaque menu panels, the picker chevrons
+//! and the back chevron — take ordinary fills recorded through the engine's
+//! [`Recorder`]. Nothing here samples a backdrop, so nothing here is a
+//! stand-in for the material.
 
 use cherenkov_record::kurbo::{
     BezPath, Circle, Line, Point, Rect, RoundedRect, RoundedRectRadii, Stroke, Vec2,
 };
 use cherenkov_record::{Draw as _, Recorder, Shadow};
-use hydrolysis::theme::{RadioIndicatorState, WidgetInteractionState};
+use hydrolysis::theme::WidgetInteractionState;
 use waterui::interaction::InteractionState;
 use waterui_graphics::WorkingColor;
 
-use super::palette::{Palette, Rgba, alpha, over, working};
+use super::palette::{Palette, alpha, over, working};
 
 /// Opaque menu and popup corner radius, pt.
 pub const MENU_CORNER_RADIUS: f64 = 14.0;
@@ -46,50 +47,6 @@ fn rounded(rect: Rect, radii: impl Into<RoundedRectRadii>) -> RoundedRect {
     RoundedRect::from_rect(rect, radii)
 }
 
-fn mix(a: Rgba, b: Rgba, t: f32) -> Rgba {
-    [
-        (b[0] - a[0]).mul_add(t, a[0]),
-        (b[1] - a[1]).mul_add(t, a[1]),
-        (b[2] - a[2]).mul_add(t, a[2]),
-        (b[3] - a[3]).mul_add(t, a[3]),
-    ]
-}
-
-/// Draws a translucent state layer and focus ring for a rounded control.
-pub fn state_layer(
-    palette: &Palette,
-    draw: &mut Recorder,
-    rect: Rect,
-    radii: RoundedRectRadii,
-    state: WidgetInteractionState,
-) {
-    if state.state.contains(InteractionState::DISABLED) {
-        return;
-    }
-    if state.state_layer_opacity > 0.0 {
-        draw.fill(
-            rounded(rect, radii),
-            working(alpha(palette.state_layer, state.state_layer_opacity)),
-        );
-    }
-    if state.state.contains(InteractionState::FOCUSED) && state.focus_progress > 0.0 {
-        let inset = -FOCUS_RING_WIDTH.mul_add(0.5, FOCUS_RING_GAP);
-        let ring = rect.inset(inset);
-        let grow = -inset;
-        let ring_radii = RoundedRectRadii::new(
-            radii.top_left + grow,
-            radii.top_right + grow,
-            radii.bottom_right + grow,
-            radii.bottom_left + grow,
-        );
-        draw.stroke(
-            rounded(ring, ring_radii),
-            Stroke::new(FOCUS_RING_WIDTH),
-            working(alpha(palette.accent, state.focus_progress)),
-        );
-    }
-}
-
 /// Draws a state layer over a circular control.
 pub fn circular_state_layer(
     palette: &Palette,
@@ -114,29 +71,6 @@ pub fn circular_state_layer(
                 FOCUS_RING_WIDTH.mul_add(0.5, radius + FOCUS_RING_GAP),
             ),
             Stroke::new(FOCUS_RING_WIDTH),
-            working(alpha(palette.accent, state.focus_progress)),
-        );
-    }
-}
-
-/// A text field: a soft filled rounded rectangle with an accent outline when
-/// focused.
-pub fn input_field(
-    palette: &Palette,
-    draw: &mut Recorder,
-    bounds: Rect,
-    state: WidgetInteractionState,
-) {
-    let radii = uniform(10.0);
-    let mut fill = palette.track;
-    if state.state.contains(InteractionState::DISABLED) {
-        fill[3] *= 0.5;
-    }
-    draw.fill(rounded(bounds, radii), working(fill));
-    if state.state.contains(InteractionState::FOCUSED) && state.focus_progress > 0.0 {
-        draw.stroke(
-            rounded(bounds.inset(-0.75), radii),
-            Stroke::new(1.5),
             working(alpha(palette.accent, state.focus_progress)),
         );
     }
@@ -180,40 +114,12 @@ pub fn picker_indicator(palette: &Palette, draw: &mut Recorder, bounds: Rect) {
     draw.stroke(path, Stroke::new(1.8), working(palette.muted_foreground));
 }
 
-/// A popup row: the selected row carries a soft accent container.
-pub fn popup_row_background(palette: &Palette, draw: &mut Recorder, row: Rect, selected: bool) {
-    if selected {
-        draw.fill(
-            rounded(row.inset(-4.0), uniform(8.0)),
-            working(alpha(palette.accent, 0.14)),
-        );
-    }
-}
-
-/// A radio indicator: an outer ring that turns accent, and an inner dot.
-pub fn radio_indicator(
-    palette: &Palette,
-    draw: &mut Recorder,
-    center: Point,
-    radius: f64,
-    state: RadioIndicatorState,
-) {
-    let ring = mix(
-        palette.border,
-        palette.accent,
-        state.outer_selected_progress.clamp(0.0, 1.0),
+/// The selected row of a popup: a soft accent container around the row.
+pub fn selected_row(palette: &Palette, draw: &mut Recorder, row: Rect) {
+    draw.fill(
+        rounded(row.inset(-4.0), uniform(8.0)),
+        working(alpha(palette.accent, 0.14)),
     );
-    draw.stroke(
-        Circle::new(center, radius - 1.0),
-        Stroke::new(2.0),
-        working(ring),
-    );
-    if state.inner_opacity > 0.0 && state.inner_scale > 0.0 {
-        draw.fill(
-            Circle::new(center, radius * 0.5 * f64::from(state.inner_scale)),
-            working(alpha(palette.accent, state.inner_opacity)),
-        );
-    }
 }
 
 /// A back chevron.
@@ -225,14 +131,6 @@ pub fn back_button(palette: &Palette, draw: &mut Recorder, bounds: Rect) {
     path.line_to(Point::new(h.mul_add(-0.5, c.x), c.y));
     path.line_to(Point::new(h.mul_add(0.5, c.x), c.y + h));
     draw.stroke(path, Stroke::new(2.5), working(palette.accent));
-}
-
-/// The selected-tab highlight: a soft capsule under the tab's content.
-pub fn tabs_highlight(palette: &Palette, draw: &mut Recorder, bounds: Rect) {
-    draw.fill(
-        rounded(bounds, capsule(bounds)),
-        working(alpha(palette.state_layer, 0.08)),
-    );
 }
 
 /// A scroll indicator pill.

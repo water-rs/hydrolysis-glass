@@ -4,15 +4,13 @@
 use cherenkov_record::kurbo::{BezPath, Point, RoundedRectRadii, Size, Stroke};
 use cherenkov_record::{Draw as _, Paint};
 use hydrolysis::theme::{
-    Chrome, CornerShape, Corners, Custom, Driven, FocusIndicator, Inputs, PressFeedback,
-    StateLayer, StepperLook, StepperSpec, Surface as ChromeSurface,
+    Chrome, CornerShape, Corners, Custom, Driven, Inputs, StepperLook, StepperSpec,
+    Surface as ChromeSurface,
 };
 use waterui_core::Environment;
 
 use super::super::Glass;
-use super::super::chrome::{FOCUS_RING_GAP, FOCUS_RING_WIDTH, HOVER_ALPHA, PRESSED_ALPHA};
-use super::super::palette::alpha;
-use super::{control_motion, faded, is_disabled, paint};
+use super::{faded, is_disabled, paint, state_chrome};
 
 /// The side of a stepper's button, pt.
 const BUTTON: f64 = 32.0;
@@ -82,21 +80,5 @@ fn end(glass: &Glass, end: End, rtl: bool) -> Chrome {
             recorder.stroke(path, Stroke::new(ICON_STROKE), paint);
         },
     );
-    Chrome::new(
-        ChromeSurface::new(CornerShape::new(corners), fill),
-        StateLayer::new(super::super::Glass::color(palette.state_layer)).opacities(
-            HOVER_ALPHA,
-            HOVER_ALPHA,
-            PRESSED_ALPHA,
-            PRESSED_ALPHA,
-        ),
-        PressFeedback::new().tint(),
-        FocusIndicator::Ring {
-            width: FOCUS_RING_WIDTH,
-            offset: FOCUS_RING_GAP,
-            color: super::super::Glass::color(alpha(palette.accent, 1.0)),
-        },
-        control_motion(),
-    )
-    .custom(icon)
+    state_chrome(glass, ChromeSurface::new(CornerShape::new(corners), fill)).custom(icon)
 }
