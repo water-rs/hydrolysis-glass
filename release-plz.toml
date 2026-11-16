@@ -2,7 +2,12 @@
 pr_draft = false
 pr_labels = ["release"]
 git_release_name = "v{{ version }}"
-publish = true
+# `publish = false`: `cherenkov-record = "0.0.0"` and the required `waterui`
+# contracts are patched from git until the next framework release, and the
+# crate has not been manually published to crates.io with Trusted Publishing
+# configured yet. release-plz still produces the changelog, tag, and GitHub
+# release — everything except `cargo publish`.
+publish = false
 release_always = true
 git_tag_enable = true
 changelog_update = true
