@@ -12,7 +12,7 @@ Rules for working in `water-rs/hydrolysis-glass`.
 - Express chrome and glass surfaces through `cherenkov-record` and Hydrolysis's public widget theme contract; keep `verification` GPU-to-CPU readback gated behind the `verification` feature so consumers never build readback paths by default.
 - Do not use crate- or file-level `#![allow]` or `#![expect]`; every item-level `#[allow(...)]` must carry a `reason` (`tests/lint_hygiene.rs`).
 - Keep `Cargo.lock` committed and `.gitignore` limited to `/target`. Every dependency declares `default-features = false` with only the needed features, matching `water-rs/waterui`'s `[patch.crates-io]` table when riding framework `main`.
-- Never open visible GUI windows on the developer MacBook Pro; verify rendering headless via `tests/gpu.rs` and `tests/hydrolysis.rs`.
+- Never open visible GUI windows during verification; verify rendering headless via `tests/gpu.rs` and `tests/hydrolysis.rs`.
 
 ## GitHub workflow and checks
 
