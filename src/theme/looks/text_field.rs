@@ -38,7 +38,7 @@ const FLOAT_TOP: f64 = 4.0;
 /// The alpha of the accent the selection is painted in (§8.6, Colours).
 const SELECTION_ALPHA: f32 = 0.3;
 /// Disabled opacity applied to fill, label, value and placeholder (§8.6, States).
-const DISABLED_OPACITY: f32 = 0.5;
+pub(super) const DISABLED_OPACITY: f32 = 0.5;
 /// The caret's blink: a full fade to nothing and back each second, redrawn
 /// every 16 ms (§8.6, Motion).
 const CARET_BLINK: TextCaretMotion = TextCaretMotion {
@@ -48,7 +48,7 @@ const CARET_BLINK: TextCaretMotion = TextCaretMotion {
 };
 
 /// `base` dimmed to [`DISABLED_OPACITY`] while disabled (§8.6, States).
-fn state_color(base: Rgba) -> Driven<Color> {
+pub(super) fn state_color(base: Rgba) -> Driven<Color> {
     Driven::new(move |inputs: &Inputs<'_, ()>| {
         Glass::color(faded(
             base,
