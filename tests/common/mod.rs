@@ -160,11 +160,18 @@ fn gallery_artifact_rel_path(name: &str) -> PathBuf {
         ("controls", "slider")
     } else if name.starts_with("stepper_") {
         ("controls", "stepper")
-    } else if name.starts_with("text_field_") || name.starts_with("text_context_menu_") {
+    } else if name.starts_with("text_field_")
+        || name.starts_with("text_context_menu_")
+        || name.starts_with("secure_search_")
+    {
         ("controls", "text_field")
     } else if name.starts_with("menu_picker_") || name.starts_with("radio_group_") {
         ("controls", "picker")
-    } else if name.starts_with("navigation_bar_") || name.starts_with("tabs_") {
+    } else if name.starts_with("navigation_bar_")
+        || name.starts_with("tabs_")
+        || name.starts_with("tab_bar_")
+        || name.starts_with("bar_item")
+    {
         ("navigation", "chrome")
     } else if name.starts_with("material_")
         || name.starts_with("glass_background_")
