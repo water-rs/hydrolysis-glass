@@ -3,7 +3,7 @@
 //! a minus or plus icon.
 
 use cherenkov_record::Draw as _;
-use cherenkov_record::kurbo::{BezPath, Point, RoundedRectRadii, Size, Stroke};
+use cherenkov_record::kurbo::{BezPath, Cap, Point, RoundedRectRadii, Size, Stroke};
 use hydrolysis_style::theme::{
     Chrome, CornerShape, Corners, Custom, Driven, HitRegion, Inputs, StepperLook, StepperSpec,
     Surface as ChromeSurface,
@@ -93,7 +93,7 @@ fn end(glass: &Glass, end: End, rtl: bool) -> Chrome {
             path.move_to(Point::new(c.x, c.y - half));
             path.line_to(Point::new(c.x, c.y + half));
         }
-        recorder.stroke(path, Stroke::new(ICON_STROKE), paint);
+        recorder.stroke(path, Stroke::new(ICON_STROKE).with_caps(Cap::Round), paint);
     });
     // Keep each button's 32 pt horizontal bounds so the 1 pt seam never
     // overlaps targets, while extending vertically to 44 pt (§8.5, Geometry).

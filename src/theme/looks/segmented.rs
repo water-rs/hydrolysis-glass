@@ -32,7 +32,7 @@ use crate::theme::button::Spring;
 
 /// Space between the picker's own label above the row and the row, pt: the
 /// theme's picker label spacing.
-const LABEL_SPACING: f64 = 8.0;
+const LABEL_SPACING: f64 = 4.0;
 /// Room on each side of a label inside its segment, pt: the theme's picker
 /// horizontal inset. The label is centred on both axes (§8.4), so the
 /// padding only bounds how wide it may lay out.

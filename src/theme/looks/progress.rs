@@ -9,10 +9,10 @@ use core::f64::consts::TAU;
 use core::time::Duration;
 
 use cherenkov_record::kurbo::{
-    Affine, Arc, BezPath, Rect, RoundedRect, RoundedRectRadii, Shape as _, Size, Stroke,
+    Affine, Arc, BezPath, Cap, Rect, RoundedRect, RoundedRectRadii, Shape as _, Size, Stroke,
 };
 use cherenkov_record::{
-    Curve, Draw as _, Fixed, Keyframes, Paint, Repeat, ShapeData, WorkingColor,
+    BlendSpace, Curve, Draw as _, Fixed, Group, Keyframes, Paint, Repeat, ShapeData, WorkingColor,
 };
 use hydrolysis_style::theme::{
     Custom, Driven, DrivenSet, IndicatorLook, Inputs, LinearProgressLook, Motion, ProgressControl,
@@ -22,20 +22,23 @@ use waterui::animation::Animation;
 use waterui_core::Environment;
 
 use super::super::palette::Rgba;
+use super::super::slider;
 use super::super::{
     CIRCULAR_INDETERMINATE_CYCLE, Glass, LINEAR_INDETERMINATE_CYCLE, LOADING_CYCLE,
 };
 use super::paint;
 
 /// The bar's length and thickness, pt.
-const BAR: Size = Size::new(120.0, 4.0);
+const BAR: Size = Size::new(120.0, 6.0);
 /// The height of the label above a bar, pt.
-const LABEL_HEIGHT: f64 = 20.0;
-/// The gap between a bar and its label above and its value label below, pt.
-const BAR_SPACING: f64 = 6.0;
+const LABEL_HEIGHT: f64 = 18.0;
+/// The gap between a bar and its label above, pt.
+const LABEL_SPACING: f64 = 11.0;
+/// The gap between a bar and its value label below, pt.
+const VALUE_LABEL_SPACING: f64 = 12.0;
 /// The ring's diameter and the stroke's width, pt.
-const RING: f64 = 28.0;
-const RING_STROKE: f64 = 3.0;
+const RING: f64 = 16.0;
+const RING_STROKE: f64 = 3.5;
 /// The loading indicator's container and the rounded square inside it, pt.
 const LOADING_CONTAINER: f64 = 48.0;
 const LOADING_SHAPE: f64 = 28.0;
@@ -92,8 +95,8 @@ pub(in super::super) fn linear(
         control.part(linear_indeterminate(glass, spec, env, rtl))
     };
     LinearProgressLook::new(control, 0.0)
-        .label_band(LABEL_HEIGHT, BAR_SPACING)
-        .value_label_band(BAR_SPACING)
+        .label_band(LABEL_HEIGHT, LABEL_SPACING)
+        .value_label_band(VALUE_LABEL_SPACING)
 }
 
 /// The look of a circular progress indicator.
@@ -143,20 +146,30 @@ fn linear_determinate(
     env: &Environment,
     rtl: bool,
 ) -> Custom<f64, impl DrivenSet<f64> + use<>> {
-    // The track runs from where the fill ends to the bar's end.
-    let track = Driven::new(move |inputs: &Inputs<'_, f64>| {
-        let end = inputs.frame.width().mul_add(*inputs.value, inputs.frame.x0);
-        bar(inputs.frame, end, inputs.frame.x1, rtl)
+    // Draw the full capsule track underneath so the filled bar meets its track
+    // without a double-capsule pinch at `value`.
+    let track = Driven::new(|inputs: &Inputs<'_, f64>| {
+        bar(inputs.frame, inputs.frame.x0, inputs.frame.x1, false)
     });
     let fill = Driven::new(move |inputs: &Inputs<'_, f64>| {
         let end = inputs.frame.width().mul_add(*inputs.value, inputs.frame.x0);
         bar(inputs.frame, inputs.frame.x0, end, rtl)
     });
     Custom::new(
-        (track, solid(glass.palette.track), fill, tint(spec, env)),
+        (
+            track,
+            solid(slider::unfilled_track(glass.palette.appearance)),
+            fill,
+            tint(spec, env),
+        ),
         |recorder, _frame, (track, track_paint, fill, fill_paint)| {
-            recorder.fill(track, track_paint);
-            recorder.fill(fill, fill_paint);
+            recorder.group(
+                Group::new().blend_space(BlendSpace::SrgbEncoded),
+                |recorder| {
+                    recorder.fill(track, track_paint);
+                    recorder.fill(fill, fill_paint);
+                },
+            );
         },
     )
 }
@@ -189,7 +202,7 @@ fn linear_indeterminate(
 ) -> Custom<f64, impl DrivenSet<f64> + use<>> {
     Custom::new(
         (
-            solid(glass.palette.track),
+            solid(slider::unfilled_track(glass.palette.appearance)),
             Driven::repeating(
                 |frame| sweep(frame, LINEAR_INDETERMINATE_CYCLE),
                 Repeat::Forever,
@@ -198,8 +211,13 @@ fn linear_indeterminate(
         ),
         move |recorder, frame, (track_paint, segment, segment_paint)| {
             let draw = |recorder: &mut cherenkov_record::Recorder| {
-                recorder.fill(Fixed(bar(frame, frame.x0, frame.x1, false)), track_paint);
-                recorder.fill(segment, segment_paint);
+                recorder.group(
+                    Group::new().blend_space(BlendSpace::SrgbEncoded),
+                    |recorder| {
+                        recorder.fill(Fixed(bar(frame, frame.x0, frame.x1, false)), track_paint);
+                        recorder.fill(segment, segment_paint);
+                    },
+                );
             };
             if rtl {
                 let mirror = Affine::translate((frame.x0 + frame.x1, 0.0))
@@ -226,17 +244,9 @@ fn ring(frame: Rect, from: f64) -> (BezPath, f64) {
 /// dash and the rest of the ring as gap.
 fn arc_stroke(circumference: f64, share: f64) -> Stroke {
     let arc = share * circumference;
-    Stroke::new(RING_STROKE).with_dashes(0.0, [arc, circumference - arc])
-}
-
-/// The ring minus its first `value` of it: one dash of the rest, shifted so
-/// that it begins where the arc ends.
-fn track_stroke(circumference: f64, value: f64) -> Stroke {
-    let active = value * circumference;
-    let dash = (circumference - active).max(0.0);
-    let period = dash + circumference;
     Stroke::new(RING_STROKE)
-        .with_dashes((period - active).rem_euclid(period), [dash, circumference])
+        .with_caps(Cap::Round)
+        .with_dashes(0.0, [arc, circumference - arc])
 }
 
 fn circular_determinate(
@@ -247,19 +257,21 @@ fn circular_determinate(
     let start = -core::f64::consts::FRAC_PI_2;
     Custom::new(
         (
-            Driven::new(move |inputs: &Inputs<'_, f64>| {
-                track_stroke(ring(inputs.frame, start).1, *inputs.value)
-            }),
-            solid(glass.palette.track),
+            solid(slider::unfilled_track(glass.palette.appearance)),
             Driven::new(move |inputs: &Inputs<'_, f64>| {
                 arc_stroke(ring(inputs.frame, start).1, *inputs.value)
             }),
             tint(spec, env),
         ),
-        move |recorder, frame, (track, track_paint, active, active_paint)| {
+        move |recorder, frame, (track_paint, active, active_paint)| {
             let (path, _) = ring(frame, start);
-            recorder.stroke(path.clone(), track, track_paint);
-            recorder.stroke(path, active, active_paint);
+            recorder.group(
+                Group::new().blend_space(BlendSpace::SrgbEncoded),
+                |recorder| {
+                    recorder.stroke(path.clone(), Stroke::new(RING_STROKE), track_paint);
+                    recorder.stroke(path, active, active_paint);
+                },
+            );
         },
     )
 }
@@ -337,4 +349,42 @@ fn loading_part(
         Keyframes::new(LOADING_CYCLE, 0.0).then(1.0, Curve::linear(LOADING_CYCLE), TAU),
         Repeat::Forever,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use hydrolysis_style::theme::SpecTint;
+    use waterui::component::progress::ProgressStyle;
+    use waterui_core::layout::LayoutDirection;
+
+    use super::*;
+
+    fn spec(style: ProgressStyle) -> ProgressSpec {
+        ProgressSpec::new(
+            style,
+            true,
+            LayoutDirection::LeftToRight,
+            SpecTint::default(),
+        )
+        .with_label(true)
+        .with_value_label(true)
+    }
+
+    #[test]
+    fn linear_progress_uses_6pt_bar_and_spaced_label_bands() {
+        let glass = Glass::light();
+        let env = Environment::new();
+        let look = linear(&glass, &spec(ProgressStyle::Linear), &env);
+        assert_eq!(look.control().size(), Size::new(120.0, 6.0));
+        let layout = look.layout(120.0, Some(14.0), Some(14.0));
+        assert!((layout.height - 61.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn circular_progress_uses_16pt_ring() {
+        let glass = Glass::dark();
+        let env = Environment::new();
+        let look = circular(&glass, &spec(ProgressStyle::Circular), &env);
+        assert_eq!(look.control().size(), Size::new(16.0, 16.0));
+    }
 }
