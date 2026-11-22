@@ -466,4 +466,75 @@ mod tests {
             "expected popup elevation extent {expected}, got {extent}"
         );
     }
+
+    #[test]
+    fn stepper_look_dims_disabled_ends_and_mirrors_rtl_corners() {
+        use hydrolysis_style::theme::Corners;
+
+        let g = Glass::light();
+        let env = environment(&g);
+        let frame = Rect::new(0.0, 0.0, 32.0, 32.0);
+        let ltr = g.stepper(
+            &StepperSpec::new(LayoutDirection::LeftToRight, SpecTint::default()),
+            &env,
+        );
+        let rtl = g.stepper(
+            &StepperSpec::new(LayoutDirection::RightToLeft, SpecTint::default()),
+            &env,
+        );
+        assert_eq!(ltr.button(), cherenkov_record::kurbo::Size::new(32.0, 32.0));
+        assert!((ltr.get_spacing() - 1.0).abs() < 1e-9);
+        assert!((ltr.get_label_spacing() - 12.0).abs() < 1e-9);
+        assert_eq!(
+            ltr.decrement().get_hit().get_minimum(),
+            cherenkov_record::kurbo::Size::new(0.0, f64::from(button::MIN_HIT_SIDE)),
+        );
+        assert!(
+            (ltr.decrement().get_hit().get_cancel_distance() - f64::from(button::CANCEL_DISTANCE))
+                .abs()
+                < 1e-9
+        );
+
+        let radii_of = |chrome: &hydrolysis_style::theme::Chrome| {
+            let corner = chrome.surface().shape().corners().target(&Inputs::at_rest(
+                frame,
+                InteractionState::empty(),
+                &(),
+            ));
+            let Corners::Radii(radii) = corner else {
+                panic!("expected concrete radii");
+            };
+            radii
+        };
+        let ltr_dec = radii_of(ltr.decrement());
+        assert!((ltr_dec.top_left - 16.0).abs() < 1e-9);
+        assert!(ltr_dec.top_right.abs() < 1e-9);
+        assert!(ltr_dec.bottom_right.abs() < 1e-9);
+        assert!((ltr_dec.bottom_left - 16.0).abs() < 1e-9);
+
+        let rtl_dec = radii_of(rtl.decrement());
+        assert!(rtl_dec.top_left.abs() < 1e-9);
+        assert!((rtl_dec.top_right - 16.0).abs() < 1e-9);
+        assert!((rtl_dec.bottom_right - 16.0).abs() < 1e-9);
+        assert!(rtl_dec.bottom_left.abs() < 1e-9);
+
+        let Fill::Paint(fill) = ltr.decrement().surface().fill() else {
+            panic!("expected paint fill on stepper end");
+        };
+        let enabled_fill = fill.target(&Inputs::at_rest(frame, InteractionState::empty(), &()));
+        let disabled_fill = fill.target(&Inputs::at_rest(frame, InteractionState::DISABLED, &()));
+        let cherenkov_record::Paint::Solid(enabled_color) = enabled_fill else {
+            panic!("expected solid paint");
+        };
+        let cherenkov_record::Paint::Solid(disabled_color) = disabled_fill else {
+            panic!("expected solid paint");
+        };
+        assert!(
+            enabled_color.components[3]
+                .mul_add(-0.5, disabled_color.components[3])
+                .abs()
+                < 1e-6,
+            "expected disabled fill alpha to halve"
+        );
+    }
 }
