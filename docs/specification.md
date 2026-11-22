@@ -1659,6 +1659,59 @@ every value is [chosen].
 - **Caret blink.** Fades smoothly to opacity `0.0` and back over a
   `1000` ms cycle, stepped at `16` ms intervals [chosen].
 
+### 8.7 Tab bar
+
+A tab bar is a standalone regular-family glass capsule docked at the
+container's bottom edge (or at the leading edge in sidebar placement),
+holding one item per tab with no hairline divider beyond the glass
+element's rim highlight and cast shadow. The selected item carries an
+inset translucent capsule highlight under its icon and title.
+
+**Reference.** Nothing in this section was measured against a capture;
+every value is [chosen].
+
+#### Geometry
+
+- **Compact / vertical bar** (`width < 600` pt, or sidebar strip): bar
+  thickness `60` pt, item minimum extent `64` pt, horizontal label inset
+  `12` pt, icon-to-label spacing `6` pt [chosen].
+- **Wide / horizontal bar** (`width >= 600` pt): bar height `48` pt,
+  item minimum width `64` pt, horizontal label inset `16` pt,
+  icon-to-label spacing `8` pt [chosen].
+- **Surface.** A standalone regular-family glass capsule spanning the
+  docked band extended through adjacent safe-area edges (`tab_bar_surface`)
+  [chosen].
+- **Selection highlight and item chrome.** Both use a capsule inset
+  `4` pt inside the item's bounds so hover/press state layers and focus
+  rings share the highlight silhouette [chosen].
+- **Hit region.** Each item extends vertically to at least `44` pt with
+  the `70` pt release cancel distance of §8.1 [chosen].
+
+#### Colours
+
+| Part | Dark appearance | Light appearance |
+|---|---|---|
+| bar surface | regular glass capsule (§5) | regular glass capsule (§5) |
+| divider | none (glass rim and shadow) | none (glass rim and shadow) |
+| selected highlight | white at alpha 0.08 | black at alpha 0.08 |
+
+#### States
+
+- **Selected item.** Draws the `4` pt inset highlight capsule at opacity
+  `1` (`state_layer` at alpha `0.08`) beneath the item's chrome [chosen].
+- **Hover, focus and press.** Each item wears the theme's state layer
+  (`0.06` hover/focus, `0.12` press with press tint) and a `2` pt accent
+  focus ring `2` pt outside its `4` pt inset capsule [chosen].
+- **Disabled item.** Draws no pointer target [chosen].
+
+#### Motion
+
+- **Selection cross-fade.** Selecting a different tab transitions the
+  outgoing and incoming highlight opacities by `ease_out` over
+  `ln(0.05) / ln(1 − 0.22) / 60 ≈ 0.201` s (`PRESS_DURATION`) [chosen].
+- **Item state layer.** Hover and focus ease over `0.201` s; press and
+  release run on the §8.1 springs [chosen].
+
 ### 8.8 Navigation bar and bar items
 
 Top navigation bars and bottom toolbars are standalone regular-family

@@ -620,6 +620,31 @@ mod tests {
     }
 
     #[test]
+    fn tabs_look_switches_layout_at_600pt_and_cross_fades_selection() {
+        use hydrolysis_style::theme::{TabItemLayout, ValueMotion};
+        use waterui::navigation::tab::NativeTabStyle;
+
+        let g = Glass::dark();
+        let env = environment(&g);
+        let look = g.tabs(&TabsSpec::new(NativeTabStyle::TabBar), &env);
+        assert_eq!(look.item_layout(402.0), TabItemLayout::Vertical);
+        assert_eq!(look.item_layout(600.0), TabItemLayout::Horizontal);
+        let vertical = look.metrics(TabItemLayout::Vertical);
+        assert!((vertical.bar_height - 60.0).abs() < 1e-9);
+        assert!((vertical.button_min_width - 64.0).abs() < 1e-9);
+        let horizontal = look.metrics(TabItemLayout::Horizontal);
+        assert!((horizontal.bar_height - 48.0).abs() < 1e-9);
+        assert!((horizontal.button_horizontal_inset - 16.0).abs() < 1e-9);
+        let ValueMotion::Own(anim) = &look.motion().value else {
+            panic!("expected Own value motion on tab bar highlight");
+        };
+        assert_eq!(
+            *anim,
+            waterui::animation::Animation::ease_out(PRESS_DURATION)
+        );
+    }
+
+    #[test]
     fn navigation_bar_look_enables_back_feedback_and_metrics() {
         use hydrolysis_style::theme::FocusIndicator;
 
