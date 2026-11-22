@@ -353,6 +353,7 @@ fn loading_part(
 
 #[cfg(test)]
 mod tests {
+    use hydrolysis_style::Style as _;
     use hydrolysis_style::theme::SpecTint;
     use waterui::component::progress::ProgressStyle;
     use waterui_core::layout::LayoutDirection;
@@ -373,17 +374,22 @@ mod tests {
     #[test]
     fn linear_progress_uses_6pt_bar_and_spaced_label_bands() {
         let glass = Glass::light();
-        let env = Environment::new();
+        let mut env = Environment::new();
+        glass.install_tokens(&mut env);
         let look = linear(&glass, &spec(ProgressStyle::Linear), &env);
         assert_eq!(look.control().size(), Size::new(120.0, 6.0));
+        assert!((look.get_label_height() - 18.0).abs() < 1e-9);
+        assert!((look.get_label_spacing() - 11.0).abs() < 1e-9);
+        assert!((look.get_value_label_spacing() - 12.0).abs() < 1e-9);
         let layout = look.layout(120.0, Some(14.0), Some(14.0));
-        assert!((layout.height - 61.0).abs() < 1e-9);
+        assert!((layout.height - 65.0).abs() < 1e-9);
     }
 
     #[test]
     fn circular_progress_uses_16pt_ring() {
         let glass = Glass::dark();
-        let env = Environment::new();
+        let mut env = Environment::new();
+        glass.install_tokens(&mut env);
         let look = circular(&glass, &spec(ProgressStyle::Circular), &env);
         assert_eq!(look.control().size(), Size::new(16.0, 16.0));
     }
