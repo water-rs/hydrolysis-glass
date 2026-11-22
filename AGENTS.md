@@ -5,7 +5,7 @@ Rules for working in `water-rs/hydrolysis-glass`.
 ## Clean-room rule and visual parity
 
 - Development is strictly clean-room. Never mention proprietary vendor copyrights, trademarks, product names, or framework names in code, comments, shaders, documentation, commit messages, issues, or pull requests, and never include proprietary vendor assets, shaders, or binaries.
-- Visual parity is calibrated strictly against `waterui-apple` (WaterUI's native backend) on macOS 27 (`#81`). Close visual divergences through clean-room specification (`docs/specification.md`, tagging every value `measured`, `fitted`, or `chosen`) and independent implementation verified via offscreen rendering and FLIP perceptual metrics.
+- Visual parity is calibrated strictly against `waterui-apple` (WaterUI's native backend) on iOS / iPadOS (UIKit) — never macOS AppKit — using a compositor-backed capture path so translucent glass surfaces, backdrop blur, refraction, and rim highlights are faithfully composited (`#81`). Close visual divergences through clean-room specification (`docs/specification.md`, tagging every value `measured`, `fitted`, or `chosen`) and independent implementation verified via offscreen rendering and FLIP perceptual metrics.
 
 ## Architecture and hygiene
 
