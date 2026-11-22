@@ -692,6 +692,83 @@ mod tests {
     }
 
     #[test]
+    fn menu_look_specifies_panel_layout_and_selected_row() {
+        let g = Glass::light();
+        let env = environment(&g);
+        let look = g.menu(&MenuSpec::new(LayoutDirection::LeftToRight), &env);
+        let layout = look.layout();
+        assert!((layout.row_height - 40.0).abs() < 1e-9);
+        assert!((layout.horizontal_padding - 16.0).abs() < 1e-9);
+        assert!((layout.vertical_padding - 6.0).abs() < 1e-9);
+        assert!((layout.min_width - 120.0).abs() < 1e-9);
+        assert!((layout.max_width - 280.0).abs() < 1e-9);
+        assert!((layout.width_per_char - 8.0).abs() < 1e-9);
+        assert!(layout.separator_horizontal_inset.abs() < 1e-9);
+        assert!((layout.separator_thickness - chrome::HAIRLINE).abs() < 1e-9);
+        assert!(look.has_selected_row());
+        assert!(matches!(look.panel().fill(), Fill::Paint(_)));
+        assert!(look.panel().get_border().is_some());
+    }
+
+    #[test]
+    fn menu_picker_look_dims_disabled_value_and_container() {
+        let g = Glass::dark();
+        let env = environment(&g);
+        let frame = Rect::new(0.0, 0.0, 140.0, 56.0);
+        let look = g.menu_picker(
+            &PickerSpec::new(
+                ControlSize::Medium,
+                LayoutDirection::LeftToRight,
+                SpecTint::default(),
+            ),
+            &env,
+        );
+        let layout = look.layout();
+        assert!((layout.min_width - 120.0).abs() < 1e-9);
+        assert!((layout.min_height - 36.0).abs() < 1e-9);
+        assert!((layout.horizontal_inset - 12.0).abs() < 1e-9);
+        assert!((layout.vertical_inset - 8.0).abs() < 1e-9);
+        assert!((layout.label_spacing - 8.0).abs() < 1e-9);
+        assert!((layout.indicator_space - 24.0).abs() < 1e-9);
+        assert!((layout.popup_gap - 6.0).abs() < 1e-9);
+
+        let Fill::Paint(fill) = look.chrome().surface().fill() else {
+            panic!("expected paint fill on menu picker container");
+        };
+        let enabled_fill = fill.target(&Inputs::at_rest(frame, InteractionState::empty(), &()));
+        let disabled_fill = fill.target(&Inputs::at_rest(frame, InteractionState::DISABLED, &()));
+        let (cherenkov_record::Paint::Solid(ef), cherenkov_record::Paint::Solid(df)) =
+            (enabled_fill, disabled_fill)
+        else {
+            panic!("expected solid fill paints on menu picker container");
+        };
+        assert!(
+            ef.components[3].mul_add(-0.5, df.components[3]).abs() < 1e-6,
+            "expected disabled menu picker container alpha to halve"
+        );
+
+        let value_color = look
+            .get_value()
+            .get_color()
+            .expect("menu picker value label color");
+        let enabled_value = value_color
+            .target(&Inputs::at_rest(frame, InteractionState::empty(), &()))
+            .resolve(&env)
+            .snapshot();
+        let disabled_value = value_color
+            .target(&Inputs::at_rest(frame, InteractionState::DISABLED, &()))
+            .resolve(&env)
+            .snapshot();
+        assert!(
+            enabled_value.components[3]
+                .mul_add(-0.5, disabled_value.components[3])
+                .abs()
+                < 1e-6,
+            "expected disabled menu picker value alpha to halve"
+        );
+    }
+
+    #[test]
     fn sheet_surface_uses_regular_glass_and_clamps_top_corners() {
         use crate::material::geometry::CornerCurve;
         use crate::material::recipe::{Family, Recipe};

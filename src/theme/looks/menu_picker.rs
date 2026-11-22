@@ -1,14 +1,17 @@
-//! The menu picker look: the text field's container with the picker's
-//! chevron pair over it. The popup the field opens is the
+//! The menu picker look (specification §8.9): the text field's container
+//! with the picker's chevron pair over it, dimming both its selected value
+//! and its chevrons while disabled. The popup the field opens is the
 //! [menu look](super::menu).
 
 use cherenkov_record::kurbo::Rect;
-use hydrolysis_style::theme::{Custom, MenuPickerLayout, MenuPickerLook, PickerSpec};
+use hydrolysis_style::theme::{
+    Custom, Driven, Inputs, Label, MenuPickerLayout, MenuPickerLook, PickerSpec,
+};
 use waterui_core::Environment;
 
 use super::super::Glass;
 use super::super::chrome;
-use super::text_field;
+use super::{faded, is_disabled, paint, text_field};
 
 /// The measures of the field: at least 120 × 36 pt, its content inset 12 by
 /// 8 with 8 pt between its label and its value, 24 pt kept for the chevrons,
@@ -25,22 +28,38 @@ const LAYOUT: MenuPickerLayout = MenuPickerLayout {
 
 /// The band of a field at `frame` its chevrons draw in: the
 /// `indicator_space` Hydrolysis keeps clear of the value, inside the
-/// trailing inset, over the field's whole height.
-fn indicator_band(frame: Rect) -> Rect {
-    let x1 = frame.x1 - LAYOUT.horizontal_inset;
-    Rect::new(x1 - LAYOUT.indicator_space, frame.y0, x1, frame.y1)
+/// trailing inset (at the left in RTL), over the field's whole height.
+fn indicator_band(frame: Rect, rtl: bool) -> Rect {
+    if rtl {
+        let x0 = frame.x0 + LAYOUT.horizontal_inset;
+        Rect::new(x0, frame.y0, x0 + LAYOUT.indicator_space, frame.y1)
+    } else {
+        let x1 = frame.x1 - LAYOUT.horizontal_inset;
+        Rect::new(x1 - LAYOUT.indicator_space, frame.y0, x1, frame.y1)
+    }
 }
 
-/// The look of a menu picker's field in `spec`. The selected value keeps
-/// its own styling.
+/// The look of a menu picker's field in `spec` (§8.9).
 pub(in super::super) fn look(
     glass: &Glass,
-    _spec: &PickerSpec,
+    spec: &PickerSpec,
     _env: &Environment,
 ) -> MenuPickerLook {
     let palette = glass.palette;
-    let chevrons = Custom::<(), _>::new((), move |recorder, frame, ()| {
-        chrome::picker_indicator(&palette, recorder, indicator_band(frame));
+    let rtl = spec.direction().is_right_to_left();
+    let chevron_paint = Driven::new(move |inputs: &Inputs<'_, ()>| {
+        paint(faded(
+            palette.muted_foreground,
+            if is_disabled(inputs.state) {
+                text_field::DISABLED_OPACITY
+            } else {
+                1.0
+            },
+        ))
+    });
+    let chevrons = Custom::<(), _>::new((chevron_paint,), move |recorder, frame, (stroke,)| {
+        chrome::picker_indicator_with(recorder, indicator_band(frame, rtl), stroke);
     });
     MenuPickerLook::new(text_field::container(glass).custom(chevrons), LAYOUT)
+        .value(Label::new().color(text_field::state_color(palette.foreground)))
 }

@@ -1,6 +1,7 @@
-//! The menu look: one opaque elevated panel for the picker popup, the text
-//! context menu and a menu button's popup, its rows split by hairlines and
-//! a picker popup's selected row on a soft accent container.
+//! The menu look (specification §8.9): one opaque elevated panel for the
+//! picker popup, the text context menu and a menu button's popup, its rows
+//! split by hairlines and a picker popup's selected row on a soft accent
+//! container.
 
 use cherenkov_record::Shadow;
 use cherenkov_record::kurbo::Vec2;

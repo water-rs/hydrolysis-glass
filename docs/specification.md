@@ -1768,6 +1768,79 @@ every value is [chosen].
 - **Back button and bar items.** Hover and focus ease over `0.201` s;
   press and release run on the §8.1 springs [chosen].
 
+### 8.9 Menus and pop-ups
+
+One pop-up menu look serves menu button pop-ups, menu picker pop-ups and
+context menus (including text-field context menus). Because Hydrolysis hosts
+pop-up menus in standalone borderless windows and flat picture recordings
+that do not sample a scene backdrop at rest (`water-rs/waterui#2003`), the
+pop-up panel is an opaque elevated surface rather than glass. The trigger
+of a menu picker wears the §8.6 field container with a trailing dropdown
+indicator.
+
+**Reference.** Nothing in this section was measured against a capture;
+every value is [chosen].
+
+#### Geometry
+
+- **Panel.** A rounded rectangle with `14` pt circular corners, a `0.5` pt
+  outline border and a cast shadow of blur `24` pt offset `(0, 8)` pt; a
+  pop-up window reserves the elevation extent `3 × 24 + 8 = 80` pt on
+  every side [chosen].
+- **Width and padding.** Width is clamped to `[120, 280]` pt, estimated at
+  `8` pt per character before text layout and widened by `12` pt plus the
+  widest shortcut hint when commands carry hints; the panel insets rows by
+  `6` pt vertically [chosen].
+- **Rows and dividers.** Each single-line row is `40` pt tall (grown by
+  the supporting line's intrinsic height when a command carries a subtitle)
+  with `16` pt horizontal text inset; each divider row is
+  `2 × 6 + 0.5 = 12.5` pt tall with a `0.5` pt hairline centred
+  vertically and `0` pt horizontal inset [chosen].
+- **Selected picker row.** Draws a `4` pt inset highlight rounded
+  rectangle of corner radius `8` pt behind the selected item's label
+  [chosen].
+- **Menu picker field.** Uses the §8.6 field container (`10` pt circular
+  corners, minimum `120 × 36` pt, `12` pt horizontal and `8` pt vertical
+  insets, `8` pt label-to-value spacing) and reserves `24` pt inside the
+  trailing inset (`12` to `36` pt from the trailing edge, mirrored in RTL)
+  for a pair of `1.8` pt stroked chevrons spaced `±1.5` pt vertically with
+  leg half-width `0.18` of the indicator band's shorter side; the pop-up
+  opens `6` pt below the field at the field's width [chosen].
+
+#### Colours
+
+| Part | Dark appearance | Light appearance |
+|---|---|---|
+| menu panel fill | (28, 28, 30) opaque | (255, 255, 255) opaque |
+| menu panel border and divider | (84, 84, 88) at alpha 0.6 | (60, 60, 67) at alpha 0.29 |
+| menu panel shadow | black at alpha 0.18 | black at alpha 0.18 |
+| selected picker row | accent `(10, 132, 255)` at alpha 0.14 | accent `(0, 122, 255)` at alpha 0.14 |
+| command label and picker value | white | black |
+| destructive command label | (255, 69, 58) | (255, 59, 48) |
+| shortcut hint and picker chevrons | (235, 235, 245) at alpha 0.6 | (60, 60, 67) at alpha 0.6 |
+| disabled command label and hint | disabled foreground | disabled foreground |
+
+#### States
+
+- **Menu rows.** Command and submenu rows sit on a clear square surface
+  (`0` pt corner radius) wearing the theme's foreground-tinted state layer
+  (`0.06` hover/focus, `0.12` press with press tint, tint focus indicator);
+  disabled rows take disabled foreground and ignore taps [chosen].
+- **Menu picker field.** Enabled, hovered, pressed and focused states
+  follow §8.6 (`0.06` hover/focus, `0.12` press, `1.5` pt inner accent
+  outline and `2` pt outer focus ring). While disabled, the container fill,
+  selected value and dropdown chevrons dim to opacity `0.5`, with no state
+  layer or focus outlines [chosen].
+
+#### Motion
+
+- **Pop-up entrance.** The pop-up panel enters from opacity `0.0` and
+  scale `0.96` to `1.0` over `120` ms with `cubic_bezier(0.2, 0.0, 0.0, 1.0)`
+  [chosen].
+- **Row and field state layers.** Hover and focus ease over
+  `ln(0.05) / ln(1 − 0.22) / 60 ≈ 0.201` s; press and release follow the
+  §8.1 springs [chosen].
+
 ### 8.10 Sheets
 
 A sheet rises from the viewport's bottom edge as a standalone regular-family
