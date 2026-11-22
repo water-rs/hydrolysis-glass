@@ -645,6 +645,53 @@ mod tests {
     }
 
     #[test]
+    fn navigation_bar_look_enables_back_feedback_and_metrics() {
+        use hydrolysis_style::theme::FocusIndicator;
+
+        let g = Glass::dark();
+        let env = environment(&g);
+        let look = g.navigation_bar(&NavigationSpec::new(LayoutDirection::LeftToRight), &env);
+        let metrics = look.metrics();
+        assert!((metrics.inline_bar_height - 44.0).abs() < 1e-9);
+        assert!((metrics.large_bar_height - 96.0).abs() < 1e-9);
+        assert!((metrics.horizontal_inset - 16.0).abs() < 1e-9);
+        assert!((metrics.item_spacing - 8.0).abs() < 1e-9);
+        assert!((metrics.back_button_size - 44.0).abs() < 1e-9);
+        assert!((metrics.back_button_leading_inset - 8.0).abs() < 1e-9);
+        let back = look.back();
+        assert!(
+            (back.state_layer().hover - chrome::HOVER_ALPHA).abs() < 1e-6,
+            "back button carries hover state opacity"
+        );
+        assert!(
+            (back.state_layer().pressed - chrome::PRESSED_ALPHA).abs() < 1e-6,
+            "back button carries pressed state opacity"
+        );
+        assert!(matches!(back.focus(), FocusIndicator::Ring { .. }));
+        assert_eq!(
+            back.get_hit().get_minimum(),
+            cherenkov_record::kurbo::Size::new(
+                f64::from(button::MIN_HIT_SIDE),
+                f64::from(button::MIN_HIT_SIDE)
+            )
+        );
+        assert!(
+            (back.get_hit().get_cancel_distance() - f64::from(button::CANCEL_DISTANCE)).abs()
+                < 1e-9
+        );
+
+        let bounds = Rect::new(0.0, 0.0, 44.0, 44.0);
+        let record_chevron = |rtl: bool| {
+            layered_recorder(|r| {
+                chrome::back_button_directed(&g.palette, r, bounds, rtl);
+            })
+        };
+        let ltr_chevron = format!("{:?}", record_chevron(false));
+        let rtl_chevron = format!("{:?}", record_chevron(true));
+        assert_ne!(ltr_chevron, rtl_chevron, "RTL mirrors the back chevron");
+    }
+
+    #[test]
     fn sheet_surface_uses_regular_glass_and_clamps_top_corners() {
         use crate::material::geometry::CornerCurve;
         use crate::material::recipe::{Family, Recipe};
