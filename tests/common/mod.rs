@@ -568,6 +568,13 @@ impl GlassApp {
         });
     }
 
+    /// Sends committed text input to the currently focused text target.
+    pub fn text_input(&mut self, text: &str) {
+        self.runtime.push_input_event(InputEvent::TextInput {
+            text: text.to_owned(),
+        });
+    }
+
     /// Clicks the secondary mouse button at `(x, y)` pt: the gesture that
     /// opens a context menu.
     pub fn secondary_click(&mut self, x: f32, y: f32) {
