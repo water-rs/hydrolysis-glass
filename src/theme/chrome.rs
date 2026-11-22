@@ -81,15 +81,30 @@ pub fn selected_row(palette: &Palette, draw: &mut Recorder, row: Rect) {
     );
 }
 
-/// A back chevron.
-pub fn back_button(palette: &Palette, draw: &mut Recorder, bounds: Rect) {
+/// A back chevron pointing left (`rtl = false`) or mirrored right (`rtl = true`).
+pub fn back_button_directed(palette: &Palette, draw: &mut Recorder, bounds: Rect, rtl: bool) {
     let c = bounds.center();
     let h = bounds.height() * 0.22;
+    let tip_x = if rtl {
+        h.mul_add(0.5, c.x)
+    } else {
+        h.mul_add(-0.5, c.x)
+    };
+    let arm_x = if rtl {
+        h.mul_add(-0.5, c.x)
+    } else {
+        h.mul_add(0.5, c.x)
+    };
     let mut path = BezPath::new();
-    path.move_to(Point::new(h.mul_add(0.5, c.x), c.y - h));
-    path.line_to(Point::new(h.mul_add(-0.5, c.x), c.y));
-    path.line_to(Point::new(h.mul_add(0.5, c.x), c.y + h));
+    path.move_to(Point::new(arm_x, c.y - h));
+    path.line_to(Point::new(tip_x, c.y));
+    path.line_to(Point::new(arm_x, c.y + h));
     draw.stroke(path, Stroke::new(2.5), working(palette.accent));
+}
+
+/// A back chevron pointing left.
+pub fn back_button(palette: &Palette, draw: &mut Recorder, bounds: Rect) {
+    back_button_directed(palette, draw, bounds, false);
 }
 
 /// A scroll indicator pill.
