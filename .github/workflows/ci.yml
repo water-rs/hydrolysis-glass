@@ -131,12 +131,19 @@ jobs:
       # legitimately require newer, so check the package targets only.
       - run: cargo check --locked
 
+  gallery:
+    name: Visual Gallery
+    needs: bump
+    uses: water-rs/.github/.github/workflows/visual-gallery.yml@main
+    with:
+      artifact-name: hydrolysis-glass-gallery
+
   result:
     # The single check the `main` ruleset requires: it passes when every
     # job passed or was skipped (release-plz bump pull requests skip all).
     name: CI result
     if: always()
-    needs: [bump, check, msrv]
+    needs: [bump, check, msrv, gallery]
     runs-on: ubuntu-latest
     steps:
       - name: Check job results
