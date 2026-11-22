@@ -299,3 +299,23 @@ fn button_scene() {
         }
     }
 }
+
+#[test]
+fn sheet_scene() {
+    use cherenkov_record::kurbo::Rect as KRect;
+    use hydrolysis_glass::Glass;
+
+    let mut h = Harness::new();
+    let sheet_bounds = KRect::new(0.0, 260.0, f64::from(SCENE_PT[0]), f64::from(SCENE_PT[1]));
+    for backdrop in [Backdrop::Black, Backdrop::White, Backdrop::GridOverSplit] {
+        for (glass, name) in [(Glass::dark(), "dark"), (Glass::light(), "light")] {
+            let sheet = glass.sheet_surface(sheet_bounds);
+            let scene = Scene::new(SCENE_PT, PX_PER_PT, vec![Group::single(sheet.element)]);
+            h.export(
+                backdrop,
+                &scene,
+                &format!("sheet_{}_{name}_s05", backdrop.name()),
+            );
+        }
+    }
+}
