@@ -2652,15 +2652,41 @@ fn navigation_back_button_pops_and_rtl_renders_mirrored_chevron() {
 
     // Back button is 44 × 44 pt at x = 8..52, y = 0..44 (center 30, 22).
     app.touch_down(30.0, 22.0);
-    app.advance(Duration::from_millis(120));
-    assert!(
-        app.capture_now()
-            .save("navigation_back_pressed_dark")
-            .is_file()
-    );
     app.touch_up(30.0, 22.0);
     app.settle();
     assert_eq!(path.len(), 0, "tapping back button pops destination");
+
+    // Capture the back button pressed state layer cleanly on a pushed destination.
+    let pressed_path = NavigationPath::<i32>::new();
+    pressed_path.push(1);
+    let pressed_shown = pressed_path.clone();
+    let mut pressed_app = GlassApp::sized(
+        move || {
+            NavigationStack::with_path(
+                pressed_shown.clone(),
+                NavigationView::new("Root", backdrop_view(Backdrop::Black)),
+            )
+            .destination(move |_: i32| NavigationView::new("Detail", backdrop_view(Backdrop::Black)))
+        },
+        theme(Appearance::Dark),
+        [SCENE_PT[0], 120.0],
+    );
+    pressed_app.settle();
+    pressed_app.touch_down(30.0, 22.0);
+    pressed_app.advance(Duration::from_millis(120));
+    assert!(
+        pressed_app
+            .capture_now()
+            .save("navigation_back_pressed_dark")
+            .is_file()
+    );
+    pressed_app.touch_up(30.0, 22.0);
+    pressed_app.settle();
+    assert_eq!(
+        pressed_path.len(),
+        0,
+        "releasing pressed back button pops destination"
+    );
 
     let render = |direction: LayoutDirection| {
         let path = NavigationPath::<i32>::new();
