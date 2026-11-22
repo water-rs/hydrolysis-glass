@@ -2664,13 +2664,11 @@ fn navigation_bar_items_scene() {
 }
 
 /// Tapping the pushed navigation back button pops the path, pressing shows
-/// the state layer, toolbar items respond to taps, and right-to-left layout
-/// renders the mirrored chevron (§8.8).
+/// the state layer, and toolbar items respond to taps (§8.8).
 #[test]
-fn navigation_back_button_pops_and_rtl_renders_mirrored_chevron() {
+fn navigation_back_button_pops_and_toolbar_item_responds() {
     use std::sync::Arc;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use waterui::layout::LayoutDirection;
     use waterui::navigation::{
         NavigationPath, NavigationStack, NavigationToolbar, NavigationToolbarItem,
         NavigationToolbarPlacement,
@@ -2734,7 +2732,9 @@ fn navigation_back_button_pops_and_rtl_renders_mirrored_chevron() {
                 pressed_shown.clone(),
                 NavigationView::new("Root", backdrop_view(Backdrop::Black)),
             )
-            .destination(move |_: i32| NavigationView::new("Detail", backdrop_view(Backdrop::Black)))
+            .destination(move |_: i32| {
+                NavigationView::new("Detail", backdrop_view(Backdrop::Black))
+            })
         },
         theme(Appearance::Dark),
         [SCENE_PT[0], 120.0],
@@ -2755,6 +2755,13 @@ fn navigation_back_button_pops_and_rtl_renders_mirrored_chevron() {
         0,
         "releasing pressed back button pops destination"
     );
+}
+
+/// Right-to-left layout mirrors the pushed navigation back chevron (§8.8).
+#[test]
+fn navigation_rtl_renders_mirrored_back_chevron() {
+    use waterui::layout::LayoutDirection;
+    use waterui::navigation::{NavigationPath, NavigationStack};
 
     let render = |direction: LayoutDirection| {
         let path = NavigationPath::<i32>::new();
