@@ -580,8 +580,8 @@ mod tests {
                 chrome::back_button_directed(&g.palette, r, bounds, rtl);
             })
         };
-        let ltr_chevron = record_chevron(false);
-        let rtl_chevron = record_chevron(true);
+        let ltr_chevron = format!("{:?}", record_chevron(false));
+        let rtl_chevron = format!("{:?}", record_chevron(true));
         assert_ne!(ltr_chevron, rtl_chevron, "RTL mirrors the back chevron");
     }
 }
