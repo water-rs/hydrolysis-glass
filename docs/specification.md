@@ -1592,3 +1592,122 @@ every value is [chosen].
   [chosen].
 - **Press and release.** Driven by the press (`ω0 = 28.2 rad/s, ζ = 0.65`)
   and release (`ω0 = 15.8 rad/s, ζ = 0.385`) springs of §8.1 [chosen].
+
+### 8.6 Text and search fields
+
+A text field, a secure field, and a navigation search field share a flat
+rounded-rectangle container carrying an optional inside label (or a
+prompt standing in when no label view is present), an optional
+placeholder, editable text (masked with `*` for a secure field), an
+animated floating label, a blinking caret, and a selection highlight. At
+rest no part is glass.
+
+**Reference.** Nothing in this section was measured against a capture;
+every value is [chosen].
+
+#### Geometry
+
+- **Container.** A rounded rectangle with `10` pt circular corners and a
+  minimum size of `120 × 36` pt [chosen].
+- **Insets.** Content is inset `12` pt horizontally and `8` pt
+  vertically, with a `20` pt band reserved above the text when an inside
+  label or floating prompt is present; a single-line field with neither
+  centres its text vertically inside the container [chosen].
+- **Floating label.** Rests vertically centred in the container; while
+  the field holds focus or content, it scales to `0.75` of its resting
+  size and moves `4` pt below the container's top edge [chosen].
+- **Focus outlines.** While focused and enabled, an accent outline of
+  width `1.5` pt sits flush inside the container's edge (`0.75` pt inset,
+  corner radius `9.25` pt), and the theme's `2` pt accent focus ring
+  sits `2` pt outside the container [chosen].
+- **Search field.** Inside a navigation bar, a searchable view mounts an
+  unlabelled field carrying the search prompt, `56` pt tall (matching the
+  `8` pt vertical insets, `20` pt floating prompt band, and body line
+  height without clipping), inset `16` pt from the bar's leading and
+  trailing edges and `8` pt below the bar row [chosen].
+
+#### Colours
+
+| Part | Dark appearance | Light appearance |
+|---|---|---|
+| container fill | (120, 120, 128) at alpha 0.32 over the backdrop | (120, 120, 128) at alpha 0.16 over the backdrop |
+| value and floating label | white | black |
+| placeholder | (235, 235, 245) at alpha 0.6 | (60, 60, 67) at alpha 0.6 |
+| caret, inner focus outline, focus ring | accent `(10, 132, 255)` | accent `(0, 122, 255)` |
+| selection highlight | accent at alpha 0.3 | accent at alpha 0.3 |
+
+#### States
+
+| State | Container | Label, value and placeholder |
+|---|---|---|
+| enabled | as above, with state layer | as above |
+| tinted | unchanged: the tint has no effect | unchanged |
+| disabled | container fill at opacity 0.5, no state layer or outlines | each at opacity 0.5 |
+| focused (enabled) | inner 1.5 pt accent outline and outer 2 pt accent focus ring | label floats to top; caret blinks |
+
+- **State layer.** Hover and focus draw the theme's state layer at
+  opacity `0.06`; press draws it at opacity `0.12` with press tint
+  [chosen].
+
+#### Motion
+
+- **Floating label.** Any change of focus or content transitions the
+  label's scale and offset by `ease_out` over
+  `ln(0.05) / ln(1 − 0.22) / 60 ≈ 0.201` s [chosen].
+- **State layer and focus.** Eased over `0.201` s, with the press and
+  release springs of §8.1 [chosen].
+- **Caret blink.** Fades smoothly to opacity `0.0` and back over a
+  `1000` ms cycle, stepped at `16` ms intervals [chosen].
+
+### 8.7 Tab bar
+
+A tab bar is a standalone regular-family glass capsule docked at the
+container's bottom edge (or at the leading edge in sidebar placement),
+holding one item per tab with no hairline divider beyond the glass
+element's rim highlight and cast shadow. The selected item carries an
+inset translucent capsule highlight under its icon and title.
+
+**Reference.** Nothing in this section was measured against a capture;
+every value is [chosen].
+
+#### Geometry
+
+- **Compact / vertical bar** (`width < 600` pt, or sidebar strip): bar
+  thickness `60` pt, item minimum extent `64` pt, horizontal label inset
+  `12` pt, icon-to-label spacing `6` pt [chosen].
+- **Wide / horizontal bar** (`width >= 600` pt): bar height `48` pt,
+  item minimum width `64` pt, horizontal label inset `16` pt,
+  icon-to-label spacing `8` pt [chosen].
+- **Surface.** A standalone regular-family glass capsule spanning the
+  docked band extended through adjacent safe-area edges (`tab_bar_surface`)
+  [chosen].
+- **Selection highlight and item chrome.** Both use a capsule inset
+  `4` pt inside the item's bounds so hover/press state layers and focus
+  rings share the highlight silhouette [chosen].
+- **Hit region.** Each item extends vertically to at least `44` pt with
+  the `70` pt release cancel distance of §8.1 [chosen].
+
+#### Colours
+
+| Part | Dark appearance | Light appearance |
+|---|---|---|
+| bar surface | regular glass capsule (§5) | regular glass capsule (§5) |
+| divider | none (glass rim and shadow) | none (glass rim and shadow) |
+| selected highlight | white at alpha 0.08 | black at alpha 0.08 |
+
+#### States
+
+- **Selected item.** Draws the `4` pt inset highlight capsule at opacity
+  `1` (`state_layer` at alpha `0.08`) beneath the item's chrome [chosen].
+- **Hover, focus and press.** Each item wears the theme's state layer
+  (`0.06` hover/focus, `0.12` press with press tint) and a `2` pt accent
+  focus ring `2` pt outside its `4` pt inset capsule [chosen].
+- **Disabled item.** Draws no pointer target [chosen].
+
+#### Motion
+
+- **Selection cross-fade.** Selecting a different tab transitions the
+  outgoing and incoming highlight opacities by `ease_out` over
+  `ln(0.05) / ln(1 − 0.22) / 60 ≈ 0.201` s (`PRESS_DURATION`) [chosen].
+- **Item state layer.** Hover and focus ease over `0.201` s; press and
+  release run on the §8.1 springs [chosen].
