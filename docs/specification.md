@@ -1840,3 +1840,46 @@ every value is [chosen].
 - **Row and field state layers.** Hover and focus ease over
   `ln(0.05) / ln(1 − 0.22) / 60 ≈ 0.201` s; press and release follow the
   §8.1 springs [chosen].
+
+### 8.10 Sheets
+
+A sheet rises from the viewport's bottom edge as a standalone regular-family
+glass element (§5.1) covering the lower region of the screen, with rounded
+continuous upper corners and square bottom corners where it meets the
+bottom edge (`surfaces::sheet` / `Glass::sheet_surface`). Window-modal sheet
+presentation through `WidgetTheme` awaits `water-rs/waterui#659`.
+
+**Reference.** Nothing in this section was measured against a capture;
+every value is [chosen].
+
+#### Geometry
+
+- **Upper corners.** Continuous corners (`CornerCurve::Continuous`, exponent
+  `2.02`) of radius `min(38, m / 2)` pt (`SHEET_CORNER_RADIUS = 38.0`),
+  where `m = min(width, height)` is the sheet surface's shorter side
+  [chosen].
+- **Bottom corners.** Square (`0` pt radius) at both bottom-left and
+  bottom-right corners so the sheet meets the viewport's bottom edge with
+  no bottom corner cutout [chosen].
+- **Composition.** Uses the §5.1 regular-family recipe keyed to `m` (at
+  large sheet sizes, `0.25` capture scale with the §4.10 cast shadow and rim
+  highlight along the rounded upper edge). When grouped via
+  `surfaces::group` with a `Role::Container` surface, the group takes
+  container union smoothing (`30` pt); standing alone or with controls, it
+  takes standalone smoothing (`8` pt) [chosen].
+
+#### Colours
+
+| Part | Dark appearance | Light appearance |
+|---|---|---|
+| sheet surface | regular glass element (§5.1) | regular glass element (§5.1) |
+| border and fill | none beyond glass rim and §5.1–§5.4 recipe | none beyond glass rim and §5.1–§5.4 recipe |
+
+#### States and Motion
+
+- **Material stability.** At rest and under interaction inside its content,
+  the sheet surface keeps its §5.1 recipe and geometry unchanged (§5.5)
+  [chosen].
+- **Presentation contract.** Modal scrim, detent drag handling and
+  presentation motion are deferred until `water-rs/waterui#659` introduces
+  the `WidgetTheme` sheet contract [chosen].
