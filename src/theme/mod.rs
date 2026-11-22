@@ -537,4 +537,85 @@ mod tests {
             "expected disabled fill alpha to halve"
         );
     }
+
+    #[test]
+    fn text_field_look_dims_disabled_states_and_specifies_metrics_and_blink() {
+        use core::time::Duration;
+
+        let g = Glass::light();
+        let env = environment(&g);
+        let frame = Rect::new(0.0, 0.0, 300.0, 60.0);
+        let look = g.text_field(
+            &TextFieldSpec::new(LayoutDirection::LeftToRight, SpecTint::default()),
+            &env,
+        );
+        let metrics = look.metrics();
+        assert!((metrics.label_height - 20.0).abs() < 1e-9);
+        assert!((metrics.min_width - 120.0).abs() < 1e-9);
+        assert!((metrics.min_height - 36.0).abs() < 1e-9);
+        assert!((metrics.horizontal_inset - 12.0).abs() < 1e-9);
+        assert!((metrics.vertical_inset - 8.0).abs() < 1e-9);
+        assert!((look.floating_label().get_scale() - 0.75).abs() < 1e-9);
+        assert!((look.floating_label().get_top() - 4.0).abs() < 1e-9);
+        let blink = look.caret().blink();
+        assert_eq!(blink.fade_cycle_duration, Duration::from_millis(1_000));
+        assert_eq!(blink.frame_interval, Duration::from_millis(16));
+        assert!(blink.min_opacity.abs() < 1e-6);
+
+        let Fill::Paint(fill) = look.container().surface().fill() else {
+            panic!("expected paint fill on text field container");
+        };
+        let Fill::Paint(_) = look.container().surface().fill() else {
+            unreachable!();
+        };
+        let enabled_fill = fill.target(&Inputs::at_rest(frame, InteractionState::empty(), &()));
+        let disabled_fill = fill.target(&Inputs::at_rest(frame, InteractionState::DISABLED, &()));
+        let (cherenkov_record::Paint::Solid(ef), cherenkov_record::Paint::Solid(df)) =
+            (enabled_fill, disabled_fill)
+        else {
+            panic!("expected solid fill paints");
+        };
+        assert!(
+            ef.components[3].mul_add(-0.5, df.components[3]).abs() < 1e-6,
+            "expected disabled container alpha to halve"
+        );
+
+        let assert_color_halves = |driven: &hydrolysis_style::theme::Driven<Color>, name: &str| {
+            let enabled = driven
+                .target(&Inputs::at_rest(frame, InteractionState::empty(), &()))
+                .resolve(&env)
+                .snapshot();
+            let disabled = driven
+                .target(&Inputs::at_rest(frame, InteractionState::DISABLED, &()))
+                .resolve(&env)
+                .snapshot();
+            assert!(
+                enabled.components[3]
+                    .mul_add(-0.5, disabled.components[3])
+                    .abs()
+                    < 1e-6,
+                "expected disabled {name} alpha to halve"
+            );
+        };
+        assert_color_halves(
+            look.floating_label()
+                .label()
+                .get_color()
+                .expect("floating label color"),
+            "floating label",
+        );
+        assert_color_halves(
+            look.get_placeholder()
+                .get_color()
+                .expect("placeholder color"),
+            "placeholder",
+        );
+        assert_color_halves(
+            look.get_value()
+                .expect("value label")
+                .get_color()
+                .expect("value color"),
+            "value",
+        );
+    }
 }
