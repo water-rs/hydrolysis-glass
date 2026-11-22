@@ -2508,3 +2508,114 @@ fn a_right_to_left_stepper_is_the_mirror_of_a_left_to_right_one() {
     rtl_app.settle();
     assert_eq!(value.snapshot(), 5, "RTL right end decrements");
 }
+
+/// Secure and navigation search fields in both appearances (§8.6): an enabled
+/// secure field, a disabled secure field, and a searchable navigation bar.
+#[test]
+fn secure_and_search_field_scene() {
+    use waterui::Str;
+    use waterui::form::secure::{Secure, secure};
+    for (appearance, backdrop, name) in APPEARANCES {
+        let mut app = GlassApp::sized(
+            move || {
+                let enabled_pw = Binding::container(Secure::new("hunter2".to_owned()));
+                let disabled_pw = Binding::container(Secure::new("secret".to_owned()));
+                let query = Binding::container(Str::from("Glass"));
+                NavigationView::new(
+                    "Library",
+                    absolute((
+                        backdrop_view(backdrop),
+                        row(secure("Password", &enabled_pw), 40.0),
+                        row(secure("Disabled", &disabled_pw), 140.0).disabled(true),
+                    )),
+                )
+                .searchable(&query, "Search")
+            },
+            theme(appearance),
+            [SCENE_PT[0], WIDGET_SCENE_HEIGHT],
+        );
+        app.export(&format!("secure_search_{name}"));
+    }
+}
+
+/// Focusing, typing into, and selecting text inside a text field (§8.6),
+/// verifying that disabled fields ignore input and exporting focused+selected
+/// snapshots for visual verification of the single inner outline, outer focus
+/// ring, caret, and selection highlight.
+#[test]
+fn text_field_focus_typing_selection_and_disabled() {
+    use waterui::Str;
+    let enabled = Binding::container(Str::from("Hello"));
+    let enabled_view = enabled.clone();
+    let disabled = Binding::container(Str::from("Locked"));
+    let disabled_view = disabled.clone();
+
+    let mut app = GlassApp::sized(
+        move || {
+            absolute((
+                backdrop_view(Backdrop::Black),
+                row(
+                    waterui_controls::field("Name", &enabled_view).prompt("Your name"),
+                    40.0,
+                ),
+                row(
+                    waterui_controls::field("Locked", &disabled_view).prompt("Disabled"),
+                    140.0,
+                )
+                .disabled(true),
+            ))
+        },
+        theme(Appearance::Dark),
+        [SCENE_PT[0], 260.0],
+    );
+    app.settle();
+
+    // Tapping the disabled field changes neither focus nor value.
+    app.touch_down(120.0, 170.0);
+    app.touch_up(120.0, 170.0);
+    app.text_input("X");
+    app.settle();
+    assert_eq!(disabled.snapshot().as_str(), "Locked");
+
+    // Tap to focus the enabled field, type "!", then open the context menu
+    // and choose "Select All" (below "Paste") to highlight the full value.
+    app.touch_down(120.0, 70.0);
+    app.touch_up(120.0, 70.0);
+    app.text_input("!");
+    app.settle();
+    assert_eq!(enabled.snapshot().as_str(), "Hello!");
+
+    // Drag across the text line inside the focused field to select it, then
+    // capture without settling (the caret blinks while focused).
+    app.touch_down(63.0, 82.0);
+    app.touch_move(140.0, 82.0);
+    app.touch_up(140.0, 82.0);
+    app.advance(Duration::from_millis(250));
+    let dark = app.capture_now().save("text_field_focused_selected_dark");
+    assert!(dark.is_file(), "focused selected dark PNG written");
+
+    // Render focused state in light appearance as well.
+    let light_val = Binding::container(Str::from("Hello!"));
+    let mut light_app = GlassApp::sized(
+        move || {
+            absolute((
+                backdrop_view(Backdrop::White),
+                row(
+                    waterui_controls::field("Name", &light_val).prompt("Your name"),
+                    40.0,
+                ),
+            ))
+        },
+        theme(Appearance::Light),
+        [SCENE_PT[0], 140.0],
+    );
+    light_app.settle();
+    light_app.touch_down(63.0, 82.0);
+    light_app.touch_move(140.0, 82.0);
+    light_app.touch_up(140.0, 82.0);
+    light_app.advance(Duration::from_millis(250));
+    let light = light_app
+        .capture_now()
+        .save("text_field_focused_selected_light");
+    assert!(light.is_file(), "focused selected light PNG written");
+}
