@@ -110,7 +110,7 @@ pub(super) fn container(glass: &Glass) -> Chrome {
         |recorder, frame, (outline,)| {
             let inset = OUTLINE_WIDTH * 0.5;
             recorder.stroke(
-                RoundedRect::from_rect(frame.inset(inset), (CORNER_RADIUS - inset).max(0.0)),
+                RoundedRect::from_rect(frame.inset(-inset), (CORNER_RADIUS - inset).max(0.0)),
                 Stroke::new(OUTLINE_WIDTH),
                 outline,
             );
