@@ -2292,6 +2292,155 @@ fn tabs_scene() {
     }
 }
 
+/// The stepper in both appearances (§8.5): enabled mid-range, at the lower
+/// bound (decrement disabled), at the upper bound (increment disabled), and
+/// fully disabled.
+#[test]
+fn stepper_scene() {
+    use waterui_controls::stepper::stepper;
+    for (appearance, backdrop, name) in APPEARANCES {
+        let mut app = GlassApp::sized(
+            move || {
+                let mid = Binding::container(5i32);
+                let min = Binding::container(0i32);
+                let max = Binding::container(10i32);
+                let off = Binding::container(5i32);
+                absolute((
+                    backdrop_view(backdrop),
+                    row(stepper("Copies", &mid).range(0..=10), 40.0),
+                    row(stepper("At minimum", &min).range(0..=10), 110.0),
+                    row(stepper("At maximum", &max).range(0..=10), 180.0),
+                    row(stepper("Disabled", &off).range(0..=10), 250.0).disabled(true),
+                ))
+            },
+            theme(appearance),
+            [SCENE_PT[0], WIDGET_SCENE_HEIGHT],
+        );
+        app.export(&format!("stepper_{name}"));
+    }
+}
+
+/// Tapping the stepper's increment and decrement ends steps the value within
+/// its range, uses the 44 pt vertical hit region, and ignores disabled controls
+/// (§8.5).
+#[test]
+fn stepper_taps_step_and_respect_bounds_and_disabled() {
+    use waterui_controls::stepper::stepper;
+    let value = Binding::container(0i32);
+    let shown = value.clone();
+    let disabled_value = Binding::container(1i32);
+    let disabled_shown = disabled_value.clone();
+    let mut app = GlassApp::sized(
+        move || {
+            absolute((
+                backdrop_view(Backdrop::Black),
+                row(stepper("Copies", &shown).range(0..=2).step(1), 40.0),
+                row(
+                    stepper("Locked", &disabled_shown).range(0..=2).step(1),
+                    120.0,
+                )
+                .disabled(true),
+            ))
+        },
+        theme(Appearance::Dark),
+        [SCENE_PT[0], 200.0],
+    );
+    app.settle();
+
+    // Row sits at x = 51..351; the 65 × 32 pt controls sit at x = 286..351,
+    // with decrement centered at 302 and increment at 335, y = 40..72.
+    let tap = |app: &mut GlassApp, x: f32, y: f32| {
+        app.touch_down(x, y);
+        app.touch_up(x, y);
+        app.settle();
+    };
+    tap(&mut app, 335.0, 56.0);
+    assert_eq!(value.snapshot(), 1, "first increment tap steps 0 -> 1");
+    // 36.0 is 4 pt above the 32 pt visual button yet inside the 44 pt hit box.
+    tap(&mut app, 335.0, 36.0);
+    assert_eq!(
+        value.snapshot(),
+        2,
+        "extended 44 pt vertical hit region accepts increment 1 -> 2"
+    );
+    tap(&mut app, 335.0, 56.0);
+    assert_eq!(value.snapshot(), 2, "increment at upper bound is ignored");
+    tap(&mut app, 302.0, 56.0);
+    assert_eq!(value.snapshot(), 1, "decrement steps 2 -> 1");
+    tap(&mut app, 302.0, 56.0);
+    assert_eq!(value.snapshot(), 0, "decrement steps 1 -> 0");
+    tap(&mut app, 302.0, 56.0);
+    assert_eq!(value.snapshot(), 0, "decrement at lower bound is ignored");
+
+    // Disabled stepper ignores taps on either end.
+    tap(&mut app, 335.0, 136.0);
+    tap(&mut app, 302.0, 136.0);
+    assert_eq!(
+        disabled_value.snapshot(),
+        1,
+        "disabled stepper ignores taps"
+    );
+}
+
+/// A right-to-left stepper mirrors the pair horizontally so decrement leads on
+/// the right and increment trails on the left (§8.5).
+#[test]
+fn a_right_to_left_stepper_is_the_mirror_of_a_left_to_right_one() {
+    use waterui::layout::LayoutDirection;
+    use waterui_controls::stepper::stepper;
+
+    let render = |direction: LayoutDirection| {
+        let value = Binding::container(5i32);
+        let mut app = GlassApp::sized(
+            move || {
+                absolute((
+                    backdrop_view(Backdrop::Black),
+                    row(stepper("", &value).range(0..=10).with(direction), 40.0),
+                ))
+            },
+            theme(Appearance::Dark),
+            [SCENE_PT[0], 112.0],
+        );
+        app.snapshot()
+    };
+    let ltr = render(LayoutDirection::LeftToRight);
+    let rtl = render(LayoutDirection::RightToLeft);
+    flipped(&ltr).save("stepper_ltr_flipped");
+    rtl.save("stepper_rtl");
+    assert_agrees("right-to-left stepper", &rtl, &flipped(&ltr));
+
+    // Also verify the ends swap actions in RTL: left end increments, right end
+    // decrements.
+    let value = Binding::container(5i32);
+    let shown = value.clone();
+    let mut rtl_app = GlassApp::sized(
+        move || {
+            absolute((
+                backdrop_view(Backdrop::Black),
+                row(
+                    stepper("", &shown)
+                        .range(0..=10)
+                        .with(LayoutDirection::RightToLeft),
+                    40.0,
+                ),
+            ))
+        },
+        theme(Appearance::Dark),
+        [SCENE_PT[0], 112.0],
+    );
+    rtl_app.settle();
+    // Row is x = 51..351, so in RTL the 65 pt pair sits at x = 51..116:
+    // increment on the left (center 67) and decrement on the right (center 100).
+    rtl_app.touch_down(67.0, 56.0);
+    rtl_app.touch_up(67.0, 56.0);
+    rtl_app.settle();
+    assert_eq!(value.snapshot(), 6, "RTL left end increments");
+    rtl_app.touch_down(100.0, 56.0);
+    rtl_app.touch_up(100.0, 56.0);
+    rtl_app.settle();
+    assert_eq!(value.snapshot(), 5, "RTL right end decrements");
+}
+
 /// Secure and navigation search fields in both appearances (§8.6): an enabled
 /// secure field, a disabled secure field, and a searchable navigation bar.
 #[test]
