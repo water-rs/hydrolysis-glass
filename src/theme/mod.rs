@@ -643,4 +643,36 @@ mod tests {
             waterui::animation::Animation::ease_out(PRESS_DURATION)
         );
     }
+
+    #[test]
+    fn sheet_surface_uses_regular_glass_and_clamps_top_corners() {
+        use crate::material::geometry::CornerCurve;
+        use crate::material::recipe::{Family, Recipe};
+
+        for g in [Glass::dark(), Glass::light()] {
+            let full = g.sheet_surface(Rect::new(0.0, 200.0, 402.0, 874.0));
+            assert_eq!(full.role, surfaces::Role::Sheet);
+            assert_eq!(
+                full.element.recipe,
+                Recipe::for_size(
+                    402.0,
+                    Family::Regular,
+                    g.palette().appearance,
+                    g.translucency()
+                )
+            );
+            assert_eq!(full.element.shape.curve, CornerCurve::Continuous);
+            assert_eq!(full.element.shape.radii, [38.0, 38.0, 0.0, 0.0]);
+            assert!(full.wash.is_none());
+
+            let compact = g.sheet_surface(Rect::new(0.0, 814.0, 402.0, 874.0));
+            assert_eq!(compact.element.shape.radii, [30.0, 30.0, 0.0, 0.0]);
+
+            let layered = layered_recorder(|r| {
+                record_standalone(r, &full);
+            });
+            assert_eq!(layered.runs.len(), 1);
+            assert_eq!(layered.runs[0].material.shader(), materials::GLASS_SHADER);
+        }
+    }
 }

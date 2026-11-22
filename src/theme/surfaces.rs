@@ -19,7 +19,8 @@ use crate::material::recipe::{Appearance, Family, Recipe, Tint, Translucency};
 use super::button::{self, BorderShape, Kind, SizeGroup};
 use super::palette::{Palette, Rgba};
 
-/// Continuous corner radius of a sheet's exposed corners, pt.
+/// Continuous corner radius of a sheet's exposed top corners, pt
+/// (specification §8.10).
 pub const SHEET_CORNER_RADIUS: f32 = 38.0;
 /// Continuous corner radius of a container the union fuses members into, pt.
 pub const CONTAINER_CORNER_RADIUS: f32 = 26.0;
@@ -264,8 +265,9 @@ pub fn toolbar(palette: &Palette, bounds: KRect, translucency: Translucency) -> 
     }
 }
 
-/// A sheet: continuous top corners, square bottom corners where it meets the
-/// screen edge, the regular recipe at the sheet's size.
+/// A sheet (specification §8.10): continuous 38 pt top corners, square
+/// bottom corners where it meets the screen edge, and the regular recipe at
+/// the sheet's size.
 #[must_use]
 pub fn sheet(palette: &Palette, bounds: KRect, translucency: Translucency) -> Surface {
     let r = rect(bounds);
