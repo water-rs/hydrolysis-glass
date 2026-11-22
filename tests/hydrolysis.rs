@@ -2619,3 +2619,173 @@ fn text_field_focus_typing_selection_and_disabled() {
         .save("text_field_focused_selected_light");
     assert!(light.is_file(), "focused selected light PNG written");
 }
+
+/// Top and bottom navigation bar items (§8.8) in both appearances: pushed back
+/// button, leading and trailing glass/plain actions, and a bottom toolbar item.
+#[test]
+fn navigation_bar_items_scene() {
+    use waterui::navigation::{
+        NavigationPath, NavigationStack, NavigationToolbar, NavigationToolbarItem,
+        NavigationToolbarPlacement,
+    };
+    for (appearance, backdrop, name) in APPEARANCES {
+        let path = NavigationPath::<i32>::new();
+        path.push(1);
+        let mut app = GlassApp::sized(
+            move || {
+                NavigationStack::with_path(
+                    path.clone(),
+                    NavigationView::new("Root", backdrop_view(backdrop)),
+                )
+                .destination(move |_: i32| {
+                    let toolbar = NavigationToolbar::new(vec![
+                        NavigationToolbarItem::new(
+                            NavigationToolbarPlacement::TopBarTrailing,
+                            button("Save")
+                                .style(ButtonStyle::Glass)
+                                .size(ControlSize::Small),
+                        ),
+                        NavigationToolbarItem::new(
+                            NavigationToolbarPlacement::BottomBar,
+                            button("Done")
+                                .style(ButtonStyle::BorderedProminent)
+                                .size(ControlSize::Small),
+                        ),
+                    ]);
+                    NavigationView::new("Detail", backdrop_view(backdrop))
+                        .navigation_toolbar(toolbar)
+                })
+            },
+            theme(appearance),
+            [SCENE_PT[0], WIDGET_SCENE_HEIGHT],
+        );
+        app.export(&format!("navigation_bar_items_{name}"));
+    }
+}
+
+/// Tapping the pushed navigation back button pops the path, pressing shows
+/// the state layer, and toolbar items respond to taps (§8.8).
+#[test]
+fn navigation_back_button_pops_and_toolbar_item_responds() {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use waterui::navigation::{
+        NavigationPath, NavigationStack, NavigationToolbar, NavigationToolbarItem,
+        NavigationToolbarPlacement,
+    };
+
+    let done_taps = Arc::new(AtomicUsize::new(0));
+    let done_count = Arc::clone(&done_taps);
+    let path = NavigationPath::<i32>::new();
+    path.push(1);
+    let shown = path.clone();
+    let mut app = GlassApp::sized(
+        move || {
+            let done_count = Arc::clone(&done_count);
+            NavigationStack::with_path(
+                shown.clone(),
+                NavigationView::new("Root", backdrop_view(Backdrop::Black)),
+            )
+            .destination(move |_: i32| {
+                let done_count = Arc::clone(&done_count);
+                let toolbar = NavigationToolbar::new(vec![NavigationToolbarItem::new(
+                    NavigationToolbarPlacement::BottomBar,
+                    button("Done")
+                        .style(ButtonStyle::BorderedProminent)
+                        .size(ControlSize::Small)
+                        .action(move || {
+                            done_count.fetch_add(1, Ordering::Relaxed);
+                        }),
+                )]);
+                NavigationView::new("Detail", backdrop_view(Backdrop::Black))
+                    .navigation_toolbar(toolbar)
+            })
+        },
+        theme(Appearance::Dark),
+        [SCENE_PT[0], 160.0],
+    );
+    app.settle();
+    assert_eq!(path.len(), 1);
+    // Bottom toolbar button is centered horizontally at x = 201, y = 160 - 22 = 138.
+    app.touch_down(201.0, 138.0);
+    app.touch_up(201.0, 138.0);
+    app.settle();
+    assert_eq!(
+        done_taps.load(Ordering::Relaxed),
+        1,
+        "tapping bottom bar item fires its action"
+    );
+
+    // Back button is 44 × 44 pt at x = 8..52, y = 0..44 (center 30, 22).
+    app.touch_down(30.0, 22.0);
+    app.touch_up(30.0, 22.0);
+    app.settle();
+    assert_eq!(path.len(), 0, "tapping back button pops destination");
+
+    // Capture the back button pressed state layer cleanly on a pushed destination.
+    let pressed_path = NavigationPath::<i32>::new();
+    pressed_path.push(1);
+    let pressed_shown = pressed_path.clone();
+    let mut pressed_app = GlassApp::sized(
+        move || {
+            NavigationStack::with_path(
+                pressed_shown.clone(),
+                NavigationView::new("Root", backdrop_view(Backdrop::Black)),
+            )
+            .destination(move |_: i32| {
+                NavigationView::new("Detail", backdrop_view(Backdrop::Black))
+            })
+        },
+        theme(Appearance::Dark),
+        [SCENE_PT[0], 120.0],
+    );
+    pressed_app.settle();
+    pressed_app.touch_down(30.0, 22.0);
+    pressed_app.advance(Duration::from_millis(120));
+    assert!(
+        pressed_app
+            .capture_now()
+            .save("navigation_back_pressed_dark")
+            .is_file()
+    );
+    pressed_app.touch_up(30.0, 22.0);
+    pressed_app.settle();
+    assert_eq!(
+        pressed_path.len(),
+        0,
+        "releasing pressed back button pops destination"
+    );
+}
+
+/// Right-to-left layout mirrors the pushed navigation back chevron (§8.8).
+#[test]
+fn navigation_rtl_renders_mirrored_back_chevron() {
+    use waterui::layout::LayoutDirection;
+    use waterui::navigation::{NavigationPath, NavigationStack};
+
+    let render = |direction: LayoutDirection| {
+        let path = NavigationPath::<i32>::new();
+        path.push(1);
+        let mut app = GlassApp::sized(
+            move || {
+                NavigationStack::with_path(
+                    path.clone(),
+                    NavigationView::new("Root", backdrop_view(Backdrop::Black)),
+                )
+                .destination(move |_: i32| NavigationView::new("", backdrop_view(Backdrop::Black)))
+                .with(direction)
+            },
+            theme(Appearance::Dark),
+            [SCENE_PT[0], 120.0],
+        );
+        app.snapshot()
+    };
+    let ltr = render(LayoutDirection::LeftToRight);
+    let rtl = render(LayoutDirection::RightToLeft);
+    assert!(ltr.save("navigation_bar_ltr").is_file());
+    assert!(rtl.save("navigation_bar_rtl").is_file());
+    assert_ne!(
+        ltr.pixels, rtl.pixels,
+        "RTL back chevron renders differently from LTR"
+    );
+}

@@ -1711,3 +1711,59 @@ every value is [chosen].
   `ln(0.05) / ln(1 − 0.22) / 60 ≈ 0.201` s (`PRESS_DURATION`) [chosen].
 - **Item state layer.** Hover and focus ease over `0.201` s; press and
   release run on the §8.1 springs [chosen].
+
+### 8.8 Navigation bar and bar items
+
+Top navigation bars and bottom toolbars are standalone regular-family
+glass capsules (`toolbar_surface`) with no hairline separator beyond the
+glass element's rim highlight and cast shadow. Bar items sit horizontally
+inside the bar, and a pushed destination presents an interactive back
+button at the leading edge.
+
+**Reference.** Nothing in this section was measured against a capture;
+every value is [chosen].
+
+#### Geometry
+
+- **Bar heights.** `44` pt for automatic and inline top bars (and bottom
+  bars), and `96` pt for medium and large bars (`44` pt inline title
+  slot, `52` pt medium/large title slot with `8` pt bottom inset)
+  [chosen].
+- **Insets and spacing.** Leading and trailing bar groups inset `16` pt
+  from the bar edges, with `8` pt spacing between adjacent items and
+  between titles and adjacent items (`16` pt title leading/trailing
+  inset when no adjacent item occupies that edge) [chosen].
+- **Bar items.** Semantic toolbar actions default to icon-only display
+  where supported, styled through §8.1 button looks (`Plain` /
+  `Borderless` without a glass capsule, or `Glass` / `Bordered` /
+  `Prominent` as capsule buttons) [chosen].
+- **Back button.** `44 × 44` pt frame placed `8` pt from the leading
+  edge and `0` pt from the top edge (`44 × 44` pt hit region with the
+  `70` pt cancel distance of §8.1) [chosen].
+- **Back chevron.** Open chevron stroked at width `2.5` pt with vertical
+  half-height `0.22 · height` and horizontal span `0.22 · height`:
+  pointing left (`<`) in left-to-right layout and mirrored right (`>`)
+  in right-to-left layout [chosen].
+
+#### Colours
+
+| Part | Dark appearance | Light appearance |
+|---|---|---|
+| bar surface | regular glass capsule (§5) | regular glass capsule (§5) |
+| separator | none (glass rim and shadow) | none (glass rim and shadow) |
+| back chevron | accent `(10, 132, 255)` | accent `(0, 122, 255)` |
+
+#### States
+
+- **Back button.** Wears the theme's capsule state layer over a clear
+  surface (`0.06` hover and focus, `0.12` press with press tint) and a
+  `2` pt accent focus ring `2` pt outside its bounds [chosen].
+- **Toolbar buttons.** Follow §8.1 button states [chosen].
+
+#### Motion
+
+- **Page transition.** `350` ms duration on cubic-bezier
+  `(0.2, 0.0, 0.0, 1.0)`, `30` pt shared-axis slide distance, and `0.35`
+  fade-through threshold [chosen].
+- **Back button and bar items.** Hover and focus ease over `0.201` s;
+  press and release run on the §8.1 springs [chosen].
