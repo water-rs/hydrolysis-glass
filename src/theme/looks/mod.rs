@@ -2,13 +2,13 @@
 //! a checkbox, a stepper, a slider, a segmented control, a progress
 //! indicator, a text field, a menu, a menu picker, a radio group, the
 //! navigation bar and a tab bar, built from Hydrolysis's look vocabulary
-//! (`hydrolysis::theme`).
+//! (`hydrolysis_style::theme`).
 //!
 //! A look is data: every value that follows the widget's interaction state,
-//! value, drag or frame is a [`Driven`](hydrolysis::theme::Driven) the engine
+//! value, drag or frame is a [`Driven`](hydrolysis_style::theme::Driven) the engine
 //! animates, so a press, a hover or a value change records nothing. The
 //! glass body of a button and the held knob of a switch are
-//! [`Backdrop`](hydrolysis::theme::Backdrop) fills over the shader and the
+//! [`Backdrop`](hydrolysis_style::theme::Backdrop) fills over the shader and the
 //! capture classes [`materials::register`](super::materials::register)
 //! declares.
 
@@ -40,21 +40,27 @@ pub(super) use tabs::look as tabs;
 pub(super) use text_field::look as text_field;
 pub(super) use toggle::{checkbox, switch};
 
-use cherenkov_record::kurbo::Size;
-use cherenkov_record::{Paint, WorkingColor};
-use hydrolysis::theme::{
-    Chrome, Driven, FocusIndicator, HitRegion, Inputs, Motion, PressFeedback, StateLayer,
-    Surface as ChromeSurface, Transition, ValueMotion,
+use cherenkov_record::kurbo::{Line, Point, Size};
+use cherenkov_record::{Draw as _, Live, Paint, ShapeData, Stroke, WorkingColor};
+use hydrolysis_style::theme::{
+    BadgeLook, BadgeMetrics, Chrome, CornerShape, Custom, Driven, FocusIndicator, HitRegion,
+    Inputs, ListControls, ListDividerMetrics, ListGestures, ListLook, ListMetrics, ListRowMetrics,
+    ListSectionMetrics, ListTrailingControlMetrics, Motion, PressFeedback, ScrollIndicatorLook,
+    StateLayer, Surface as ChromeSurface, TableLook, TableMetrics, Transition, ValueMotion,
 };
 use waterui::animation::Animation;
 use waterui::color::working::to_srgb;
 use waterui::interaction::InteractionState;
+use waterui::text::font::{Font, Footnote};
 
 use super::Glass;
 use super::button::{CANCEL_DISTANCE, MIN_HIT_SIDE, Spring};
-use super::chrome::{FOCUS_RING_GAP, FOCUS_RING_WIDTH, HOVER_ALPHA, PRESSED_ALPHA};
+use super::chrome::{self, FOCUS_RING_GAP, FOCUS_RING_WIDTH, HOVER_ALPHA, PRESSED_ALPHA};
 use super::palette::{Rgba, alpha, working};
 use super::{DRAG_DURATION, PRESS_DURATION};
+
+/// Default opacity applied to disabled button labels over the background.
+const DISABLED_CONTENT_ALPHA: f32 = 0.38;
 
 /// `color` as a paint.
 fn paint(color: Rgba) -> Paint {
@@ -155,4 +161,144 @@ fn control_motion() -> Motion {
         drag: Transition::symmetric(Animation::ease_out(DRAG_DURATION)),
         value: ValueMotion::Follow(Animation::linear(core::time::Duration::ZERO)),
     }
+}
+
+/// The look of a scroll indicator thumb.
+pub(super) fn scroll_indicator(glass: &Glass) -> ScrollIndicatorLook {
+    let palette = glass.palette;
+    ScrollIndicatorLook::new(
+        2.5,
+        6.5,
+        Custom::<(), _>::new((), move |recorder, frame, ()| {
+            chrome::scroll_indicator(&palette, recorder, frame);
+        }),
+    )
+    .edge_inset(1.5)
+    .min_extent(12.0)
+    .gutter(12.0)
+}
+
+/// The look of a badge indicator.
+pub(super) fn badge(glass: &Glass) -> BadgeLook {
+    let palette = glass.palette;
+    BadgeLook::new(
+        BadgeMetrics::new(8.0, 18.0, 6.0, 4.0, 4.0, 9.0, 9.0),
+        Font::from(Footnote),
+        Glass::color(palette.error_foreground),
+        Custom::<(), _>::new((), move |recorder, frame, ()| {
+            chrome::badge_small(&palette, recorder, frame);
+        }),
+        Custom::<(), _>::new((), move |recorder, frame, ()| {
+            chrome::badge_large(&palette, recorder, frame);
+        }),
+    )
+}
+
+/// The look of a list and its row editing controls.
+pub(super) fn list(glass: &Glass) -> ListLook {
+    let palette = glass.palette;
+    let move_control = || {
+        state_chrome(glass, ChromeSurface::clear(CornerShape::circle())).custom(
+            Custom::<(), _>::new((), move |recorder, frame, ()| {
+                chrome::list_move_control(&palette, recorder, frame);
+            }),
+        )
+    };
+    let delete_control = state_chrome(glass, ChromeSurface::clear(CornerShape::circle())).custom(
+        Custom::<(), _>::new((), move |recorder, frame, ()| {
+            chrome::list_delete_control(&palette, recorder, frame);
+        }),
+    );
+    let swipe_bg: Driven<Paint, f64> = Driven::new(move |inputs: &Inputs<'_, f64>| {
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "progress is clamped to [0, 1] before cast"
+        )]
+        let t = inputs.value.abs().clamp(0.0, 1.0) as f32;
+        paint(alpha(palette.error, 0.4f32.mul_add(t, 0.6)))
+    });
+    let swipe_icon: Driven<ShapeData, f64> = Driven::new(|inputs: &Inputs<'_, f64>| {
+        let bounds = inputs.frame;
+        let r = bounds.height().min(44.0) * 0.2;
+        let x = if *inputs.value < 0.0 {
+            bounds.x1 - 24.0
+        } else {
+            bounds.x0 + 24.0
+        };
+        let c = Point::new(x, bounds.center().y);
+        ShapeData::Line(Line::new(
+            Point::new(c.x - r, c.y),
+            Point::new(c.x + r, c.y),
+        ))
+    });
+    ListLook::new(
+        ListMetrics::new(
+            ListRowMetrics::new(44.0, 16.0, 11.0),
+            ListDividerMetrics::new(16.0, 0.0),
+            ListTrailingControlMetrics::new(32.0, 32.0, 8.0, 6.0),
+            ListSectionMetrics::new(36.0, 28.0),
+        ),
+        ListGestures {
+            swipe_threshold: 0.5,
+            reorder_threshold: 0.5,
+            slop: 8.0,
+            settle: Animation::ease_out(PRESS_DURATION),
+        },
+        Custom::<(), _>::new((), move |recorder, frame, ()| {
+            chrome::list_row_background(&palette, recorder, frame, false);
+        }),
+        Custom::<(), _>::new((), move |recorder, frame, ()| {
+            chrome::separator(&palette, recorder, frame);
+        }),
+        ListControls {
+            move_up: move_control(),
+            move_down: move_control(),
+            delete: delete_control,
+        },
+    )
+    .alternate_row(Custom::<(), _>::new((), move |recorder, frame, ()| {
+        chrome::list_row_background(&palette, recorder, frame, true);
+    }))
+    .lifted_row(Custom::<(), _>::new((), move |recorder, frame, ()| {
+        chrome::list_row_lifted(&palette, recorder, frame, 8.0);
+    }))
+    .swipe_background(Custom::<f64, _>::new(
+        (swipe_bg, swipe_icon),
+        move |recorder, frame, (bg, icon): (Live<Paint>, Live<ShapeData>)| {
+            recorder.fill(frame, bg);
+            recorder.stroke(icon, Stroke::new(2.0), working(palette.error_foreground));
+        },
+    ))
+}
+
+/// The look of a backend-rendered table.
+pub(super) fn table(glass: &Glass) -> TableLook {
+    let palette = glass.palette;
+    TableLook::new(
+        TableMetrics {
+            min_column_width: 80.0,
+            cell_horizontal_padding: 12.0,
+            cell_vertical_inset: 8.0,
+            header_height: 36.0,
+            row_height: 40.0,
+            outline_width: chrome::HAIRLINE,
+        },
+        Custom::<(), _>::new((), move |recorder, frame, ()| {
+            chrome::table_background(&palette, recorder, frame);
+        }),
+        Custom::<(), _>::new((), move |recorder, frame, ()| {
+            chrome::table_header_background(&palette, recorder, frame);
+        }),
+        Custom::<(), _>::new((), move |recorder, frame, ()| {
+            chrome::table_cell_border(&palette, recorder, frame);
+        }),
+        Custom::<(), _>::new((), move |recorder, frame, ()| {
+            chrome::table_column_separator(
+                &palette,
+                recorder,
+                Point::new(frame.x0, frame.y0),
+                Point::new(frame.x0, frame.y1),
+            );
+        }),
+    )
 }

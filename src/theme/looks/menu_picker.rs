@@ -3,7 +3,7 @@
 //! [menu look](super::menu).
 
 use cherenkov_record::kurbo::Rect;
-use hydrolysis::theme::{Custom, MenuPickerLayout, MenuPickerLook, PickerSpec};
+use hydrolysis_style::theme::{Custom, MenuPickerLayout, MenuPickerLook, PickerSpec};
 use waterui_core::Environment;
 
 use super::super::Glass;

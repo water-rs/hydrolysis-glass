@@ -1,7 +1,7 @@
 //! The navigation bar look: every bar a standalone glass toolbar with no
 //! separator, and the back button an accent chevron.
 
-use hydrolysis::theme::{
+use hydrolysis_style::theme::{
     BarSurface, Chrome, CornerShape, Custom, FocusIndicator, NavigationBarLook, NavigationMetrics,
     NavigationMotion, NavigationSpec, PressFeedback, StateLayer, Surface as ChromeSurface,
 };

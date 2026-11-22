@@ -6,7 +6,7 @@ name = "hydrolysis-glass"
 version = "0.1.0"
 edition = "2024"
 authors = ["Lexo Liu"]
-rust-version = "1.99"
+rust-version = "1.100"
 license = "MIT OR Apache-2.0"
 readme = "README.md"
 repository = "https://github.com/water-rs/hydrolysis-glass"
@@ -28,7 +28,7 @@ bytemuck = { version = "1", features = ["derive"] }
 # (`MaterialRegistry`, `Recorder::backdrop_material`, `MaterialEffect`,
 # `CaptureClass`) — the render-target-neutral layer, never the engine.
 cherenkov-record = "0.0.0"
-hydrolysis = "0.3.1"
+hydrolysis-style = "0.5.1"
 nami = "0.13"
 waterui = { version = "0.5.2", default-features = false }
 waterui-controls = "0.5.1"
@@ -86,7 +86,6 @@ multiple_crate_versions = "allow"
 # traits in one graph. `branch = "main"` follows the branch; the commit it
 # resolved to is recorded by `Cargo.lock`.
 waterui = { git = "https://github.com/water-rs/waterui", branch = "main" }
-waterui-assets = { git = "https://github.com/water-rs/waterui", branch = "main" }
 waterui-assets-core = { git = "https://github.com/water-rs/waterui", branch = "main" }
 waterui-controls = { git = "https://github.com/water-rs/waterui", branch = "main" }
 waterui-core = { git = "https://github.com/water-rs/waterui", branch = "main" }
@@ -94,19 +93,17 @@ waterui-dylib = { git = "https://github.com/water-rs/waterui", branch = "main" }
 waterui-form = { git = "https://github.com/water-rs/waterui", branch = "main" }
 waterui-graphics = { git = "https://github.com/water-rs/waterui", branch = "main" }
 waterui-icon = { git = "https://github.com/water-rs/waterui", branch = "main" }
-waterui-inspector-protocol = { git = "https://github.com/water-rs/waterui", branch = "main" }
 waterui-internal = { git = "https://github.com/water-rs/waterui", branch = "main" }
 waterui-layout = { git = "https://github.com/water-rs/waterui", branch = "main" }
 waterui-locale = { git = "https://github.com/water-rs/waterui", branch = "main" }
 waterui-macros = { git = "https://github.com/water-rs/waterui", branch = "main" }
-waterui-map = { git = "https://github.com/water-rs/waterui", branch = "main" }
 waterui-navigation = { git = "https://github.com/water-rs/waterui", branch = "main" }
 waterui-shape = { git = "https://github.com/water-rs/waterui", branch = "main" }
 waterui-text = { git = "https://github.com/water-rs/waterui", branch = "main" }
 waterui-url = { git = "https://github.com/water-rs/waterui", branch = "main" }
 waterui-watcher-set = { git = "https://github.com/water-rs/waterui", branch = "main" }
-waterui-webview = { git = "https://github.com/water-rs/waterui", branch = "main" }
 hydrolysis = { git = "https://github.com/water-rs/waterui", branch = "main" }
+hydrolysis-style = { git = "https://github.com/water-rs/waterui", branch = "main" }
 # `cherenkov-record` is this crate's own crates.io requirement: it resolves
 # to the same source so the graph carries one `Recorder`/`Paint` pair. The
 # engine crates themselves — `cherenkov`, `cherenkov-gpu`, `cherenkov-cpu`,
@@ -143,8 +140,6 @@ waterkit-clipboard = { git = "https://github.com/water-rs/waterkit", branch = "m
 waterkit-core = { git = "https://github.com/water-rs/waterkit", branch = "main" }
 waterkit-dialog = { git = "https://github.com/water-rs/waterkit", branch = "main" }
 waterkit-fs = { git = "https://github.com/water-rs/waterkit", branch = "main" }
-waterkit-location = { git = "https://github.com/water-rs/waterkit", branch = "main" }
-waterkit-permission = { git = "https://github.com/water-rs/waterkit", branch = "main" }
 
 # Mirrored from the framework's own patch (water-rs/cherenkov#229, carried
 # into water-rs/waterui): wgpu 30.0.1's native display backend reads the

@@ -4,7 +4,7 @@
 
 use cherenkov_record::Draw as _;
 use cherenkov_record::kurbo::{Circle, Size, Stroke};
-use hydrolysis::theme::{
+use hydrolysis_style::theme::{
     Custom, Driven, Inputs, Motion, PickerSpec, RadioGroupLook, RadioLayout, ToggleControl,
     ValueMotion,
 };

@@ -3,7 +3,7 @@
 
 use cherenkov_record::kurbo::{BezPath, Point, RoundedRectRadii, Size, Stroke};
 use cherenkov_record::{Draw as _, Paint};
-use hydrolysis::theme::{
+use hydrolysis_style::theme::{
     Chrome, CornerShape, Corners, Custom, Driven, Inputs, StepperLook, StepperSpec,
     Surface as ChromeSurface,
 };

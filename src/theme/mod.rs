@@ -28,24 +28,20 @@ pub mod switch;
 
 use core::time::Duration;
 
-use cherenkov_record::kurbo::{Point, Rect};
+use cherenkov_record::kurbo::Rect;
 use cherenkov_record::{MaterialRegistry, Recorder};
-use hydrolysis::Style;
-use hydrolysis::theme::{
-    BadgeMetrics, ButtonLook, ButtonSpec, CheckboxLook, DividerMetrics, GlassLook, IndicatorLook,
-    InteractionMotion, LinearProgressLook, ListDividerMetrics, ListMetrics, ListRowMetrics,
-    ListSectionMetrics, ListTrailingControlMetrics, MenuLook, MenuPickerLook, MenuSpec,
-    NavigationBarLook, NavigationSpec, PickerSpec, ProgressSpec, RadioGroupLook, SegmentedLook,
-    SegmentedSpec, SliderLook, SliderSpec, StepperLook, StepperSpec, SwitchLook, TableMetrics,
-    TabsLook, TabsSpec, TextFieldLook, TextFieldSpec, ToggleSpec, WidgetInteractionState,
-    WidgetTheme,
+use hydrolysis_style::Style;
+use hydrolysis_style::theme::{
+    BadgeLook, ButtonLook, ButtonSpec, CheckboxLook, GlassLook, IndicatorLook, LinearProgressLook,
+    ListLook, ListSpec, MenuLook, MenuPickerLook, MenuSpec, NavigationBarLook, NavigationSpec,
+    PickerSpec, ProgressSpec, RadioGroupLook, ScrollIndicatorLook, SegmentedLook, SegmentedSpec,
+    SliderLook, SliderSpec, StepperLook, StepperSpec, SwitchLook, TableLook, TabsLook, TabsSpec,
+    TextFieldLook, TextFieldSpec, ToggleSpec, WidgetTheme,
 };
 use waterui::Plugin as _;
-use waterui::animation::Animation;
 use waterui::color::{Color, ColorScheme};
 use waterui::interaction::InteractionState;
 use waterui::reactive::Signal as _;
-use waterui::text::font::{Font, Footnote};
 use waterui::theme::{ColorSettings, FontSettings, Theme, installed_color_scheme};
 use waterui_controls::ControlSize;
 use waterui_controls::button::ButtonStyle;
@@ -142,15 +138,15 @@ impl Glass {
         bounds: Rect,
         style: ButtonStyle,
         size: ControlSize,
-        state: WidgetInteractionState,
+        state: InteractionState,
     ) -> Option<Surface> {
         let kind = surfaces::button_kind(style)?;
         let spec = surfaces::ButtonSpec {
-            enabled: !state.state.contains(InteractionState::DISABLED),
+            enabled: !state.contains(InteractionState::DISABLED),
             ..surfaces::ButtonSpec::new(kind, button::SizeGroup::of(size))
         };
         let press = surfaces::Press {
-            progress: surfaces::press_progress(state, self.interaction_motion().pressed_opacity),
+            progress: f32::from(u8::from(state.contains(InteractionState::PRESSED))),
             // The renderer hands the chrome the touch in window space; the
             // press is centred on the frame until it is local.
             touch_x: None,
@@ -245,30 +241,6 @@ impl Style for Glass {
 }
 
 impl WidgetTheme for Glass {
-    fn interaction_motion(&self) -> InteractionMotion {
-        InteractionMotion {
-            hover_opacity: chrome::HOVER_ALPHA,
-            focus_opacity: chrome::HOVER_ALPHA,
-            pressed_opacity: chrome::PRESSED_ALPHA,
-            dragged_opacity: chrome::PRESSED_ALPHA,
-            hover_enter: Animation::ease_out(PRESS_DURATION),
-            hover_exit: Animation::ease_out(PRESS_DURATION),
-            focus_enter: Animation::ease_out(PRESS_DURATION),
-            focus_exit: Animation::ease_out(PRESS_DURATION),
-            // The glass button's press progress is the newest press wave's
-            // opacity, so the wave's fade-in and fade-out are the press
-            // and release springs of §8.1, and a release starts at once.
-            press_fade_in: button::Spring::PRESS.physical(),
-            press_fade_out: button::Spring::RELEASE.physical(),
-            press_grow: Animation::ease_out(PRESS_DURATION),
-            // `press_progress` drives the physical shape morph; the press
-            // spring is the contract's one animation for both directions.
-            press_shape: button::Spring::PRESS.physical(),
-            minimum_press_duration: Duration::ZERO,
-            touch_delay: Duration::ZERO,
-        }
-    }
-
     fn register_backdrop_shaders(&self, registry: &mut MaterialRegistry) {
         materials::register(registry);
     }
@@ -341,132 +313,20 @@ impl WidgetTheme for Glass {
         looks::tabs(self, *spec, env)
     }
 
-    fn draw_scroll_indicator(&self, draw: &mut Recorder, bounds: Rect) {
-        chrome::scroll_indicator(&self.palette, draw, bounds);
+    fn scroll_indicator(&self, _env: &Environment) -> ScrollIndicatorLook {
+        looks::scroll_indicator(self)
     }
 
-    fn divider_metrics(&self) -> DividerMetrics {
-        DividerMetrics::new(chrome::HAIRLINE)
+    fn badge(&self, _env: &Environment) -> BadgeLook {
+        looks::badge(self)
     }
 
-    fn draw_divider(&self, draw: &mut Recorder, bounds: Rect) {
-        chrome::separator(&self.palette, draw, bounds);
+    fn list(&self, _spec: &ListSpec, _env: &Environment) -> ListLook {
+        looks::list(self)
     }
 
-    fn badge_metrics(&self) -> BadgeMetrics {
-        BadgeMetrics::new(8.0, 18.0, 6.0, 4.0, 4.0, 9.0, 9.0)
-    }
-
-    fn badge_label_color(&self) -> Color {
-        Self::color(self.palette.error_foreground)
-    }
-
-    fn badge_label_font(&self) -> Font {
-        Font::from(Footnote)
-    }
-
-    fn draw_badge_small(&self, draw: &mut Recorder, bounds: Rect) {
-        chrome::badge_small(&self.palette, draw, bounds);
-    }
-
-    fn draw_badge_large(&self, draw: &mut Recorder, bounds: Rect) {
-        chrome::badge_large(&self.palette, draw, bounds);
-    }
-
-    fn list_metrics(&self) -> ListMetrics {
-        ListMetrics::new(
-            ListRowMetrics::new(44.0, 16.0, 11.0),
-            ListDividerMetrics::new(16.0, 0.0),
-            ListTrailingControlMetrics::new(32.0, 32.0, 8.0, 6.0),
-            ListSectionMetrics::new(36.0, 28.0),
-        )
-    }
-
-    fn draw_list_row_background(&self, draw: &mut Recorder, bounds: Rect, alternate: bool) {
-        chrome::list_row_background(&self.palette, draw, bounds, alternate);
-    }
-
-    fn draw_list_move_control(&self, draw: &mut Recorder, bounds: Rect) {
-        chrome::list_move_control(&self.palette, draw, bounds);
-    }
-
-    fn draw_list_move_control_state_layer(
-        &self,
-        draw: &mut Recorder,
-        bounds: Rect,
-        state: WidgetInteractionState,
-    ) {
-        chrome::circular_state_layer(
-            &self.palette,
-            draw,
-            bounds.center(),
-            bounds.width().min(bounds.height()) * 0.5,
-            state,
-        );
-    }
-
-    fn draw_list_delete_control(&self, draw: &mut Recorder, bounds: Rect) {
-        chrome::list_delete_control(&self.palette, draw, bounds);
-    }
-
-    fn draw_list_delete_control_state_layer(
-        &self,
-        draw: &mut Recorder,
-        bounds: Rect,
-        state: WidgetInteractionState,
-    ) {
-        chrome::circular_state_layer(
-            &self.palette,
-            draw,
-            bounds.center(),
-            bounds.width().min(bounds.height()) * 0.5,
-            state,
-        );
-    }
-
-    fn draw_list_swipe_dismiss_background(
-        &self,
-        draw: &mut Recorder,
-        bounds: Rect,
-        progress: f64,
-        toward_start: bool,
-    ) {
-        chrome::list_swipe_dismiss_background(&self.palette, draw, bounds, progress, toward_start);
-    }
-
-    fn draw_list_row_lifted(&self, draw: &mut Recorder, bounds: Rect, elevation: f64) {
-        chrome::list_row_lifted(&self.palette, draw, bounds, elevation);
-    }
-
-    fn draw_list_separator(&self, draw: &mut Recorder, bounds: Rect) {
-        chrome::separator(&self.palette, draw, bounds);
-    }
-
-    fn table_metrics(&self) -> TableMetrics {
-        TableMetrics {
-            min_column_width: 80.0,
-            cell_horizontal_padding: 12.0,
-            cell_vertical_inset: 8.0,
-            header_height: 36.0,
-            row_height: 40.0,
-            outline_width: chrome::HAIRLINE,
-        }
-    }
-
-    fn draw_table_background(&self, draw: &mut Recorder, bounds: Rect) {
-        chrome::table_background(&self.palette, draw, bounds);
-    }
-
-    fn draw_table_header_background(&self, draw: &mut Recorder, bounds: Rect) {
-        chrome::table_header_background(&self.palette, draw, bounds);
-    }
-
-    fn draw_table_cell_border(&self, draw: &mut Recorder, bounds: Rect) {
-        chrome::table_cell_border(&self.palette, draw, bounds);
-    }
-
-    fn draw_table_column_separator(&self, draw: &mut Recorder, from: Point, to: Point) {
-        chrome::table_column_separator(&self.palette, draw, from, to);
+    fn table(&self, _env: &Environment) -> TableLook {
+        looks::table(self)
     }
 }
 
@@ -474,7 +334,7 @@ impl WidgetTheme for Glass {
 mod tests {
     use super::*;
     use cherenkov_record::{Content, LayoutSize};
-    use hydrolysis::theme::{Fill, Inputs, SpecTint};
+    use hydrolysis_style::theme::{Fill, Inputs, SpecTint};
     use waterui_core::layout::LayoutDirection;
 
     #[test]
@@ -519,7 +379,7 @@ mod tests {
                 b,
                 ButtonStyle::Plain,
                 ControlSize::Small,
-                WidgetInteractionState::NONE
+                InteractionState::empty(),
             )
             .is_none()
         );
@@ -558,7 +418,7 @@ mod tests {
                 frame,
                 ButtonStyle::Glass,
                 ControlSize::Medium,
-                WidgetInteractionState::NONE,
+                InteractionState::empty(),
             )
             .expect("glass surface");
         // The button's recipe capture scale snaps up to the smallest
@@ -592,5 +452,18 @@ mod tests {
         for run in &layered.runs {
             assert_eq!(run.material.shader(), materials::GLASS_SHADER);
         }
+    }
+
+    #[test]
+    fn menu_look_reports_elevation_extent_for_popup_shadow() {
+        let g = Glass::light();
+        let env = environment(&g);
+        let look = g.menu(&MenuSpec::new(LayoutDirection::LeftToRight), &env);
+        let extent = look.panel_extent(Rect::new(0.0, 0.0, 140.0, 120.0));
+        let expected = chrome::POPUP_SHADOW_BLUR.mul_add(3.0, chrome::POPUP_SHADOW_OFFSET);
+        assert!(
+            (extent - expected).abs() < 1e-6,
+            "expected popup elevation extent {expected}, got {extent}"
+        );
     }
 }
