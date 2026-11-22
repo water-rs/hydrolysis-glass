@@ -14,8 +14,6 @@ use super::{hit_region, state_chrome};
 
 /// The measures of the navigation chrome: 44 pt inline bars and 96 pt
 /// medium and large ones, titles and items inset 16 pt and 8 pt apart, a
-/// The measures of the navigation chrome: 44 pt inline bars and 96 pt
-/// medium and large ones, titles and items inset 16 pt and 8 pt apart, a
 /// 56 pt search field (§8.6) and a 44 pt back button 8 pt from the leading
 /// edge (§8.8, Geometry).
 const METRICS: NavigationMetrics = NavigationMetrics {
