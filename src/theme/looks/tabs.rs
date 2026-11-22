@@ -62,8 +62,15 @@ pub(in super::super) fn look(glass: &Glass, _spec: TabsSpec, _env: &Environment)
         bar,
         divider,
         motion,
-        move |_item, _selected| {
-            state_chrome(&items, ChromeSurface::clear(CornerShape::full())).hit(hit)
+        move |item, _selected| {
+            let size = item.geometry.bounds.size();
+            let pill = Size::new(
+                HIGHLIGHT_INSET.mul_add(-2.0, size.width).max(0.0),
+                HIGHLIGHT_INSET.mul_add(-2.0, size.height).max(0.0),
+            );
+            state_chrome(&items, ChromeSurface::clear(CornerShape::full()))
+                .centered(pill)
+                .hit(hit)
         },
     )
     .horizontal(HORIZONTAL_BREAKPOINT, HORIZONTAL_METRICS)

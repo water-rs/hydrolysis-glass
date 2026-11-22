@@ -1530,6 +1530,69 @@ is dragged, which is the part of the control that shows the material.
 - **Leaving the control.** The drag continues wherever the touch goes
   until release; it never cancels [chosen].
 
+### 8.5 Stepper
+
+A stepper adjusts an integer value by discrete steps through a pair of
+adjacent buttons — a decrement end (`−`) and an increment end (`+`) —
+joined into one capsule at the trailing edge of an optional label. At
+rest no part is glass: each button carries a flat fill and a flat icon.
+
+**Reference.** Nothing in this section was measured against a capture;
+every value is [chosen].
+
+#### Geometry
+
+- **Buttons.** Two `32 × 32` pt ends separated by a `1` pt seam
+  (`65 × 32` pt in all), centred vertically in the row [chosen]. A row
+  shorter than `32` pt caps each button's height without changing its
+  width.
+- **Label spacing.** `12` pt between the label and the button pair
+  [chosen].
+- **Corners.** Each end rounds its outer two corners to half its height
+  (`h / 2`, circular) and leaves its inner two corners at `0` pt along
+  the `1` pt seam [chosen].
+- **Icons.** Centred `−` and `+` strokes of width `2` pt and half-length
+  `0.22 · min(width, height)` (`7.04` pt at `32 × 32` pt) [chosen].
+- **Direction.** The decrement end leads the pair: left of increment in
+  a left-to-right layout, and right of increment in a right-to-left
+  layout, with the rounded outer corners mirrored accordingly [chosen].
+- **Hit region.** Each button keeps its `32` pt horizontal bounds so the
+  `1` pt seam never overlaps targets, and extends vertically to at least
+  `44` pt centred on the button, with the `70` pt release cancel
+  distance of §8.1 [chosen].
+
+#### Colours
+
+| Part | Dark appearance | Light appearance |
+|---|---|---|
+| button fill | (120, 120, 128) at alpha 0.32 over the backdrop | (120, 120, 128) at alpha 0.16 over the backdrop |
+| icons (`−`, `+`) | white | black |
+
+#### States
+
+| State | Button fill | Icons |
+|---|---|---|
+| enabled | as above, with state layer and press tint | as above |
+| tinted | unchanged: the tint has no effect | unchanged |
+| end at limit / disabled | as enabled, at opacity 0.5, no state layer or focus ring | as enabled, at opacity 0.5 |
+| focused (enabled) | as enabled, with a 2 pt accent focus ring 2 pt outside the half-capsule | as enabled |
+
+- **Disabled and range limits.** Disabling the whole control fades both
+  ends (and the label through the backend); reaching a bound of the
+  stepper's range (`value <= start` for decrement, `value >= end` for
+  increment) disables only that end, fading its fill and icon to
+  opacity `0.5` while leaving the opposite end interactive [chosen].
+- **State layer.** Hover and focus draw the theme's state layer at
+  opacity `0.06`; press draws it at opacity `0.12` with press tint
+  [chosen].
+
+#### Press motion
+
+- **Hover and focus.** Eased over `ln(0.05) / ln(1 − 0.22) / 60 ≈ 0.201` s
+  [chosen].
+- **Press and release.** Driven by the press (`ω0 = 28.2 rad/s, ζ = 0.65`)
+  and release (`ω0 = 15.8 rad/s, ζ = 0.385`) springs of §8.1 [chosen].
+
 ### 8.7 Tab bar
 
 A tab bar is a standalone regular-family glass capsule docked at the
@@ -1552,8 +1615,9 @@ every value is [chosen].
 - **Surface.** A standalone regular-family glass capsule spanning the
   docked band extended through adjacent safe-area edges (`tab_bar_surface`)
   [chosen].
-- **Selection highlight.** A capsule inset `4` pt inside the selected
-  item's chrome bounds [chosen].
+- **Selection highlight and item chrome.** Both use a capsule inset
+  `4` pt inside the item's bounds so hover/press state layers and focus
+  rings share the highlight silhouette [chosen].
 - **Hit region.** Each item extends vertically to at least `44` pt with
   the `70` pt release cancel distance of §8.1 [chosen].
 
@@ -1571,7 +1635,7 @@ every value is [chosen].
   `1` (`state_layer` at alpha `0.08`) beneath the item's chrome [chosen].
 - **Hover, focus and press.** Each item wears the theme's state layer
   (`0.06` hover/focus, `0.12` press with press tint) and a `2` pt accent
-  focus ring `2` pt outside its bounds [chosen].
+  focus ring `2` pt outside its `4` pt inset capsule [chosen].
 - **Disabled item.** Draws no pointer target [chosen].
 
 #### Motion
