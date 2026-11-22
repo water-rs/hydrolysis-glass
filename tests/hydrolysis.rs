@@ -2619,3 +2619,97 @@ fn text_field_focus_typing_selection_and_disabled() {
         .save("text_field_focused_selected_light");
     assert!(light.is_file(), "focused selected light PNG written");
 }
+
+#[test]
+fn menu_picker_selection_disabled_and_rtl() {
+    use waterui::form::picker::PickerStyle;
+    use waterui_core::layout::LayoutDirection;
+
+    let selection = Binding::container(1i32);
+    let view_selection = selection.clone();
+    let disabled_selection = Binding::container(1i32);
+    let view_disabled = disabled_selection.clone();
+
+    let mut app = GlassApp::sized(
+        move || {
+            absolute((
+                backdrop_view(Backdrop::Black),
+                row(fruit_picker(PickerStyle::Menu, &view_selection), 40.0),
+                row(fruit_picker(PickerStyle::Menu, &view_disabled), 280.0).disabled(true),
+            ))
+        },
+        theme(Appearance::Dark),
+        [SCENE_PT[0], WIDGET_SCENE_HEIGHT],
+    );
+    app.settle();
+
+    // Tapping the disabled picker leaves its selection unchanged.
+    app.touch_down(200.0, 305.0);
+    app.touch_up(200.0, 305.0);
+    app.settle();
+    assert_eq!(disabled_selection.snapshot(), 1);
+
+    // Tapping the enabled picker opens its popup; tapping "Cherry" selects it
+    // and closes the popup.
+    app.touch_down(200.0, 55.0);
+    app.touch_up(200.0, 55.0);
+    app.settle();
+    app.touch_down(200.0, 207.0);
+    app.touch_up(200.0, 207.0);
+    app.settle();
+    assert_eq!(selection.snapshot(), 2);
+
+    // Verify right-to-left layout mirrors the menu picker's content and
+    // indicator band cleanly.
+    let mut rtl_app = GlassApp::sized(
+        move || {
+            let rtl_selection = Binding::container(1i32);
+            absolute((
+                backdrop_view(Backdrop::Black),
+                row(fruit_picker(PickerStyle::Menu, &rtl_selection), 40.0)
+                    .with(LayoutDirection::RightToLeft),
+            ))
+        },
+        theme(Appearance::Dark),
+        [SCENE_PT[0], 140.0],
+    );
+    rtl_app.export("menu_picker_rtl_dark");
+}
+
+#[test]
+fn menu_popup_scene() {
+    use waterui_controls::menu::{Command, Menu, MenuItem, Shortcut};
+
+    for (appearance, backdrop, name) in APPEARANCES {
+        let mut app = GlassApp::sized(
+            move || {
+                absolute((
+                    backdrop_view(backdrop),
+                    Menu::new(
+                        "Actions",
+                        (
+                            Command::builder("Rename")
+                                .action(|| {})
+                                .shortcut(Shortcut::new('r').command()),
+                            MenuItem::Divider,
+                            Command::builder("Delete").action(|| {}).destructive(),
+                            Command::builder("Archive").action(|| {}).disabled(true),
+                        ),
+                    )
+                    .style(ButtonStyle::Glass)
+                    .position_anchor(
+                        waterui::layout::UnitPoint::TOP_LEADING,
+                        51.0,
+                        40.0,
+                    ),
+                ))
+            },
+            theme(appearance),
+            [SCENE_PT[0], WIDGET_SCENE_HEIGHT],
+        );
+        app.settle();
+        app.touch_down(85.0, 55.0);
+        app.touch_up(85.0, 55.0);
+        app.export(&format!("menu_popup_{name}"));
+    }
+}
