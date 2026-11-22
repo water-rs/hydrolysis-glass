@@ -1,6 +1,8 @@
 //! The glass switch (specification §8.2) and the checkbox looks.
 
-use cherenkov_record::kurbo::{BezPath, Point, Rect, RoundedRect, RoundedRectRadii, Size, Stroke};
+use cherenkov_record::kurbo::{
+    BezPath, Cap, Join, Point, Rect, RoundedRect, RoundedRectRadii, Size, Stroke,
+};
 use cherenkov_record::{
     BlendSpace, Draw as _, Fixed, Group, Live, MaterialEffect, Paint, ShapeData, WorkingColor,
 };
@@ -161,13 +163,13 @@ pub(in super::super) fn switch(glass: &Glass, spec: &ToggleSpec, env: &Environme
 }
 
 /// The checkbox's side, pt.
-const CHECKBOX_SIDE: f64 = 22.0;
+const CHECKBOX_SIDE: f64 = 16.0;
 /// The gap between a checkbox and its label, pt.
-const CHECKBOX_LABEL_SPACING: f64 = 10.0;
+const CHECKBOX_LABEL_SPACING: f64 = 8.0;
 /// A checkbox's corner radius, in shares of its side.
-const CHECKBOX_RADIUS: f64 = 0.3;
+const CHECKBOX_RADIUS: f64 = 0.25;
 /// The check mark's stroke width, in shares of the checkbox's side.
-const CHECK_STROKE: f64 = 0.12;
+const CHECK_STROKE: f64 = 0.13;
 
 /// The look of a checkbox in `spec`: an outline, an accent fill that fades
 /// in as the box checks with its check mark, and a state layer with a focus
@@ -235,7 +237,13 @@ pub(in super::super) fn checkbox(
             mark.move_to(at(0.22, 0.52));
             mark.line_to(at(0.42, 0.72));
             mark.line_to(at(0.78, 0.30));
-            recorder.stroke(mark, Stroke::new(w * CHECK_STROKE), check);
+            recorder.stroke(
+                mark,
+                Stroke::new(w * CHECK_STROKE)
+                    .with_caps(Cap::Round)
+                    .with_join(Join::Round),
+                check,
+            );
             recorder.fill(rounded(frame, 0.0), layer);
             let ring_inset = FOCUS_RING_WIDTH.mul_add(0.5, FOCUS_RING_GAP);
             recorder.stroke(
