@@ -1,19 +1,21 @@
-//! The navigation bar look: every bar a standalone glass toolbar with no
-//! separator, and the back button an accent chevron.
+//! The navigation bar look (specification §8.8): every bar a standalone
+//! glass toolbar with no separator, and the back button a direction-aware
+//! accent chevron with state feedback and focus ring.
 
 use hydrolysis_style::theme::{
-    BarSurface, Chrome, CornerShape, Custom, FocusIndicator, NavigationBarLook, NavigationMetrics,
-    NavigationMotion, NavigationSpec, PressFeedback, StateLayer, Surface as ChromeSurface,
+    BarSurface, CornerShape, Custom, NavigationBarLook, NavigationMetrics, NavigationMotion,
+    NavigationSpec, Surface as ChromeSurface,
 };
 use waterui_core::{EasingCurve, Environment};
 
 use super::super::chrome;
 use super::super::{Glass, NAVIGATION_DURATION, record_standalone};
-use super::control_motion;
+use super::{hit_region, state_chrome};
 
 /// The measures of the navigation chrome: 44 pt inline bars and 96 pt
 /// medium and large ones, titles and items inset 16 pt and 8 pt apart, a
-/// 56 pt search field and a 44 pt back button 8 pt from the leading edge.
+/// 56 pt search field (§8.6) and a 44 pt back button 8 pt from the leading
+/// edge (§8.8, Geometry).
 const METRICS: NavigationMetrics = NavigationMetrics {
     automatic_bar_height: 44.0,
     inline_bar_height: 44.0,
@@ -35,7 +37,8 @@ const METRICS: NavigationMetrics = NavigationMetrics {
 };
 
 /// A page transition: [`NAVIGATION_DURATION`] on the emphasized decelerate
-/// curve, sliding 30 pt and fading through at 35 % of its progress.
+/// curve, sliding 30 pt and fading through at 35 % of its progress (§8.8,
+/// Motion).
 const fn motion() -> NavigationMotion {
     NavigationMotion {
         transition_duration: NAVIGATION_DURATION,
@@ -45,14 +48,15 @@ const fn motion() -> NavigationMotion {
     }
 }
 
-/// The look of the navigation chrome in `spec`.
+/// The look of the navigation chrome in `spec` (§8.8).
 ///
 /// The bar is the theme's toolbar surface over the bar's frame, whatever
-/// background the application gives it. The back button draws its chevron
-/// and nothing else: no container, no state layer and no focus ring.
+/// background the application gives it. The back button draws its
+/// direction-aware chevron over a clear capsule with the theme's state
+/// layer, focus ring and 44 pt hit target.
 pub(in super::super) fn look(
     glass: &Glass,
-    _spec: NavigationSpec,
+    spec: NavigationSpec,
     _env: &Environment,
 ) -> NavigationBarLook {
     let toolbar = glass.clone();
@@ -60,16 +64,12 @@ pub(in super::super) fn look(
         record_standalone(recorder, &toolbar.toolbar_surface(frame));
     });
     let palette = glass.palette;
+    let rtl = spec.direction().is_right_to_left();
     let chevron = Custom::<(), _>::new((), move |recorder, frame, ()| {
-        chrome::back_button(&palette, recorder, frame);
+        chrome::back_button_directed(&palette, recorder, frame, rtl);
     });
-    let back = Chrome::new(
-        ChromeSurface::clear(CornerShape::full()),
-        StateLayer::new(Glass::color(palette.state_layer)),
-        PressFeedback::new(),
-        FocusIndicator::Tint,
-        control_motion(),
-    )
-    .custom(chevron);
+    let back = state_chrome(glass, ChromeSurface::clear(CornerShape::full()))
+        .hit(hit_region())
+        .custom(chevron);
     NavigationBarLook::new(METRICS, motion(), back, bar)
 }
