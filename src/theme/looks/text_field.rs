@@ -1,21 +1,23 @@
-//! The text field look (specification §8.6): a soft filled rounded rectangle
-//! under the theme's state layer, with an accent outline just inside its edge
-//! and an outer focus ring while focused, an inside label that floats to the
-//! top at three quarters of its size, and an accent caret and selection.
+//! The text field look (specification §8.6): a bordered `surface`-filled
+//! rounded rectangle under the theme's state layer, with an accent outline just
+//! inside its edge and an outer focus ring while focused, an inside label that
+//! floats to the top at three quarters of its size, and an accent caret and
+//! selection.
 //!
-//! The menu picker's field wears the same container, so
-//! [`menu_picker`](super::menu_picker) takes it from here.
+//! [`menu_picker`](super::menu_picker) reuses the soft `10` pt track container
+//! helper [`container`] from here.
 
 use core::time::Duration;
 
 use cherenkov_record::Draw as _;
 use cherenkov_record::kurbo::{RoundedRect, Stroke};
 use hydrolysis_style::theme::{
-    Caret, Chrome, CornerShape, Custom, Driven, FloatingLabel, InputFieldMetrics, Inputs, Label,
-    Surface as ChromeSurface, TextCaretMotion, TextFieldLook, TextFieldSpec, ValueMotion,
+    Border, Caret, Chrome, CornerShape, Custom, Driven, FloatingLabel, InputFieldMetrics, Inputs,
+    Label, Surface as ChromeSurface, TextCaretMotion, TextFieldLook, TextFieldSpec, ValueMotion,
 };
 use waterui::animation::Animation;
 use waterui::color::Color;
+use waterui::text::font::{Body, Font, FontWeight};
 use waterui_core::Environment;
 
 use super::super::Glass;
@@ -26,8 +28,14 @@ use super::{faded, focus_ring_paint, is_disabled, paint, state_chrome};
 /// The field's measures: a 20 pt band for the floated label, at least
 /// 120 × 36 pt, its text inset 12 by 8 (§8.6, Geometry).
 const METRICS: InputFieldMetrics = InputFieldMetrics::new(20.0, 120.0, 36.0, 12.0, 8.0);
-/// The container's corner radius, pt (§8.6, Geometry).
+/// The text field's resting corner radius, pt.
+const FIELD_CORNER_RADIUS: f64 = 6.0;
+/// The picker container's corner radius, pt (§8.6, Geometry).
 const CORNER_RADIUS: f64 = 10.0;
+/// The resting text size inside a text field, pt.
+const FIELD_TEXT_SIZE: f32 = 13.0;
+/// The resting line height inside a text field, pt.
+const FIELD_LINE_HEIGHT: f32 = 16.0;
 /// The width of the accent outline a focused field draws inside its
 /// container edge, pt (§8.6, Geometry).
 const OUTLINE_WIDTH: f64 = 1.5;
@@ -74,11 +82,17 @@ pub(in super::super) fn look(
     _env: &Environment,
 ) -> TextFieldLook {
     let palette = glass.palette;
+    let field_font = Font::from(Body)
+        .size(FIELD_TEXT_SIZE)
+        .weight(FontWeight::Normal)
+        .line_height(FIELD_LINE_HEIGHT);
     TextFieldLook::new(
-        container(glass),
+        field_container(glass),
         METRICS,
         FloatingLabel::new(
-            Label::new().color(state_color(palette.foreground)),
+            Label::new()
+                .font(field_font.clone())
+                .color(state_color(palette.foreground)),
             ValueMotion::Always(Animation::ease_out(PRESS_DURATION)),
         )
         .scale(FLOAT_SCALE)
@@ -86,8 +100,62 @@ pub(in super::super) fn look(
         Caret::new(paint(palette.accent), CARET_BLINK),
         paint(alpha(palette.accent, SELECTION_ALPHA)),
     )
-    .placeholder(Label::new().color(state_color(palette.muted_foreground)))
-    .value(Label::new().color(state_color(palette.foreground)))
+    .placeholder(
+        Label::new()
+            .font(field_font.clone())
+            .color(state_color(palette.muted_foreground)),
+    )
+    .value(
+        Label::new()
+            .font(field_font)
+            .color(state_color(palette.foreground)),
+    )
+}
+
+/// The text field's resting container: a `surface`-filled rounded rectangle
+/// with a 1 pt hairline border (`palette.border`), both dimming to 0.5 while
+/// disabled, plus the shared focus outline and ring.
+fn field_container(glass: &Glass) -> Chrome {
+    let palette = glass.palette;
+    let fill = Driven::new(move |inputs: &Inputs<'_, ()>| {
+        paint(faded(
+            palette.surface,
+            if is_disabled(inputs.state) {
+                DISABLED_OPACITY
+            } else {
+                1.0
+            },
+        ))
+    });
+    let border = Driven::new(move |inputs: &Inputs<'_, ()>| {
+        Border::new(
+            1.0,
+            paint(faded(
+                palette.border,
+                if is_disabled(inputs.state) {
+                    DISABLED_OPACITY
+                } else {
+                    1.0
+                },
+            )),
+        )
+    });
+    let outline = Custom::<(), _>::new(
+        (focus_ring_paint(palette.accent),),
+        |recorder, frame, (outline,)| {
+            let inset = OUTLINE_WIDTH * 0.5;
+            recorder.stroke(
+                RoundedRect::from_rect(frame.inset(-inset), (FIELD_CORNER_RADIUS - inset).max(0.0)),
+                Stroke::new(OUTLINE_WIDTH),
+                outline,
+            );
+        },
+    );
+    state_chrome(
+        glass,
+        ChromeSurface::new(CornerShape::radius(FIELD_CORNER_RADIUS), fill).border(border),
+    )
+    .custom(outline)
 }
 
 /// The field's container: the track colour, at half its alpha while
