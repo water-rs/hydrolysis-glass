@@ -50,7 +50,7 @@ impl Palette {
     /// Roles for the light appearance.
     pub const LIGHT: Self = Self {
         appearance: Appearance::Light,
-        background: [0.949, 0.949, 0.969, 1.0],
+        background: [1.0, 1.0, 1.0, 1.0],
         surface: [1.0, 1.0, 1.0, 1.0],
         surface_variant: [0.949, 0.949, 0.969, 1.0],
         border: [0.235, 0.235, 0.263, 0.29],
@@ -68,7 +68,7 @@ impl Palette {
     /// Roles for the dark appearance.
     pub const DARK: Self = Self {
         appearance: Appearance::Dark,
-        background: [0.0, 0.0, 0.0, 1.0],
+        background: [0.118, 0.118, 0.118, 1.0],
         surface: [0.11, 0.11, 0.118, 1.0],
         surface_variant: [0.173, 0.173, 0.18, 1.0],
         border: [0.329, 0.329, 0.345, 0.6],
