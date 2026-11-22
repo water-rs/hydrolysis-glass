@@ -2265,8 +2265,8 @@ fn navigation_bar_scene() {
     }
 }
 
-/// A tab container of two tabs in both appearances, the first selected: the
-/// tab bar, its divider, the selected item's highlight and the items.
+/// A tab container of two tabs in both appearances (§8.7), the first
+/// selected: the glass capsule bar, the inset selection highlight and the items.
 #[test]
 fn tabs_scene() {
     for (appearance, backdrop, name) in APPEARANCES {
@@ -2290,6 +2290,74 @@ fn tabs_scene() {
         );
         app.export(&format!("tabs_{name}"));
     }
+}
+
+/// Tab bar with icons, a badge, disabled tab guard, interactive selection, and
+/// wide horizontal layout (§8.7).
+#[test]
+fn tabs_icons_badges_selection_and_wide_layout() {
+    use waterui_controls::label::label;
+
+    let selection = Binding::container(0usize);
+    let shown = selection.clone();
+    let mut app = GlassApp::sized(
+        move || {
+            Tabs::new(
+                &shown,
+                (
+                    Tab::new(label("Home").icon(text("*")), move || {
+                        NavigationView::new("Home", backdrop_view(Backdrop::Black))
+                    }),
+                    Tab::new(label("Alerts").icon(text("+")), move || {
+                        NavigationView::new("Alerts", backdrop_view(Backdrop::Black))
+                    })
+                    .badge(3),
+                    Tab::new(label("Locked").icon(text("-")), move || {
+                        NavigationView::new("Locked", backdrop_view(Backdrop::Black))
+                    })
+                    .enabled(false),
+                ),
+            )
+        },
+        theme(Appearance::Dark),
+        [SCENE_PT[0], WIDGET_SCENE_HEIGHT],
+    );
+    app.settle();
+    assert!(app.snapshot().save("tabs_icons_badges_dark").is_file());
+
+    // Tapping the disabled third tab leaves selection on tab 0.
+    app.touch_down(335.0, 330.0);
+    app.touch_up(335.0, 330.0);
+    app.settle();
+    assert_eq!(selection.snapshot(), 0, "disabled tab ignores tap");
+
+    // Tapping the second tab selects it and moves the highlight.
+    app.touch_down(201.0, 330.0);
+    app.touch_up(201.0, 330.0);
+    app.settle();
+    assert_eq!(selection.snapshot(), 1, "tapping second tab selects it");
+    assert!(app.snapshot().save("tabs_icons_selected_second").is_file());
+
+    // Wide bar (>= 600 pt) uses the 48 pt horizontal item layout.
+    let wide_sel = Binding::container(0usize);
+    let mut wide_app = GlassApp::sized(
+        move || {
+            Tabs::new(
+                &wide_sel,
+                (
+                    Tab::new(label("First").icon(text("*")), || {
+                        NavigationView::new("First", backdrop_view(Backdrop::White))
+                    }),
+                    Tab::new(label("Second").icon(text("+")), || {
+                        NavigationView::new("Second", backdrop_view(Backdrop::White))
+                    }),
+                ),
+            )
+        },
+        theme(Appearance::Light),
+        [640.0, 200.0],
+    );
+    wide_app.export("tabs_wide_light");
 }
 
 /// The stepper in both appearances (§8.5): enabled mid-range, at the lower
