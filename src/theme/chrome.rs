@@ -9,7 +9,7 @@
 use cherenkov_record::kurbo::{
     BezPath, Circle, Line, Point, Rect, RoundedRect, RoundedRectRadii, Stroke, Vec2,
 };
-use cherenkov_record::{Draw as _, Recorder, Shadow};
+use cherenkov_record::{Draw as _, Paint, Recorder, Shadow};
 use waterui_graphics::WorkingColor;
 
 use super::palette::{Palette, alpha, over, working};
@@ -50,8 +50,12 @@ pub fn separator(palette: &Palette, draw: &mut Recorder, bounds: Rect) {
     draw.fill(bounds, working(palette.border));
 }
 
-/// The chevron pair of a menu picker.
-pub fn picker_indicator(palette: &Palette, draw: &mut Recorder, bounds: Rect) {
+/// The chevron pair of a menu picker, stroked with `paint`.
+pub fn picker_indicator_with(
+    draw: &mut Recorder,
+    bounds: Rect,
+    paint: impl Into<<Recorder as cherenkov_record::Draw>::Value<Paint>>,
+) {
     let c = bounds.center();
     let w = bounds.width().min(bounds.height()) * 0.18;
     let mut path = BezPath::new();
@@ -61,7 +65,12 @@ pub fn picker_indicator(palette: &Palette, draw: &mut Recorder, bounds: Rect) {
     path.move_to(Point::new(c.x - w, c.y + 1.5));
     path.line_to(Point::new(c.x, c.y + 1.5 + w));
     path.line_to(Point::new(c.x + w, c.y + 1.5));
-    draw.stroke(path, Stroke::new(1.8), working(palette.muted_foreground));
+    draw.stroke(path, Stroke::new(1.8), paint);
+}
+
+/// The chevron pair of a menu picker.
+pub fn picker_indicator(palette: &Palette, draw: &mut Recorder, bounds: Rect) {
+    picker_indicator_with(draw, bounds, Paint::from(working(palette.muted_foreground)));
 }
 
 /// The selected row of a popup: a soft accent container around the row.
