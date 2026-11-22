@@ -107,7 +107,8 @@ impl Image {
         img
     }
 
-    /// Writes the scene PNG to `target/verification/<name>.png`.
+    /// Writes the scene PNG to `target/verification/<name>.png` (and to
+    /// `$WATERUI_TEST_ARTIFACTS_DIR/<suite>/<case>/<name>.png` when set).
     #[allow(
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss,
@@ -137,8 +138,44 @@ impl Image {
             image::ExtendedColorType::Rgba8,
         )
         .expect("write png");
+        if let Some(artifacts_root) = std::env::var_os("WATERUI_TEST_ARTIFACTS_DIR") {
+            let artifact_path = PathBuf::from(artifacts_root).join(gallery_artifact_rel_path(name));
+            if let Some(parent) = artifact_path.parent() {
+                std::fs::create_dir_all(parent).expect("create artifact directory");
+            }
+            std::fs::copy(&path, &artifact_path).expect("copy verification png to artifacts dir");
+        }
         path
     }
+}
+
+fn gallery_artifact_rel_path(name: &str) -> PathBuf {
+    let (suite, case) = if name.starts_with("button_") {
+        ("controls", "button")
+    } else if name.starts_with("switch_") {
+        ("controls", "switch")
+    } else if name.starts_with("segmented_") {
+        ("controls", "segmented")
+    } else if name.starts_with("slider_") {
+        ("controls", "slider")
+    } else if name.starts_with("stepper_") {
+        ("controls", "stepper")
+    } else if name.starts_with("text_field_") || name.starts_with("text_context_menu_") {
+        ("controls", "text_field")
+    } else if name.starts_with("menu_picker_") || name.starts_with("radio_group_") {
+        ("controls", "picker")
+    } else if name.starts_with("navigation_bar_") || name.starts_with("tabs_") {
+        ("navigation", "chrome")
+    } else if name.starts_with("material_")
+        || name.starts_with("glass_background_")
+        || name.starts_with("cast_shadow_")
+        || name.ends_with("_chrome_hydrolysis")
+    {
+        ("material", "hydrolysis")
+    } else {
+        ("material", "standalone")
+    };
+    PathBuf::from(suite).join(case).join(format!("{name}.png"))
 }
 
 pub const fn grey(v: f32) -> [f32; 4] {
