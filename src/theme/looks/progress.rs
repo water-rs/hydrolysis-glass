@@ -14,7 +14,7 @@ use cherenkov_record::kurbo::{
 use cherenkov_record::{
     Curve, Draw as _, Fixed, Keyframes, Paint, Repeat, ShapeData, WorkingColor,
 };
-use hydrolysis::theme::{
+use hydrolysis_style::theme::{
     Custom, Driven, DrivenSet, IndicatorLook, Inputs, LinearProgressLook, Motion, ProgressControl,
     ProgressSpec, ValueMotion,
 };

@@ -6,7 +6,7 @@ use core::time::Duration;
 
 use cherenkov_record::Draw as _;
 use cherenkov_record::kurbo::RoundedRect;
-use hydrolysis::theme::{
+use hydrolysis_style::theme::{
     CornerShape, Custom, Driven, Inputs, Motion, Surface as ChromeSurface, TabItem, TabsLook,
     TabsMetrics, TabsSpec, ValueMotion,
 };

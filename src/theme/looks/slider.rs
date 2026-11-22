@@ -10,7 +10,7 @@ use cherenkov_record::kurbo::{RoundedRect, RoundedRectRadii, Size, Stroke, Vec2}
 use cherenkov_record::{
     BlendSpace, Draw as _, Group, Live, MaterialEffect, Paint, Shadow, ShapeData, WorkingColor,
 };
-use hydrolysis::theme::{
+use hydrolysis_style::theme::{
     Custom, DragMapping, Driven, DrivenSet, HitRegion, Inputs, Knob, Motion, SliderLayout,
     SliderLook, SliderSpec, Transition, ValueIndicator, ValueMotion,
 };

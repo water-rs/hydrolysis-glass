@@ -10,7 +10,7 @@ use core::time::Duration;
 
 use cherenkov_record::Draw as _;
 use cherenkov_record::kurbo::{RoundedRect, Stroke};
-use hydrolysis::theme::{
+use hydrolysis_style::theme::{
     Caret, Chrome, CornerShape, Custom, Driven, FloatingLabel, InputFieldMetrics, Inputs, Label,
     Surface as ChromeSurface, TextCaretMotion, TextFieldLook, TextFieldSpec, ValueMotion,
 };

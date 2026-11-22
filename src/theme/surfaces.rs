@@ -8,8 +8,6 @@
 //! [`Group`]s over a captured backdrop.
 
 use cherenkov_record::kurbo::Rect as KRect;
-use hydrolysis::theme::WidgetInteractionState;
-use waterui::interaction::InteractionState;
 use waterui_controls::button::ButtonStyle;
 
 use crate::material::geometry::{
@@ -85,25 +83,6 @@ pub const fn rect(bounds: KRect) -> Rect {
         bounds.width() as f32,
         bounds.height() as f32,
     )
-}
-
-/// The press progress `p` the theme reads from a renderer state snapshot:
-/// the newest press wave's opacity over the pressed opacity.
-///
-/// The renderer animates that opacity with the theme's press and release
-/// animations (the springs of §8.1), so `p` follows the springs, overshoot
-/// included. A wave is dropped once its opacity reaches zero, so the
-/// release spring's undershoot below rest never reaches the theme. A
-/// disabled button does not respond to touches (§8.1).
-#[must_use]
-pub fn press_progress(state: WidgetInteractionState, pressed_opacity: f32) -> f32 {
-    if state.state.contains(InteractionState::DISABLED) {
-        return 0.0;
-    }
-    state
-        .press_waves
-        .latest()
-        .map_or(0.0, |wave| wave.opacity / pressed_opacity)
 }
 
 /// The kind of glass a button style is realised as, or `None` for the
@@ -345,7 +324,6 @@ pub fn group(surfaces: Vec<Surface>) -> Group {
 )]
 mod tests {
     use super::*;
-    use hydrolysis::theme::{PressWave, PressWaves};
 
     const P: Palette = Palette::LIGHT;
     const FRAME: KRect = KRect::new(10.0, 20.0, 86.0, 54.33);
@@ -486,30 +464,6 @@ mod tests {
         .wash
         .expect("pressed");
         assert!((off.alpha_at(end) - 0.30).abs() < 1e-6);
-    }
-
-    #[test]
-    fn press_progress_is_the_newest_waves_opacity_over_the_pressed_opacity() {
-        let mut state = WidgetInteractionState::NONE;
-        assert_eq!(press_progress(state, 0.12), 0.0);
-        // The hover layer is not a press.
-        state.state_layer_opacity = 0.06;
-        assert_eq!(press_progress(state, 0.12), 0.0);
-        let mut waves = PressWaves::EMPTY;
-        waves.push(PressWave {
-            origin: None,
-            progress: 1.0,
-            opacity: 0.06,
-        });
-        waves.push(PressWave {
-            origin: None,
-            progress: 1.0,
-            opacity: 0.1284,
-        });
-        state.press_waves = waves;
-        assert!((press_progress(state, 0.12) - 1.07).abs() < 1e-4);
-        state.state = InteractionState::PRESSED | InteractionState::DISABLED;
-        assert_eq!(press_progress(state, 0.12), 0.0);
     }
 
     #[test]

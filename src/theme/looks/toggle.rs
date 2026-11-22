@@ -4,7 +4,7 @@ use cherenkov_record::kurbo::{BezPath, Point, Rect, RoundedRect, RoundedRectRadi
 use cherenkov_record::{
     BlendSpace, Draw as _, Fixed, Group, Live, MaterialEffect, Paint, ShapeData, WorkingColor,
 };
-use hydrolysis::theme::{
+use hydrolysis_style::theme::{
     Backdrop, CheckboxLook, Custom, Driven, HitRegion, Inputs, Motion, SwitchDrag, SwitchLook,
     ToggleBackdrop, ToggleControl, ToggleSpec, Transition, ValueMotion,
 };

@@ -39,7 +39,6 @@
 mod common;
 
 use common::*;
-use hydrolysis::theme::WidgetInteractionState;
 use hydrolysis_glass::material::geometry::{CONTAINER_UNION_SMOOTHING, Shape};
 use hydrolysis_glass::material::recipe::{Family, Translucency};
 use hydrolysis_glass::{Appearance, Element, Glass, Group, Scene};
@@ -49,12 +48,14 @@ use waterui::animation::{Animation, NoAnimation};
 use waterui::background::Glass as WaterGlass;
 use waterui::color::Srgb;
 use waterui::form::picker::picker;
+use waterui::interaction::InteractionState;
 use waterui::layout::stack::hstack;
 use waterui::layout::{PositionExt as _, absolute};
 use waterui::navigation::{NavigationView, Tab, Tabs};
 use waterui::shape::{Circle, FixedRoundedRectangle};
 use waterui::text::text;
 use waterui::{AnyView, Binding, Color, View, ViewExt as _};
+use waterui_controls::label::LabelKind;
 use waterui_controls::slider::{Slider, slider};
 use waterui_controls::{ButtonStyle, ControlSize, Label, button::button, toggle::toggle};
 
@@ -144,7 +145,7 @@ fn button_element(appearance: Appearance, rect: [f32; 4]) -> Element {
             kurbo_rect(rect),
             ButtonStyle::Glass,
             SIZE,
-            WidgetInteractionState::NONE,
+            InteractionState::empty(),
         )
         .expect("a glass button carries a surface")
         .element
@@ -405,7 +406,7 @@ fn sized_button_element(appearance: Appearance, size: ControlSize, rect: [f32; 4
             kurbo_rect(rect),
             ButtonStyle::Glass,
             size,
-            WidgetInteractionState::NONE,
+            InteractionState::empty(),
         )
         .expect("a glass button carries a surface")
         .element
@@ -655,12 +656,12 @@ fn app_chrome(backdrop: Backdrop) -> impl View {
     };
     Tabs::new(
         &selection,
-        vec![
+        (
             Tab::new("Glass", page),
             Tab::new("Second", move || {
                 NavigationView::new("Second", backdrop_view(backdrop))
             }),
-        ],
+        ),
     )
 }
 
@@ -1834,7 +1835,12 @@ fn the_large_size_is_the_48_point_group() {
 
 /// `control` `width` pt wide and as tall as a slider (§8.3) with its
 /// top-left corner at `(x, y)`.
-fn placed(control: Slider, width: f32, x: f32, y: f32) -> impl View {
+fn placed<L: LabelKind, Min: View, Max: View>(
+    control: Slider<L, Min, Max>,
+    width: f32,
+    x: f32,
+    y: f32,
+) -> impl View {
     // `Slider::size` is the control size; the frame's is the view's.
     waterui::ViewExt::size(control.hide_label(), width, 31.0).position_anchor(
         waterui::layout::UnitPoint::TOP_LEADING,
@@ -2122,7 +2128,7 @@ fn row(view: impl View, y: f32) -> impl View {
 }
 
 /// A text field labelled "Name" bound to `value`, prompting "Your name".
-fn name_field(value: &str) -> waterui_controls::TextField {
+fn name_field(value: &str) -> impl View {
     waterui_controls::field(
         "Name",
         &Binding::container(waterui::Str::from(value.to_owned())),
@@ -2175,7 +2181,7 @@ fn text_context_menu_scene() {
 fn fruit_picker(
     style: waterui::form::picker::PickerStyle,
     selection: &Binding<i32>,
-) -> waterui::form::picker::Picker {
+) -> impl View + use<> {
     let items: Vec<_> = ["Apple", "Banana", "Cherry"]
         .into_iter()
         .zip(0i32..)
@@ -2269,14 +2275,14 @@ fn tabs_scene() {
                 let selection = Binding::container(0usize);
                 Tabs::new(
                     &selection,
-                    vec![
+                    (
                         Tab::new("First", move || {
                             NavigationView::new("First", backdrop_view(backdrop))
                         }),
                         Tab::new("Second", move || {
                             NavigationView::new("Second", backdrop_view(backdrop))
                         }),
-                    ],
+                    ),
                 )
             },
             theme(appearance),

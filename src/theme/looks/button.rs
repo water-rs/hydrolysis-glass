@@ -3,9 +3,9 @@
 //! borderless styles, which draw no body.
 
 use cherenkov_record::{BlendSpace, Draw as _, Group, Paint, WorkingColor};
-use hydrolysis::theme::{
+use hydrolysis_style::theme::{
     Backdrop, ButtonLook, ButtonSpec, Chrome, CornerShape, Custom, Driven, FocusIndicator, Inputs,
-    Label, PressFeedback, StateLayer, Surface as ChromeSurface, WidgetTheme as _,
+    Label, PressFeedback, StateLayer, Surface as ChromeSurface,
 };
 use waterui::color::Color;
 use waterui::interaction::InteractionState;
@@ -22,7 +22,9 @@ use super::super::materials::{self, CONTINUOUS_SMOOTHING, GLASS_SHADER};
 use super::super::palette::{alpha, over};
 use super::super::surfaces::{self, Press, Wash};
 use super::super::{Glass, button};
-use super::{control_motion, hit_region, is_disabled, rgba_of, state_chrome};
+use super::{
+    DISABLED_CONTENT_ALPHA, control_motion, hit_region, is_disabled, rgba_of, state_chrome,
+};
 
 /// The look of a button in `spec`.
 ///
@@ -67,7 +69,7 @@ fn label_color(
     tint: Computed<WorkingColor>,
 ) -> Driven<Color> {
     let palette = glass.palette;
-    let dimmed = glass.disabled_content_alpha();
+    let dimmed = DISABLED_CONTENT_ALPHA;
     let color_of = move |base: [f32; 4], state: InteractionState| {
         Glass::color(if is_disabled(state) {
             over(alpha(base, dimmed), palette.background)

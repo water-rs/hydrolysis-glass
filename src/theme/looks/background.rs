@@ -2,7 +2,7 @@
 //! in the outline of the `Glass`'s shape, which Hydrolysis supplies.
 
 use cherenkov_record::WorkingColor;
-use hydrolysis::theme::{Backdrop, Driven, GlassLook, Inputs};
+use hydrolysis_style::theme::{Backdrop, Driven, GlassLook, Inputs};
 use waterui::background::{Glass as GlassBackground, GlassStyle};
 use waterui_core::Environment;
 

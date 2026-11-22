@@ -10,8 +10,6 @@ use cherenkov_record::kurbo::{
     BezPath, Circle, Line, Point, Rect, RoundedRect, RoundedRectRadii, Stroke, Vec2,
 };
 use cherenkov_record::{Draw as _, Recorder, Shadow};
-use hydrolysis::theme::WidgetInteractionState;
-use waterui::interaction::InteractionState;
 use waterui_graphics::WorkingColor;
 
 use super::palette::{Palette, alpha, over, working};
@@ -45,54 +43,6 @@ fn capsule(rect: Rect) -> RoundedRectRadii {
 
 fn rounded(rect: Rect, radii: impl Into<RoundedRectRadii>) -> RoundedRect {
     RoundedRect::from_rect(rect, radii)
-}
-
-/// Draws a state layer over a circular control.
-pub fn circular_state_layer(
-    palette: &Palette,
-    draw: &mut Recorder,
-    center: Point,
-    radius: f64,
-    state: WidgetInteractionState,
-) {
-    if state.state.contains(InteractionState::DISABLED) {
-        return;
-    }
-    if state.state_layer_opacity > 0.0 {
-        draw.fill(
-            Circle::new(center, radius),
-            working(alpha(palette.state_layer, state.state_layer_opacity)),
-        );
-    }
-    if state.state.contains(InteractionState::FOCUSED) && state.focus_progress > 0.0 {
-        draw.stroke(
-            Circle::new(
-                center,
-                FOCUS_RING_WIDTH.mul_add(0.5, radius + FOCUS_RING_GAP),
-            ),
-            Stroke::new(FOCUS_RING_WIDTH),
-            working(alpha(palette.accent, state.focus_progress)),
-        );
-    }
-}
-
-/// An opaque elevated panel: menus, popups, context menus.
-pub fn popup_panel(palette: &Palette, draw: &mut Recorder, bounds: Rect) {
-    let radii = uniform(MENU_CORNER_RADIUS);
-    draw.shadow(
-        rounded(bounds, radii),
-        Shadow::new(
-            POPUP_SHADOW_BLUR,
-            working([0.0, 0.0, 0.0, POPUP_SHADOW_ALPHA]),
-        )
-        .offset(Vec2::new(0.0, POPUP_SHADOW_OFFSET)),
-    );
-    draw.fill(rounded(bounds, radii), working(palette.surface));
-    draw.stroke(
-        rounded(bounds.inset(-0.25), radii),
-        Stroke::new(HAIRLINE),
-        working(palette.border),
-    );
 }
 
 /// A hairline separator filling `bounds`.

@@ -9,7 +9,7 @@
 
 use cherenkov_record::kurbo::{Size, Stroke, Vec2};
 use cherenkov_record::{BlendSpace, Draw as _, Group, Live, MaterialEffect, Paint, ShapeData};
-use hydrolysis::theme::{
+use hydrolysis_style::theme::{
     Custom, Driven, DrivenSet, HitRegion, Inputs, Motion, Segment, SegmentLabel, SegmentedDrag,
     SegmentedLayout, SegmentedLook, SegmentedSpec, SegmentedValue, Transition, ValueMotion,
 };
