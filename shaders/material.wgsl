@@ -405,11 +405,7 @@ fn tint_alphas(r: Recipe, d: f32, cov: f32) -> vec2<f32> {
 fn prominent_tint_rgb(rgb: vec3<f32>, outc: vec3<f32>, is_light: bool) -> vec3<f32> {
     let y_b = luma(outc);
     let c_prom_light = rgb * (0.60 + 0.40 * y_b);
-    let c_prom_dark = clamp(
-        rgb + 0.21 * max(y_b - 0.16, 0.0) * (1.0 - rgb),
-        vec3<f32>(0.0),
-        vec3<f32>(1.0),
-    );
+    let c_prom_dark = mix(rgb, vec3<f32>(1.0), sat(0.21 * (y_b - 0.16)));
     return select(c_prom_dark, c_prom_light, is_light);
 }
 
@@ -476,10 +472,14 @@ fn material_fragment(v: FullscreenOut) -> @location(0) vec4<f32> {
         let k_add = select(select(0.045, 0.025, is_light), 0.038, is_prominent);
         let light = highlight_light(r, f.d, n, cov);
         let tint = tint_alphas(r, f.d, cov);
-        let fill = r.tint.rgb;
-        let pre = select(C, add_tint(C, fill, tint), is_prominent);
+        let fill = select(
+            r.tint.rgb,
+            prominent_tint_rgb(r.tint.rgb, C, is_light),
+            is_prominent,
+        );
+        let pre = mix(C, fill, select(0.0, tint.x, is_prominent));
         let lit = add_highlight(pre, light, k_mul, k_add);
-        C = select(add_tint(lit, fill, tint), lit, is_prominent);
+        C = add_tint(lit, r.tint.rgb, select(tint, vec2<f32>(0.0), is_prominent));
         let interior = vec4<f32>(C, 1.0);
         let shadow = vec4<f32>(0.0, 0.0, 0.0, cast_alpha);
         let res = mix(shadow, interior, cov);

@@ -388,11 +388,7 @@ fn tint_alphas(tint_a: f32, has_tint: f32, d: f32, cov: f32) -> vec2<f32> {
 fn prominent_tint_rgb(rgb: vec3<f32>, c: vec3<f32>, is_light: bool) -> vec3<f32> {
     let y_b = luma(c);
     let c_prom_light = rgb * (0.60 + 0.40 * y_b);
-    let c_prom_dark = clamp(
-        rgb + 0.21 * max(y_b - 0.16, 0.0) * (1.0 - rgb),
-        vec3<f32>(0.0),
-        vec3<f32>(1.0),
-    );
+    let c_prom_dark = mix(rgb, vec3<f32>(1.0), gsat(0.21 * (y_b - 0.16)));
     return select(c_prom_dark, c_prom_light, is_light);
 }
 
@@ -460,20 +456,23 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
     c = clamp(c, vec3<f32>(0.0), vec3<f32>(params[12].z));
     // §4.12: the highlight sibling.
     // §4.13: the tint siblings; a flat tint (§8.1) lies under the
-    // highlight, every other tint over it. Each layer is computed once
-    // and only laid over twice: evaluating the layers' loops and branches
-    // once per order made D3D12's WARP device render wrong texels and
-    // stall.
+    // highlight, every other tint over it. Each layer is computed and laid
+    // over once: evaluating the layers' loops and branches once per order
+    // made D3D12's WARP device render wrong texels and stall.
     let is_light = params[7].w > 0.5;
     let is_prominent = params[15].w > 1.5;
     let k_mul = select(select(0.110, 0.085, is_light), 0.105, is_prominent);
     let k_add = select(select(0.045, 0.025, is_light), 0.038, is_prominent);
     let light = highlight_light(d, n, cov, params[12].w);
     let tint = tint_alphas(params[13].a, params[15].w, d, cov);
-    let fill = params[13].rgb;
-    let over = add_tint(add_highlight(c, light, k_mul, k_add), fill, tint);
-    let under = add_highlight(add_tint(c, fill, tint), light, k_mul, k_add);
-    c = select(over, under, is_prominent);
+    let fill = select(
+        params[13].rgb,
+        prominent_tint_rgb(params[13].rgb, c, is_light),
+        is_prominent,
+    );
+    let pre = mix(c, fill, select(0.0, tint.x, is_prominent));
+    let lit = add_highlight(pre, light, k_mul, k_add);
+    c = add_tint(lit, params[13].rgb, select(tint, vec2<f32>(0.0), is_prominent));
 
     // The standalone's `res = mix(shadow, interior, cov)` is the
     // premultiplied `(c·cov, a)` in encoded space. The member composite
