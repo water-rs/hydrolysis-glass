@@ -53,8 +53,8 @@ impl SizeGroup {
     #[must_use]
     pub fn of(size: ControlSize) -> Self {
         match size {
-            ControlSize::ExtraSmall | ControlSize::Small => Self::Compact,
-            ControlSize::Medium => Self::Regular,
+            ControlSize::ExtraSmall => Self::Compact,
+            ControlSize::Small | ControlSize::Medium => Self::Regular,
             ControlSize::Large | ControlSize::ExtraLarge => Self::Large,
             other => panic!("the glass button has no metrics for control size {other:?}"),
         }
@@ -75,7 +75,7 @@ impl SizeGroup {
             Self::Regular => SizeMetrics {
                 text_size: 17.0,
                 line_height: 20.33,
-                inset_x: 12.0,
+                inset_x: 14.0,
                 inset_y: 7.0,
                 symbol_width: 22.0,
                 rounded_radius: 6.9,
@@ -292,7 +292,7 @@ mod tests {
     #[test]
     fn control_sizes_map_onto_the_three_groups() {
         assert_eq!(SizeGroup::of(ControlSize::ExtraSmall), SizeGroup::Compact);
-        assert_eq!(SizeGroup::of(ControlSize::Small), SizeGroup::Compact);
+        assert_eq!(SizeGroup::of(ControlSize::Small), SizeGroup::Regular);
         assert_eq!(SizeGroup::of(ControlSize::Medium), SizeGroup::Regular);
         assert_eq!(SizeGroup::of(ControlSize::Large), SizeGroup::Large);
         assert_eq!(SizeGroup::of(ControlSize::ExtraLarge), SizeGroup::Large);
@@ -303,15 +303,15 @@ mod tests {
         // (group, label layout size, observed frame)
         let rows = [
             (SizeGroup::Compact, [37.67, 18.0], [57.67, 28.0]),
-            (SizeGroup::Regular, [42.0, 20.33], [66.0, 34.33]),
+            (SizeGroup::Regular, [42.0, 20.33], [70.0, 34.33]),
             (SizeGroup::Large, [42.0, 20.33], [82.0, 50.33]),
-            (SizeGroup::Regular, [68.67, 20.33], [92.67, 34.33]),
+            (SizeGroup::Regular, [68.67, 20.33], [96.67, 34.33]),
             // a filled star symbol
-            (SizeGroup::Regular, [22.0, 20.67], [46.0, 34.67]),
+            (SizeGroup::Regular, [22.0, 20.67], [50.0, 34.67]),
             (SizeGroup::Large, [22.0, 20.67], [62.0, 50.67]),
             (SizeGroup::Compact, [19.33, 18.33], [39.33, 28.33]),
             // two lines
-            (SizeGroup::Regular, [62.33, 42.33], [86.33, 56.33]),
+            (SizeGroup::Regular, [62.33, 42.33], [90.33, 56.33]),
         ];
         for (group, label, frame) in rows {
             let got = frame_of(group, label, BorderShape::Capsule);

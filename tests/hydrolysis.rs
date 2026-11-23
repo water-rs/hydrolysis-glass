@@ -420,11 +420,11 @@ fn sized_button_element(appearance: Appearance, size: ControlSize, rect: [f32; 4
 #[test]
 fn a_material_group_of_mixed_sizes_renders_with_the_container_recipe() {
     /// The label block both buttons carry, pt: a regular button's frame
-    /// is this plus `24 × 14`, a large one's plus `40 × 30`.
+    /// is this plus `28 × 14`, a large one's plus `40 × 30`.
     const LABEL: [f32; 2] = [60.0, 20.33];
     const GAP: f32 = 16.0;
     const AT: [f32; 2] = [101.0, 400.0];
-    let regular = [AT[0], AT[1], LABEL[0] + 24.0, LABEL[1] + 14.0];
+    let regular = [AT[0], AT[1], LABEL[0] + 28.0, LABEL[1] + 14.0];
     let large = [
         regular[0] + regular[2] + GAP,
         AT[1],
