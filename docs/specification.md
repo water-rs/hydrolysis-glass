@@ -1674,11 +1674,12 @@ highlight. At rest no part is glass.
 
 ### 8.7 Tab bar
 
-A tab bar is a standalone regular-family glass capsule docked at the
-container's bottom edge (or at the leading edge in sidebar placement),
-holding one item per tab with no hairline divider beyond the glass
-element's rim highlight and cast shadow. The selected item carries an
-inset translucent capsule highlight under its icon and title.
+A tab bar is a standalone regular-family glass capsule floating as a compact
+centered pill above the container's bottom edge (or docked at the leading edge
+in sidebar placement), holding one item per tab with no hairline divider beyond
+the glass element's rim highlight and cast shadow. The selected item carries an
+inset translucent capsule highlight under its icon and title and tints its icon
+and title with the accent colour.
 
 **Reference.** Nothing in this section was measured against a capture;
 every value is [chosen].
@@ -1686,14 +1687,16 @@ every value is [chosen].
 #### Geometry
 
 - **Compact / vertical bar** (`width < 600` pt, or sidebar strip): bar
-  thickness `60` pt, item minimum extent `64` pt, horizontal label inset
-  `12` pt, icon-to-label spacing `6` pt [chosen].
+  thickness `60` pt, item minimum extent `64` pt, compact floating bottom-pill
+  item minimum width `94` pt with `12` pt outer floating margin and `0` pt extra
+  horizontal pill padding, horizontal label inset `12` pt, icon-to-label
+  spacing `6` pt [chosen].
 - **Wide / horizontal bar** (`width >= 600` pt): bar height `48` pt,
   item minimum width `64` pt, horizontal label inset `16` pt,
   icon-to-label spacing `8` pt [chosen].
 - **Surface.** A standalone regular-family glass capsule spanning the
-  docked band extended through adjacent safe-area edges (`tab_bar_surface`)
-  [chosen].
+  floating pill bounds (`tab_bar_surface`), or the docked band extended through
+  adjacent safe-area edges for a sidebar strip [chosen].
 - **Selection highlight and item chrome.** Both use a capsule inset
   `4` pt inside the item's bounds so hover/press state layers and focus
   rings share the highlight silhouette [chosen].
@@ -1707,6 +1710,8 @@ every value is [chosen].
 | bar surface | regular glass capsule (§5) | regular glass capsule (§5) |
 | divider | none (glass rim and shadow) | none (glass rim and shadow) |
 | selected highlight | white at alpha 0.08 | black at alpha 0.08 |
+| selected foreground | accent `(10, 132, 255)` | accent `(0, 122, 255)` |
+| unselected foreground | foreground `(255, 255, 255)` | foreground `(0, 0, 0)` |
 
 #### States
 
@@ -1746,6 +1751,8 @@ every value is [chosen].
 - **Bar heights.** `44` pt for automatic and inline top bars (and bottom
   bars), and `96` pt for medium and large bars (`44` pt inline title
   slot, `52` pt medium/large title slot with `8` pt bottom inset)
+  [chosen].
+- **Inline title.** `17` pt `SemiBold` on the inline navigation bar title
   [chosen].
 - **Insets and spacing.** Leading and trailing bar groups inset `16` pt
   from the bar edges, with `8` pt spacing between adjacent items and

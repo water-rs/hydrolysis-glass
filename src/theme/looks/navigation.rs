@@ -6,11 +6,15 @@ use hydrolysis_style::theme::{
     BarSurface, CornerShape, Custom, NavigationBarLook, NavigationMetrics, NavigationMotion,
     NavigationSpec, Surface as ChromeSurface,
 };
+use waterui::text::font::{Body, Font, FontWeight};
 use waterui_core::{EasingCurve, Environment};
 
 use super::super::chrome;
 use super::super::{Glass, NAVIGATION_DURATION};
 use super::{hit_region, state_chrome};
+
+/// Inline navigation bar title size, pt.
+const INLINE_TITLE_SIZE: f32 = 17.0;
 
 /// The measures of the navigation chrome: 44 pt inline bars and 96 pt
 /// medium and large ones, titles and items inset 16 pt and 8 pt apart, a
@@ -67,5 +71,9 @@ pub(in super::super) fn look(
     let back = state_chrome(glass, ChromeSurface::clear(CornerShape::full()))
         .hit(hit_region())
         .custom(chevron);
-    NavigationBarLook::new(METRICS, motion(), back, bar)
+    NavigationBarLook::new(METRICS, motion(), back, bar).title_font(
+        Font::from(Body)
+            .size(INLINE_TITLE_SIZE)
+            .weight(FontWeight::SemiBold),
+    )
 }

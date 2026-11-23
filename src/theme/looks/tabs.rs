@@ -6,8 +6,8 @@
 use cherenkov_record::kurbo::{Rect, RoundedRectRadii, Size};
 use cherenkov_record::{ContinuousRect, Draw as _, ShapeData};
 use hydrolysis_style::theme::{
-    CornerShape, Custom, Driven, DrivenSet, HitRegion, Inputs, Surface as ChromeSurface, TabsDrag,
-    TabsLook, TabsMetrics, TabsSpec, TabsValue, Transition, ValueMotion,
+    CornerShape, Custom, Driven, DrivenSet, HitRegion, Inputs, Surface as ChromeSurface,
+    TabBarWidth, TabsDrag, TabsLook, TabsMetrics, TabsSpec, TabsValue, Transition, ValueMotion,
 };
 use waterui::interaction::InteractionState;
 use waterui::navigation::tab::NativeTabStyle;
@@ -36,6 +36,12 @@ const HORIZONTAL_BREAKPOINT: f64 = 600.0;
 /// 64 pt wide with their labels inset 16 pt, and 8 pt between an icon and
 /// its label (§8.7, Geometry).
 const HORIZONTAL_METRICS: TabsMetrics = TabsMetrics::new(48.0, 64.0, 16.0, 8.0);
+/// Minimum slot width per item in a compact floating bottom tab pill, pt
+/// (§8.7, Geometry).
+const COMPACT_ITEM_MIN_WIDTH: f64 = 94.0;
+/// Outer floating clearance from the bottom and horizontal viewport edges, pt
+/// (§8.7, Geometry).
+const FLOATING_MARGIN: f64 = 12.0;
 /// Inset of the selected highlight capsule inside the item's bounds, pt
 /// (§8.7, Geometry).
 const HIGHLIGHT_INSET: f64 = 4.0;
@@ -196,6 +202,14 @@ pub(in super::super) fn look(glass: &Glass, spec: TabsSpec, _env: &Environment) 
         },
     )
     .horizontal(HORIZONTAL_BREAKPOINT, HORIZONTAL_METRICS)
+    .bar_width(TabBarWidth::Compact {
+        item_min_width: COMPACT_ITEM_MIN_WIDTH,
+        max_width: None,
+        horizontal_padding: 0.0,
+    })
+    .floating_margin(FLOATING_MARGIN)
+    .selected_foreground(Glass::color(glass.palette.accent))
+    .unselected_foreground(Glass::color(glass.palette.foreground))
     .drag(TabsDrag::new())
     .selection_indicator(rest_selection_indicator(glass))
     .selection_indicator_over_labels(lens_selection_indicator(glass, vertical))
