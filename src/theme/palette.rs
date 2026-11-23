@@ -5,12 +5,12 @@
 //! toggles, tracks, dividers, menus — and the tint a prominent capsule folds
 //! into its body.
 
-use waterui::color::{ColorScheme, Srgb};
+use waterui::color::{ColorScheme, P3};
 use waterui_graphics::WorkingColor;
 
 use crate::material::recipe::Appearance;
 
-/// sRGB-encoded colour with straight alpha, `0..=1` per channel.
+/// Display P3-encoded colour with straight alpha, `0..=1` per channel.
 pub type Rgba = [f32; 4];
 
 /// One complete set of colour roles.
@@ -68,9 +68,9 @@ impl Palette {
     /// Roles for the dark appearance.
     pub const DARK: Self = Self {
         appearance: Appearance::Dark,
-        background: [0.0, 0.0, 0.0, 1.0],
-        surface: [0.11, 0.11, 0.118, 1.0],
-        surface_variant: [0.173, 0.173, 0.18, 1.0],
+        background: [30.0 / 255.0, 30.0 / 255.0, 30.0 / 255.0, 1.0],
+        surface: [44.0 / 255.0, 44.0 / 255.0, 46.0 / 255.0, 1.0],
+        surface_variant: [58.0 / 255.0, 58.0 / 255.0, 60.0 / 255.0, 1.0],
         border: [0.329, 0.329, 0.345, 0.6],
         foreground: [1.0, 1.0, 1.0, 1.0],
         muted_foreground: [0.922, 0.922, 0.961, 0.6],
@@ -102,10 +102,11 @@ impl Palette {
     }
 }
 
-/// Convert a palette colour into the engine's working space.
+/// Convert a Display P3 palette colour into the engine's linear Display P3
+/// working space.
 #[must_use]
 pub fn working(c: Rgba) -> WorkingColor {
-    WorkingColor::from(Srgb::new(c[0], c[1], c[2])).with_alpha(c[3])
+    WorkingColor::from(P3::new(c[0], c[1], c[2])).with_alpha(c[3])
 }
 
 /// The same colour at another alpha.
@@ -155,5 +156,13 @@ mod tests {
             Palette::for_scheme(ColorScheme::Light).scheme(),
             ColorScheme::Light
         );
+    }
+
+    #[test]
+    fn working_resolves_display_p3_directly() {
+        let p3_red = working([1.0, 0.0, 0.0, 1.0]);
+        assert!((p3_red.components[0] - 1.0).abs() < 1e-6);
+        assert!(p3_red.components[1].abs() < 1e-6);
+        assert!(p3_red.components[2].abs() < 1e-6);
     }
 }

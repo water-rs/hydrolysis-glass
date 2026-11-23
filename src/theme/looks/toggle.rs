@@ -89,13 +89,10 @@ pub(in super::super) fn switch(glass: &Glass, spec: &ToggleSpec, env: &Environme
     let off = Driven::<Paint, bool>::constant(paint(switch::off_fill(appearance)));
     let track = Custom::<bool, _>::new((off, on), move |recorder, frame, (off, on)| {
         let track = switch::capsule(switch::track_rect(frame, direction));
-        recorder.group(
-            Group::new().blend_space(BlendSpace::SrgbEncoded),
-            |recorder| {
-                recorder.fill(Fixed(track.clone()), off);
-                recorder.fill(Fixed(track), on);
-            },
-        );
+        recorder.group(Group::new().blend_space(BlendSpace::Linear), |recorder| {
+            recorder.fill(Fixed(track.clone()), off);
+            recorder.fill(Fixed(track), on);
+        });
     });
 
     // The knob at rest on the track, growing about its centre while held
@@ -127,12 +124,9 @@ pub(in super::super) fn switch(glass: &Glass, spec: &ToggleSpec, env: &Environme
     let fill = Custom::<bool, _>::new(
         (knob(), white),
         |recorder, _frame, (shape, white): (Live<ShapeData>, Live<Paint>)| {
-            recorder.group(
-                Group::new().blend_space(BlendSpace::SrgbEncoded),
-                |recorder| {
-                    recorder.fill(shape, white);
-                },
-            );
+            recorder.group(Group::new().blend_space(BlendSpace::Linear), |recorder| {
+                recorder.fill(shape, white);
+            });
         },
     );
 

@@ -1832,7 +1832,7 @@ every value is [chosen].
 
 | Part | Dark appearance | Light appearance |
 |---|---|---|
-| menu panel fill | (28, 28, 30) opaque | (242, 242, 247) opaque |
+| menu panel fill | (44, 44, 46) opaque | (242, 242, 247) opaque |
 | menu panel border and divider | (84, 84, 88) at alpha 0.6 | (60, 60, 67) at alpha 0.29 |
 | menu panel shadow | black at alpha 0.18 | black at alpha 0.18 |
 | selected picker row | accent `(10, 132, 255)` at alpha 0.14 | accent `(0, 122, 255)` at alpha 0.14 |

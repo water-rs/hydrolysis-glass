@@ -680,6 +680,66 @@ mod tests {
     }
 
     #[test]
+    fn dark_palette_uses_elevated_background_and_surface_hierarchy() {
+        use waterui::Resolvable as _;
+
+        assert_eq!(
+            Palette::DARK.background,
+            [30.0 / 255.0, 30.0 / 255.0, 30.0 / 255.0, 1.0]
+        );
+        assert_eq!(
+            Palette::DARK.surface,
+            [44.0 / 255.0, 44.0 / 255.0, 46.0 / 255.0, 1.0]
+        );
+        assert_eq!(
+            Palette::DARK.surface_variant,
+            [58.0 / 255.0, 58.0 / 255.0, 60.0 / 255.0, 1.0]
+        );
+
+        let mut env = Environment::new();
+        Glass::dark().install_tokens(&mut env);
+        let bg = waterui::theme::color::Background.resolve(&env).snapshot();
+        let surf = waterui::theme::color::Surface.resolve(&env).snapshot();
+        let variant = waterui::theme::color::SurfaceVariant
+            .resolve(&env)
+            .snapshot();
+        assert!(bg.components[0] > 0.0 && bg.components[0] < surf.components[0]);
+        assert!(surf.components[0] < variant.components[0]);
+    }
+
+    #[test]
+    fn tinted_button_preserves_display_p3_gamut() {
+        use waterui::color::P3;
+        use waterui::theme::Tint;
+
+        let g = Glass::dark();
+        let mut env = environment(&g);
+        env.insert(Tint::new(waterui::Color::new(P3::new(1.0, 0.0, 0.0))));
+        let spec = ButtonSpec::new(
+            ButtonStyle::Glass,
+            ControlSize::Medium,
+            false,
+            LayoutDirection::LeftToRight,
+            SpecTint::resolve(&env),
+        );
+        let look = g.button(&spec, &env);
+        let resolved = look
+            .label()
+            .get_color()
+            .expect("label color")
+            .target(&Inputs::at_rest(
+                Rect::new(0.0, 0.0, 96.0, 34.0),
+                InteractionState::empty(),
+                &(),
+            ))
+            .resolve(&env)
+            .snapshot();
+        assert!((resolved.components[0] - 1.0).abs() < 1e-4);
+        assert!(resolved.components[1].abs() < 1e-4);
+        assert!(resolved.components[2].abs() < 1e-4);
+    }
+
+    #[test]
     fn tabs_look_switches_layout_at_600pt_and_drives_selection_and_press_lens() {
         use hydrolysis_style::theme::{TabItemGeometry, TabItemLayout, TabsValue, ValueMotion};
         use waterui::navigation::tab::NativeTabStyle;
