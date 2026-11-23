@@ -46,7 +46,7 @@ use nami::{CustomBinding, Signal};
 use std::time::Duration;
 use waterui::animation::{Animation, NoAnimation};
 use waterui::background::Glass as WaterGlass;
-use waterui::color::Srgb;
+use waterui::color::{P3, Srgb};
 use waterui::form::picker::picker;
 use waterui::interaction::InteractionState;
 use waterui::layout::stack::hstack;
@@ -806,7 +806,7 @@ fn switch_scene() {
                 toggle("", &Binding::bool(on))
                     .switch()
                     .hide_label()
-                    .tint(srgb(tint))
+                    .tint(p3(tint))
                     .position_anchor(waterui::layout::UnitPoint::TOP_LEADING, x, 400.0)
             };
             let mut app = GlassApp::mount(
@@ -892,9 +892,9 @@ fn toggle_sequence() {
     capture_at(&mut app, &mut clock, 1500, "toggle_t1500");
 }
 
-/// `rgba` as an sRGB colour, for a `.tint(...)`.
-fn srgb(rgba: [f32; 4]) -> Color {
-    Color::new(Srgb::new(rgba[0], rgba[1], rgba[2]))
+/// `rgba` as a Display P3 colour, for a `.tint(...)`.
+fn p3(rgba: [f32; 4]) -> Color {
+    Color::new(P3::new(rgba[0], rgba[1], rgba[2]))
 }
 
 /// The blue the §8.2 scene tints a switch with: (0, 145, 255) in dark
@@ -964,9 +964,9 @@ fn switch_at_rest(appearance: Appearance, on: bool, tint: Option<Color>) -> Imag
 #[test]
 fn a_tint_replaces_the_on_fill_only() {
     for (appearance, name) in [(Appearance::Dark, "dark"), (Appearance::Light, "light")] {
-        let green = srgb(hydrolysis_glass::theme::switch::default_tint(appearance));
-        let red = srgb(hydrolysis_glass::theme::slider::red_tint(appearance));
-        let blue = srgb(blue_tint(appearance));
+        let green = p3(hydrolysis_glass::theme::switch::default_tint(appearance));
+        let red = p3(hydrolysis_glass::theme::slider::red_tint(appearance));
+        let blue = p3(blue_tint(appearance));
 
         let untinted_on = switch_at_rest(appearance, true, None);
         let untinted_off = switch_at_rest(appearance, false, None);
@@ -1882,7 +1882,7 @@ fn slider_scene() {
                             520.0,
                         ),
                         placed(slider("Volume", &at(0.5)), 300.0, 51.0, 600.0)
-                            .tint(Color::new(Srgb::new(red[0], red[1], red[2]))),
+                            .tint(Color::new(P3::new(red[0], red[1], red[2]))),
                     ))
                 },
                 theme(appearance),

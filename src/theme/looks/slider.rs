@@ -150,14 +150,11 @@ fn track(
     Custom::new(
         (whole, unfilled, filled, fill, knob_shape(), shadow),
         |recorder, _frame, (whole, unfilled, filled, fill, knob, shadow)| {
-            recorder.group(
-                Group::new().blend_space(BlendSpace::SrgbEncoded),
-                |recorder| {
-                    recorder.fill(whole, unfilled);
-                    recorder.fill(filled, fill);
-                    recorder.shadow(knob, shadow);
-                },
-            );
+            recorder.group(Group::new().blend_space(BlendSpace::Linear), |recorder| {
+                recorder.fill(whole, unfilled);
+                recorder.fill(filled, fill);
+                recorder.shadow(knob, shadow);
+            });
         },
     )
 }
@@ -193,12 +190,9 @@ fn knob_fill() -> Custom<f64, impl DrivenSet<f64> + use<>> {
     })
     .smoothstep_window(0.05, 0.55);
     Custom::new((knob_shape(), white), |recorder, _frame, (shape, white)| {
-        recorder.group(
-            Group::new().blend_space(BlendSpace::SrgbEncoded),
-            |recorder| {
-                recorder.fill(shape, white);
-            },
-        );
+        recorder.group(Group::new().blend_space(BlendSpace::Linear), |recorder| {
+            recorder.fill(shape, white);
+        });
     })
 }
 

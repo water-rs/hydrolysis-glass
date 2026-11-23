@@ -163,13 +163,10 @@ fn linear_determinate(
             tint(spec, env),
         ),
         |recorder, _frame, (track, track_paint, fill, fill_paint)| {
-            recorder.group(
-                Group::new().blend_space(BlendSpace::SrgbEncoded),
-                |recorder| {
-                    recorder.fill(track, track_paint);
-                    recorder.fill(fill, fill_paint);
-                },
-            );
+            recorder.group(Group::new().blend_space(BlendSpace::Linear), |recorder| {
+                recorder.fill(track, track_paint);
+                recorder.fill(fill, fill_paint);
+            });
         },
     )
 }
@@ -211,13 +208,10 @@ fn linear_indeterminate(
         ),
         move |recorder, frame, (track_paint, segment, segment_paint)| {
             let draw = |recorder: &mut cherenkov_record::Recorder| {
-                recorder.group(
-                    Group::new().blend_space(BlendSpace::SrgbEncoded),
-                    |recorder| {
-                        recorder.fill(Fixed(bar(frame, frame.x0, frame.x1, false)), track_paint);
-                        recorder.fill(segment, segment_paint);
-                    },
-                );
+                recorder.group(Group::new().blend_space(BlendSpace::Linear), |recorder| {
+                    recorder.fill(Fixed(bar(frame, frame.x0, frame.x1, false)), track_paint);
+                    recorder.fill(segment, segment_paint);
+                });
             };
             if rtl {
                 let mirror = Affine::translate((frame.x0 + frame.x1, 0.0))
@@ -265,13 +259,10 @@ fn circular_determinate(
         ),
         move |recorder, frame, (track_paint, active, active_paint)| {
             let (path, _) = ring(frame, start);
-            recorder.group(
-                Group::new().blend_space(BlendSpace::SrgbEncoded),
-                |recorder| {
-                    recorder.stroke(path.clone(), Stroke::new(RING_STROKE), track_paint);
-                    recorder.stroke(path, active, active_paint);
-                },
-            );
+            recorder.group(Group::new().blend_space(BlendSpace::Linear), |recorder| {
+                recorder.stroke(path.clone(), Stroke::new(RING_STROKE), track_paint);
+                recorder.stroke(path, active, active_paint);
+            });
         },
     )
 }
