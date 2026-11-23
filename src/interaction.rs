@@ -1,25 +1,25 @@
-//! Interaction dynamics: drag, neighbour attraction, merge smoothing and
-//! shape morphing.
+//! Interaction dynamics: spring-driven drag, neighbour attraction, merge
+//! smoothing, jelly deformation, and shape morphing.
 //!
 //! Inputs are reactive signals ([`nami::Binding`] / [`nami::Computed`]);
-//! the dynamics are stepped once per frame and publish the [`Group`] the
-//! renderer draws. The interactive material never changes its geometry on
-//! press or drag; press growth belongs to the glass button style
-//! (`theme::surfaces`, spec §5.5). The dynamics constants are chosen
-//! starting values to verify on a device (see docs/specification.md §5.5).
+//! the dynamics step analytically through [`Spring`] presets and publish the
+//! [`Group`] the renderer draws.
 
 use nami::{Binding, Computed, Signal, SignalExt};
 
+pub use crate::dynamics::*;
 use crate::material::geometry::{Element, Shape};
 use crate::material::gpu::Group;
 use crate::material::recipe::{Appearance, Family, Recipe, Translucency};
 
-/// Exponential approach rate of the drag offset per frame (≈95 % in
-/// ~170 ms) — §5.5 does not measure the dynamics. **[chosen]**
-pub const DRAG_RATE: f32 = 0.28;
-/// Exponential approach rate of the corner radii per frame (≈95 % in
-/// ~220 ms at 60 fps). **[chosen]**
-pub const MORPH_RATE: f32 = 0.22;
+/// Default fixed step duration for [`Interactive::step`], corresponding to 60 Hz.
+pub const DEFAULT_FRAME_DT: f32 = 1.0 / 60.0;
+
+/// Position tolerance for spring settlement checks, pt.
+const SETTLE_POS_EPS: f32 = 1e-4;
+/// Velocity tolerance for spring settlement checks, pt/s.
+const SETTLE_VEL_EPS: f32 = 1e-2;
+
 /// Centre-to-centre radius inside which neighbours lean towards a dragged
 /// element, pt. **[chosen]**
 pub const ATTRACTION_RADIUS: f32 = 140.0;
@@ -32,25 +32,7 @@ pub const ATTRACTION_GAP_MARGIN: f32 = 6.0;
 pub const ATTRACTION_GAP_FRACTION: f32 = 0.5;
 /// Factor by which a group's union smoothing grows while a member is
 /// grabbed (the blend distance tracks drag state). **[chosen]**
-///
-/// ×1.2 at full drag on the 30 pt container smoothing: a blend distance
-/// of 36 pt bridges gaps up to half of it, so the gap closed by an 8 pt
-/// pull across a 16 pt gap fuses while the gap opening on the far side
-/// (≈19 pt after the neighbour's lean) stays open by about 0.5 pt.
 pub const DRAG_SMOOTHING_GAIN: f32 = 0.2;
-
-/// Exponential approach of `current` towards `target` by `rate`.
-#[must_use]
-pub fn approach(current: f32, target: f32, rate: f32) -> f32 {
-    (target - current).mul_add(rate.clamp(0.0, 1.0), current)
-}
-
-fn approach2(current: [f32; 2], target: [f32; 2], rate: f32) -> [f32; 2] {
-    [
-        approach(current[0], target[0], rate),
-        approach(current[1], target[1], rate),
-    ]
-}
 
 /// Neighbour lean: `û · min(18·(1 − dist/140)², 0.5·max(gap − 6, 0))`.
 ///
@@ -90,7 +72,7 @@ impl Controls {
 }
 
 /// One member of an interactive group: its resting shape, its reactive
-/// controls and the eased dynamic state.
+/// controls and its spring-driven dynamic state.
 #[derive(Clone, Debug)]
 pub struct Member {
     /// Resting shape (bounds without drag translation).
@@ -99,8 +81,10 @@ pub struct Member {
     pub family: Family,
     /// Reactive inputs.
     pub controls: Controls,
-    offset: [f32; 2],
-    radii: [f32; 4],
+    offset: SpringState2,
+    strain: SpringState,
+    stretch_axis: [f32; 2],
+    radii: [SpringState; 4],
 }
 
 impl Member {
@@ -111,15 +95,29 @@ impl Member {
             rest,
             family,
             controls: Controls::new(rest.radii),
-            offset: [0.0; 2],
-            radii: rest.radii,
+            offset: SpringState2::at([0.0; 2]),
+            strain: SpringState::at(0.0),
+            stretch_axis: [1.0, 0.0],
+            radii: rest.radii.map(SpringState::at),
         }
     }
 
-    /// Current eased translation, pt.
+    /// Current spring-eased translation, pt.
     #[must_use]
     pub const fn offset(&self) -> [f32; 2] {
-        self.offset
+        self.offset.value()
+    }
+
+    /// Current offset velocity, pt/s.
+    #[must_use]
+    pub const fn velocity(&self) -> [f32; 2] {
+        self.offset.velocity()
+    }
+
+    /// Current area-preserving jelly drag deformation tensor.
+    #[must_use]
+    pub fn tensor(&self) -> JellyTensor {
+        JellyTensor::from_strain(self.stretch_axis, self.strain.value, self.offset())
     }
 
     fn grabbed(&self) -> bool {
@@ -131,12 +129,14 @@ impl Member {
     /// §5.5).
     #[must_use]
     pub fn shape(&self) -> Shape {
-        let mut s = self.rest.with_radii(self.radii);
-        s.rect = s.rect.translated(self.offset[0], self.offset[1]);
+        let mut s = self.rest.with_radii(self.radii.map(|r| r.value));
+        let offset = self.offset();
+        s.rect = s.rect.translated(offset[0], offset[1]);
         s
     }
 
-    /// The element as drawn this frame: translated, but with the idle recipe — interaction does not change the recipe (spec §5.5).
+    /// The element as drawn this frame: translated, but with the idle recipe —
+    /// interaction does not change the recipe (spec §5.5).
     #[must_use]
     pub fn element(&self, appearance: Appearance, translucency: Translucency) -> Element {
         let shape = self.shape();
@@ -150,13 +150,58 @@ impl Member {
         Element { shape, recipe }
     }
 
-    fn step(&mut self, pull: [f32; 2]) {
-        let offset_target = self.controls.drag.snapshot().unwrap_or(pull);
-        self.offset = approach2(self.offset, offset_target, DRAG_RATE);
-        let radii_target = self.controls.radii.snapshot();
-        for (r, t) in self.radii.iter_mut().zip(radii_target) {
-            *r = approach(*r, t, MORPH_RATE);
+    fn step_dt(&mut self, pull: [f32; 2], dt: f32) {
+        let grabbed_delta = self.controls.drag.snapshot();
+        let grabbed = grabbed_delta.is_some();
+        let offset_target = grabbed_delta.unwrap_or(pull);
+        let drag_spring = if grabbed {
+            Spring::JELLY_DRAG_ACTIVE
+        } else {
+            Spring::JELLY_DRAG_RELEASE
+        };
+        let next_offset = self.offset.step(drag_spring, offset_target, dt);
+
+        let dir_norm = offset_target[0].hypot(offset_target[1]);
+        if dir_norm > 1e-6 {
+            self.stretch_axis = [offset_target[0] / dir_norm, offset_target[1] / dir_norm];
+        } else {
+            let vel = self.offset.velocity();
+            let vel_norm = vel[0].hypot(vel[1]);
+            if vel_norm > 1e-3 {
+                self.stretch_axis = [vel[0] / vel_norm, vel[1] / vel_norm];
+            }
         }
+        let strain_target = if grabbed {
+            jelly_strain_target(next_offset, self.offset.velocity())
+        } else {
+            0.0
+        };
+        self.strain.step(drag_spring, strain_target, dt);
+
+        let radii_target = self.controls.radii.snapshot();
+        for (state, target) in self.radii.iter_mut().zip(radii_target) {
+            state.step(Spring::SWITCH_KNOB, target, dt);
+        }
+    }
+
+    fn is_settled(&self, pull: [f32; 2], epsilon: f32) -> bool {
+        let offset_target = self.controls.drag.snapshot().unwrap_or(pull);
+        let radii_target = self.controls.radii.snapshot();
+        let strain_target = if self.grabbed() {
+            jelly_strain_target(offset_target, self.offset.velocity())
+        } else {
+            0.0
+        };
+        self.offset
+            .is_settled(offset_target, epsilon, SETTLE_VEL_EPS)
+            && self
+                .strain
+                .is_settled(strain_target, epsilon, SETTLE_VEL_EPS)
+            && self
+                .radii
+                .iter()
+                .zip(radii_target)
+                .all(|(s, t)| s.is_settled(t, epsilon, SETTLE_VEL_EPS))
     }
 }
 
@@ -200,7 +245,7 @@ pub struct Interactive {
     pub appearance: Appearance,
     /// The user translucency setting the recipes are built with.
     pub translucency: Translucency,
-    drag_activity: f32,
+    drag_activity: SpringState,
     frame: Binding<Group>,
 }
 
@@ -218,7 +263,7 @@ impl Interactive {
             smoothing,
             appearance,
             translucency,
-            drag_activity: 0.0,
+            drag_activity: SpringState::at(0.0),
             frame: Binding::container(Group::container(Vec::new(), smoothing)),
         };
         this.publish();
@@ -238,17 +283,36 @@ impl Interactive {
     }
 
     /// Effective union smoothing this frame: the resting value grown by the
-    /// eased drag activity.
+    /// spring-eased drag activity.
     #[must_use]
     pub fn effective_smoothing(&self) -> f32 {
-        self.smoothing * DRAG_SMOOTHING_GAIN.mul_add(self.drag_activity, 1.0)
+        self.smoothing * DRAG_SMOOTHING_GAIN.mul_add(self.drag_activity.value.clamp(0.0, 1.0), 1.0)
     }
 
-    /// Advances the dynamics by one frame.
+    /// Advances the dynamics by one 60 Hz frame (`1 / 60` s).
     pub fn step(&mut self) {
+        self.step_dt(DEFAULT_FRAME_DT);
+    }
+
+    /// Advances the analytical spring dynamics by `dt` seconds.
+    pub fn step_dt(&mut self, dt: f32) {
         let dragged = self.members.iter().position(Member::grabbed);
+        let pulls = self.compute_pulls(dragged);
+        for (m, pull) in self.members.iter_mut().zip(pulls) {
+            m.step_dt(pull, dt);
+        }
+        let (activity_target, spring) = if dragged.is_some() {
+            (1.0, Spring::JELLY_DRAG_ACTIVE)
+        } else {
+            (0.0, Spring::JELLY_DRAG_RELEASE)
+        };
+        self.drag_activity.step(spring, activity_target, dt);
+        self.publish();
+    }
+
+    fn compute_pulls(&self, dragged: Option<usize>) -> Vec<[f32; 2]> {
         let shapes: Vec<Shape> = self.members.iter().map(Member::shape).collect();
-        let pulls: Vec<[f32; 2]> = dragged.map_or_else(
+        dragged.map_or_else(
             || vec![[0.0; 2]; shapes.len()],
             |i| {
                 let target = &shapes[i];
@@ -265,13 +329,7 @@ impl Interactive {
                     })
                     .collect()
             },
-        );
-        for (m, pull) in self.members.iter_mut().zip(pulls) {
-            m.step(pull);
-        }
-        let activity_target = if dragged.is_some() { 1.0 } else { 0.0 };
-        self.drag_activity = approach(self.drag_activity, activity_target, DRAG_RATE);
-        self.publish();
+        )
     }
 
     fn publish(&self) {
@@ -287,25 +345,46 @@ impl Interactive {
         self.frame.set(group);
     }
 
-    /// Steps until every eased quantity is within `epsilon` of its target or
-    /// `max_frames` elapse; returns the frames taken.
+    /// Steps at 60 Hz until every spring-driven quantity settles within `epsilon`
+    /// of its target or `max_frames` elapse; returns the frames taken.
     pub fn settle(&mut self, epsilon: f32, max_frames: usize) -> usize {
-        for frame in 0..max_frames {
+        self.settle_dt(DEFAULT_FRAME_DT, epsilon, max_frames)
+    }
+
+    /// Steps by `dt` seconds until every spring-driven quantity settles within
+    /// `epsilon` of its target or `max_steps` elapse; returns the steps taken.
+    pub fn settle_dt(&mut self, dt: f32, epsilon: f32, max_steps: usize) -> usize {
+        let pos_eps = epsilon.max(SETTLE_POS_EPS);
+        for step in 0..max_steps {
             let before = self.group();
-            self.step();
+            self.step_dt(dt);
             let after = self.group();
             let moved = before.members().iter().zip(after.members()).any(|(a, b)| {
                 (a.shape.rect.x - b.shape.rect.x).abs() > epsilon
                     || (a.shape.rect.y - b.shape.rect.y).abs() > epsilon
                     || (a.shape.rect.w - b.shape.rect.w).abs() > epsilon
+                    || (a.shape.rect.h - b.shape.rect.h).abs() > epsilon
                     || (a.shape.radii[0] - b.shape.radii[0]).abs() > epsilon
                     || (a.recipe.cast_density - b.recipe.cast_density).abs() > epsilon
             }) || (before.smoothing() - after.smoothing()).abs() > epsilon;
             if !moved {
-                return frame + 1;
+                let dragged = self.members.iter().position(Member::grabbed);
+                let pulls = self.compute_pulls(dragged);
+                let activity_target = if dragged.is_some() { 1.0 } else { 0.0 };
+                let settled =
+                    self.drag_activity
+                        .is_settled(activity_target, pos_eps, SETTLE_VEL_EPS)
+                        && self
+                            .members
+                            .iter()
+                            .zip(pulls)
+                            .all(|(m, pull)| m.is_settled(pull, pos_eps));
+                if settled {
+                    return step + 1;
+                }
             }
         }
-        max_frames
+        max_steps
     }
 }
 
@@ -355,19 +434,21 @@ mod tests {
     }
 
     #[test]
-    fn drag_settles_in_about_170ms_and_neighbours_lean_in() {
+    fn drag_steps_through_jelly_springs_and_neighbours_lean_in() {
         let mut g = container();
         g.members[1].controls.drag.set(Some([8.0, 0.0]));
         for _ in 0..10 {
             g.step();
         }
-        // 1 - 0.72^10 ≈ 0.963
+        // Analytical `JELLY_DRAG_ACTIVE` (T_r = 0.340, zeta = 0.600) crosses >95%
+        // of the 8 pt pull within 10 frames (~167 ms) with mild underdamped overshoot.
         let off = g.members[1].offset()[0];
         assert!(
-            off > 0.95 * 8.0 && off < 8.0,
+            off > 0.95 * 8.0 && off < 1.15 * 8.0,
             "offset after 10 frames: {off}"
         );
-        g.settle(1e-4, 200);
+        assert!(g.members[1].tensor().parallel > 1.0);
+        g.settle(1e-4, 400);
         let group = g.group();
         let dragged = &group.members()[1];
         assert!(
@@ -382,16 +463,30 @@ mod tests {
         // The gap cap keeps neighbours from closing more than half the gap.
         let gap_right = 16.0 - 8.0; // the pull closed 8 of the 16 pt gap
         assert!(-right[0] <= 0.5 * (gap_right - 6.0) + 1e-3, "{right:?}");
-        // Smoothing grows while grabbed: by settling, at least 85% of the
-        // way to its full-drag gain.
+        // Smoothing grows while grabbed.
         assert!(
             g.effective_smoothing()
                 > CONTAINER_UNION_SMOOTHING * DRAG_SMOOTHING_GAIN.mul_add(0.85, 1.0),
             "{}",
             g.effective_smoothing()
         );
-        // Release: everything returns.
+        // Release through `JELLY_DRAG_RELEASE` rebounds past zero before settling.
         g.members[1].controls.drag.set(None);
+        let mut min_x = 0.0_f32;
+        let mut min_par = 1.0_f32;
+        for _ in 0..40 {
+            g.step();
+            min_x = min_x.min(g.members[1].offset()[0]);
+            min_par = min_par.min(g.members[1].tensor().parallel);
+        }
+        assert!(
+            min_x < -1.0,
+            "release spring should overshoot past 0: {min_x}"
+        );
+        assert!(
+            min_par < 1.0,
+            "release strain should rebound into squash: {min_par}"
+        );
         g.settle(1e-4, 400);
         for m in &g.members {
             assert!(m.offset()[0].abs() < 1e-2);
