@@ -255,13 +255,13 @@ impl Spring {
     }
 }
 
-/// The default tint (the accent colour): (0, 145, 255) in dark appearance,
-/// (0, 136, 255) in light **[measured]**.
+/// The default tint (the Display P3-calibrated accent colour): `(63, 143, 247)`
+/// in dark appearance, `(59, 134, 247)` in light **[measured]**.
 #[must_use]
 pub const fn default_tint(appearance: Appearance) -> Rgba {
     match appearance {
-        Appearance::Dark => [0.0, 145.0 / 255.0, 1.0, 1.0],
-        Appearance::Light => [0.0, 136.0 / 255.0, 1.0, 1.0],
+        Appearance::Dark => super::palette::Palette::DARK.accent,
+        Appearance::Light => super::palette::Palette::LIGHT.accent,
     }
 }
 

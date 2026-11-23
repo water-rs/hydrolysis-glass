@@ -27,7 +27,7 @@ pub const SYMBOL_GAP: f64 = 12.0;
 /// Smallest width of the knob's travel the layout asks for, pt.
 pub const MIN_TRAVEL: f64 = 120.0;
 /// Space between the slider's own label and its row, pt.
-pub const LABEL_SPACING: f64 = 4.0;
+pub const LABEL_SPACING: f64 = 8.0;
 
 /// How far the track runs past each end of the knob's travel, pt: half the
 /// knob, whose centre travels the track inset by it.
@@ -221,8 +221,8 @@ mod tests {
     #[test]
     fn the_tints_are_the_rendered_colours() {
         let c = |t: Rgba| t.map(|v| (v * 255.0).round() as u8);
-        assert_eq!(c(default_tint(Appearance::Dark)), [0, 145, 255, 255]);
-        assert_eq!(c(default_tint(Appearance::Light)), [0, 136, 255, 255]);
+        assert_eq!(c(default_tint(Appearance::Dark)), [63, 143, 247, 255]);
+        assert_eq!(c(default_tint(Appearance::Light)), [59, 134, 247, 255]);
         assert_eq!(c(red_tint(Appearance::Dark)), [255, 66, 69, 255]);
         assert_eq!(c(red_tint(Appearance::Light)), [255, 56, 60, 255]);
     }

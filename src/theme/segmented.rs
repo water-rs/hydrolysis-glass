@@ -63,10 +63,8 @@ impl SizeGroup {
     }
 }
 
-/// How far the container overhangs the frame's bottom edge, pt: it is 1 pt
-/// taller than the frame and takes no layout space **[measured:
-/// simulator]**.
-pub const CONTAINER_OVERHANG: f64 = 1.0;
+/// How far the container overhangs the frame's bottom edge, pt **[measured]**.
+pub const CONTAINER_OVERHANG: f64 = 0.0;
 /// The thumb's inset from its segment on every side of the container, pt
 /// **[measured: simulator]**.
 pub const THUMB_INSET: f64 = 2.0;
@@ -253,8 +251,8 @@ mod tests {
     #[test]
     fn heights_follow_the_size_group() {
         for (group, frame, container, thumb) in [
-            (SizeGroup::Regular, 31.0, 32.0, 28.0),
-            (SizeGroup::Large, 48.0, 49.0, 45.0),
+            (SizeGroup::Regular, 31.0, 31.0, 27.0),
+            (SizeGroup::Large, 48.0, 48.0, 44.0),
         ] {
             let row = Rect::new(0.0, 0.0, 300.0, group.frame_height());
             assert_eq!(group.frame_height(), frame);
@@ -264,9 +262,9 @@ mod tests {
     }
 
     #[test]
-    fn the_first_of_three_segments_has_a_96_by_28_thumb_at_x_2() {
+    fn the_first_of_three_segments_has_a_96_by_27_thumb_at_x_2() {
         let thumb = thumb_rect(Rect::new(0.0, 0.0, 300.0, 31.0), 3, 0.0, 1.0);
-        assert_eq!(thumb, Rect::new(2.0, 2.0, 98.0, 30.0));
+        assert_eq!(thumb, Rect::new(2.0, 2.0, 98.0, 29.0));
         // The leading edge is `s · W / n + 2` at every display position.
         let between = thumb_rect(Rect::new(10.0, 0.0, 310.0, 31.0), 3, 1.25, 1.0);
         near(between.x0, 10.0 + 1.25 * 100.0 + 2.0, 1e-9);
@@ -274,9 +272,9 @@ mod tests {
     }
 
     #[test]
-    fn the_container_overhangs_the_frame_by_one_point() {
+    fn the_container_matches_the_frame_without_overhang() {
         let row = Rect::new(0.0, 10.0, 100.0, 41.0);
-        assert_eq!(container_rect(row), Rect::new(0.0, 10.0, 100.0, 42.0));
+        assert_eq!(container_rect(row), row);
     }
 
     #[test]
@@ -345,7 +343,7 @@ mod tests {
         let row = Rect::new(0.0, 0.0, 300.0, 31.0);
         let idle = thumb_rect(row, 3, 0.0, 1.0);
         let grown = thumb_rect(row, 3, 0.0, lens_scale(1.0));
-        near(grown.height(), 32.2, 1e-9);
+        near(grown.height(), 31.05, 1e-9);
         near(grown.x0, idle.x0 - 7.2, 1e-9);
         near(grown.center().x, idle.center().x, 1e-9);
         near(grown.center().y, idle.center().y, 1e-9);
@@ -356,11 +354,11 @@ mod tests {
         let row = Rect::new(0.0, 0.0, 300.0, 31.0);
         let t = Translucency::default();
         let shape = Shape::rounded_rect(
-            ElementRect::new(0.0, 0.0, 96.0, 28.0),
-            14.0,
+            ElementRect::new(0.0, 0.0, 96.0, 27.0),
+            13.5,
             CornerCurve::Continuous,
         );
-        let recipe = Recipe::for_element(96.0, 28.0, Family::Clear, Appearance::Light, t);
+        let recipe = Recipe::for_element(96.0, 27.0, Family::Clear, Appearance::Light, t);
         assert_eq!(
             lens_effect(row, 3, Appearance::Light, t),
             materials::effect(&Element { shape, recipe })

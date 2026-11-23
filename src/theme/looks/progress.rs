@@ -33,9 +33,9 @@ const BAR: Size = Size::new(120.0, 4.0);
 /// The height of the label above a bar, pt.
 const LABEL_HEIGHT: f64 = 18.0;
 /// The gap between an indicator and its label above, pt.
-const LABEL_SPACING: f64 = 6.0;
+const LABEL_SPACING: f64 = 7.0;
 /// The gap between an indicator and its value label below, pt.
-const VALUE_LABEL_SPACING: f64 = 8.0;
+const VALUE_LABEL_SPACING: f64 = 7.0;
 /// The ring's diameter and the stroke's width, pt.
 const RING: f64 = 20.0;
 const RING_STROKE: f64 = 2.5;
@@ -165,10 +165,13 @@ fn linear_determinate(
             tint(spec, env),
         ),
         |recorder, _frame, (track, track_paint, fill, fill_paint)| {
-            recorder.group(Group::new().blend_space(BlendSpace::Linear), |recorder| {
-                recorder.fill(track, track_paint);
-                recorder.fill(fill, fill_paint);
-            });
+            recorder.group(
+                Group::new().blend_space(BlendSpace::SrgbEncoded),
+                |recorder| {
+                    recorder.fill(track, track_paint);
+                    recorder.fill(fill, fill_paint);
+                },
+            );
         },
     )
 }
@@ -210,10 +213,13 @@ fn linear_indeterminate(
         ),
         move |recorder, frame, (track_paint, segment, segment_paint)| {
             let draw = |recorder: &mut cherenkov_record::Recorder| {
-                recorder.group(Group::new().blend_space(BlendSpace::Linear), |recorder| {
-                    recorder.fill(Fixed(bar(frame, frame.x0, frame.x1, false)), track_paint);
-                    recorder.fill(segment, segment_paint);
-                });
+                recorder.group(
+                    Group::new().blend_space(BlendSpace::SrgbEncoded),
+                    |recorder| {
+                        recorder.fill(Fixed(bar(frame, frame.x0, frame.x1, false)), track_paint);
+                        recorder.fill(segment, segment_paint);
+                    },
+                );
             };
             if rtl {
                 let mirror = Affine::translate((frame.x0 + frame.x1, 0.0))
@@ -261,10 +267,13 @@ fn circular_determinate(
         ),
         move |recorder, frame, (track_paint, active, active_paint)| {
             let (path, _) = ring(frame, start);
-            recorder.group(Group::new().blend_space(BlendSpace::Linear), |recorder| {
-                recorder.stroke(path.clone(), Stroke::new(RING_STROKE), track_paint);
-                recorder.stroke(path, active, active_paint);
-            });
+            recorder.group(
+                Group::new().blend_space(BlendSpace::SrgbEncoded),
+                |recorder| {
+                    recorder.stroke(path.clone(), Stroke::new(RING_STROKE), track_paint);
+                    recorder.stroke(path, active, active_paint);
+                },
+            );
         },
     )
 }
@@ -372,8 +381,8 @@ mod tests {
         let look = linear(&glass, &spec(ProgressStyle::Linear), &env);
         assert_eq!(look.control().size(), Size::new(120.0, 4.0));
         assert!((look.get_label_height() - 18.0).abs() < 1e-9);
-        assert!((look.get_label_spacing() - 6.0).abs() < 1e-9);
-        assert!((look.get_value_label_spacing() - 8.0).abs() < 1e-9);
+        assert!((look.get_label_spacing() - 7.0).abs() < 1e-9);
+        assert!((look.get_value_label_spacing() - 7.0).abs() < 1e-9);
         let layout = look.layout(120.0, Some(14.0), Some(14.0));
         assert!((layout.height - 54.0).abs() < 1e-9);
     }
@@ -386,8 +395,8 @@ mod tests {
         let look = circular(&glass, &spec(ProgressStyle::Circular), &env);
         assert_eq!(look.control().size(), Size::new(20.0, 20.0));
         assert!((look.get_label_height() - 18.0).abs() < 1e-9);
-        assert_eq!(look.get_label_spacing(), Some(6.0));
-        assert_eq!(look.get_value_label_spacing(), Some(8.0));
+        assert_eq!(look.get_label_spacing(), Some(7.0));
+        assert_eq!(look.get_value_label_spacing(), Some(7.0));
         let layout = look.layout(120.0, Some(14.0), Some(14.0));
         assert!((layout.height - 70.0).abs() < 1e-9);
     }

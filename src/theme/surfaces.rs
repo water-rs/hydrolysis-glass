@@ -379,7 +379,7 @@ mod tests {
     fn a_prominent_button_fills_with_the_default_tint_at_full_strength() {
         let s = surface(&spec(Kind::Prominent), Press::REST);
         let tint = s.element.recipe.tint.expect("tinted");
-        assert_eq!(tint.rgb, [0.0, 136.0 / 255.0, 1.0]);
+        assert_eq!(tint.rgb, [59.0 / 255.0, 134.0 / 255.0, 247.0 / 255.0]);
         assert_eq!(tint.alpha, 1.0);
         let red = ButtonSpec {
             tint: Some([1.0, 56.0 / 255.0, 61.0 / 255.0, 1.0]),

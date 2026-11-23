@@ -1085,13 +1085,13 @@ fn switch_at_rest(appearance: Appearance, on: bool, tint: Option<Color>) -> Imag
 }
 
 /// §8.2, Tint: the tint replaces the on fill only. A switch tinted with the
-/// default green is the untinted switch; an off switch ignores its tint; a
-/// red and a blue tint make an on switch different from the default and from
-/// each other. Every tinted state is exported for review.
+/// default accent is the untinted switch; an off switch ignores its tint; a
+/// red and an alternate blue tint make an on switch different from the default
+/// and from each other. Every tinted state is exported for review.
 #[test]
 fn a_tint_replaces_the_on_fill_only() {
     for (appearance, name) in [(Appearance::Dark, "dark"), (Appearance::Light, "light")] {
-        let green = p3(hydrolysis_glass::theme::switch::default_tint(appearance));
+        let default = p3(hydrolysis_glass::theme::switch::default_tint(appearance));
         let red = p3(hydrolysis_glass::theme::slider::red_tint(appearance));
         let blue = p3(blue_tint(appearance));
 
@@ -1099,7 +1099,7 @@ fn a_tint_replaces_the_on_fill_only() {
         let untinted_off = switch_at_rest(appearance, false, None);
         assert_agrees(
             &format!("{name}: the default tint as an explicit tint"),
-            &switch_at_rest(appearance, true, Some(green)),
+            &switch_at_rest(appearance, true, Some(default)),
             &untinted_on,
         );
         let red_on = switch_at_rest(appearance, true, Some(red.clone()));
@@ -1111,8 +1111,8 @@ fn a_tint_replaces_the_on_fill_only() {
             &untinted_off,
         );
         assert!(
-            agreement("red is not green", &red_on, &untinted_on).is_err(),
-            "{name}: a red tint leaves the on track green"
+            agreement("red is not default", &red_on, &untinted_on).is_err(),
+            "{name}: a red tint leaves the on track at the default accent"
         );
         assert!(
             agreement("blue is not red", &blue_on, &red_on).is_err(),
