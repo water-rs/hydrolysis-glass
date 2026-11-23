@@ -236,7 +236,7 @@ pub fn register(registry: &mut MaterialRegistry) {
                         smoothing: UnionSmoothing::new(union_smoothing(container))
                             .expect("the union smoothings are positive"),
                     },
-                    blend_space: BlendSpace::SrgbEncoded,
+                    blend_space: BlendSpace::Linear,
                 },
             );
         }
@@ -316,12 +316,15 @@ pub(super) fn pack(recipe: &Recipe, rect: Rect) -> MaterialEffect {
     let tint = r
         .tint
         .map_or([0.0; 4], |t| [t.rgb[0], t.rgb[1], t.rgb[2], t.alpha]);
+    let [tx, ty] = r
+        .touch_point
+        .unwrap_or_else(|| [rect.w.mul_add(0.5, rect.x), rect.h.mul_add(0.5, rect.y)]);
     let packed = Packed {
         primary_shift: r.primary_shift,
         primary_depth: r.primary_depth,
         rim_shift: r.rim_shift,
         rim_depth: r.rim_depth,
-        rim_ramp: r.rim_ramp,
+        touch_point: [tx, ty],
         rim_mix: r.rim_mix,
         blur_radius: r.blur_radius,
         blur_depths: r.blur_depths,
@@ -331,7 +334,7 @@ pub(super) fn pack(recipe: &Recipe, rect: Rect) -> MaterialEffect {
         haze_max_weight: r.haze_max_weight,
         haze_mix: r.haze_mix,
         luminance_limit: r.luminance_limit,
-        grade_mix: r.grade_mix,
+        press_progress: r.press_progress,
         capture_scale: r.capture_scale,
         exterior_span: r.exterior_span,
         grade: [r.grade.floor, r.grade.ceiling, r.grade.chroma],
@@ -342,7 +345,8 @@ pub(super) fn pack(recipe: &Recipe, rect: Rect) -> MaterialEffect {
         ambient_depth: r.ambient_depth,
         ambient_blur: r.ambient_blur,
         ambient_strength: r.ambient_strength,
-        ambient_ramp: r.ambient_ramp,
+        has_touch: f32::from(r.touch_point.is_some()),
+        reserved: 0.0,
         ambient_grade: [
             r.ambient_grade.floor,
             r.ambient_grade.ceiling,
@@ -406,18 +410,18 @@ fn unpack(effect: &MaterialEffect) -> (Recipe, Rect) {
         primary_depth: p.primary_depth,
         rim_shift: p.rim_shift,
         rim_depth: p.rim_depth,
-        rim_ramp: p.rim_ramp,
+        rim_ramp: FOLDED_RIM_RAMP,
         rim_mix: p.rim_mix,
         luminance_limit: p.luminance_limit,
         grade: grade(p.grade),
         wash: p.wash,
         wash_alpha: p.wash_alpha,
-        grade_mix: p.grade_mix,
+        grade_mix: FOLDED_GRADE_MIX,
         ambient_shift: p.ambient_shift,
         ambient_depth: p.ambient_depth,
         ambient_blur: p.ambient_blur,
         ambient_strength: p.ambient_strength,
-        ambient_ramp: p.ambient_ramp,
+        ambient_ramp: FOLDED_AMBIENT_RAMP,
         ambient_grade: grade(p.ambient_grade),
         ambient_favours_light: p.ambient_favours_light != 0.0,
         haze_radius: p.haze_radius,
@@ -465,6 +469,8 @@ fn unpack(effect: &MaterialEffect) -> (Recipe, Rect) {
             }),
             _ => Some(Tint::flat([p.tint[0], p.tint[1], p.tint[2]], p.tint[3])),
         },
+        press_progress: p.press_progress,
+        touch_point: (p.has_touch >= 0.5).then_some(p.touch_point),
     };
     let [left, top, width, height] = p.rect;
     (recipe, Rect::new(left, top, width, height))
@@ -480,7 +486,7 @@ struct Packed {
     primary_depth: f32,
     rim_shift: f32,
     rim_depth: f32,
-    rim_ramp: [f32; 2],
+    touch_point: [f32; 2],
     rim_mix: f32,
     blur_radius: f32,
     blur_depths: [f32; 4],
@@ -490,7 +496,7 @@ struct Packed {
     haze_max_weight: f32,
     haze_mix: f32,
     luminance_limit: f32,
-    grade_mix: f32,
+    press_progress: f32,
     capture_scale: f32,
     exterior_span: f32,
     /// Floor, ceiling, chroma.
@@ -503,7 +509,8 @@ struct Packed {
     ambient_depth: f32,
     ambient_blur: f32,
     ambient_strength: f32,
-    ambient_ramp: [f32; 2],
+    has_touch: f32,
+    reserved: f32,
     /// Floor, ceiling, chroma.
     ambient_grade: [f32; 3],
     contour_shade_density: f32,
@@ -619,6 +626,8 @@ impl ContainerRecipe for GlassContainer {
                     &Recipe {
                         tint: own.tint,
                         ellipse_bend: own.ellipse_bend,
+                        press_progress: own.press_progress,
+                        touch_point: own.touch_point,
                         ..container
                     },
                     Rect::new(
@@ -646,14 +655,25 @@ const HIGHLIGHT_TERMS: [f32; 9] = [0.75, 0.5, 0.5, 0.5, 0.0, PI, 0.14, 6.0, 0.65
 /// Both highlight lights' colour, folded into the shader: opaque white.
 const HIGHLIGHT_COLOUR: [f32; 4] = [1.0; 4];
 
+/// Folded ramp and mix constants in `material_engine.wgsl`.
+const FOLDED_RIM_RAMP: [f32; 2] = [-1.0, 0.0];
+const FOLDED_GRADE_MIX: f32 = 1.0;
+const FOLDED_AMBIENT_RAMP: [f32; 2] = [1.0, 0.0];
+
 /// Asserts the recipe fields `material_engine.wgsl` folds into constants:
-/// the border correction's measured row and the highlight's shared
-/// terms. A recipe that moved them needs the packing widened, not a
-/// silently wrong shader.
+/// the border correction's measured row, the highlight's shared
+/// terms, and the fixed ramps/mix. A recipe that moved them needs the packing
+/// widened, not a silently wrong shader.
 #[track_caller]
 fn assert_folded_constants(r: &Recipe) {
     let near = |a: f32, b: f32| (a - b).abs() < 1e-4;
     let all_near = |a: &[f32], b: &[f32]| a.iter().zip(b).all(|(a, b)| near(*a, *b));
+    assert!(
+        all_near(&r.rim_ramp, &FOLDED_RIM_RAMP)
+            && near(r.grade_mix, FOLDED_GRADE_MIX)
+            && all_near(&r.ambient_ramp, &FOLDED_AMBIENT_RAMP),
+        "rim_ramp, grade_mix and ambient_ramp are folded into material_engine.wgsl"
+    );
     assert!(
         all_near(
             &[
@@ -724,13 +744,14 @@ const WASH_SEGMENTS: u16 = 32;
 /// The paint of a button's press wash (§8.1).
 ///
 /// White, its alpha following [`Wash::alpha_at`] across the grown width,
-/// interpolated in encoded space. The look fills the grown silhouette with it, in a group composited in
-/// encoded space, over the glass body and below the label.
+/// interpolated in the Display P3 linear working space. The look fills the
+/// grown silhouette with it, in a group composited in working space, over the
+/// glass body and below the label.
 #[must_use]
 pub fn wash_paint(wash: &Wash) -> Paint {
     let r = wash.shape.rect;
     let mut gradient = LinearGradient::new((f64::from(r.x), 0.0), (f64::from(r.x + r.w), 0.0))
-        .interpolation(Interpolation::SrgbEncoded);
+        .interpolation(Interpolation::Working);
     for i in 0..=WASH_SEGMENTS {
         let t = f32::from(i) / f32::from(WASH_SEGMENTS);
         let white: Rgba = [1.0, 1.0, 1.0, wash.alpha_at(r.w.mul_add(t, r.x))];
@@ -849,7 +870,9 @@ mod tests {
                 Translucency::default(),
             ),
         };
-        for element in [tinted, declared, circle(), clear, card()] {
+        let mut pressed = circle();
+        pressed.recipe = pressed.recipe.with_press(0.75, Some([12.0, 18.0]));
+        for element in [tinted, declared, circle(), clear, card(), pressed] {
             let packed = effect(&element);
             let (recipe, rect) = unpack(&packed);
             assert_eq!(recipe, element.recipe);
@@ -966,6 +989,20 @@ mod tests {
             .capture(&members(&recorded));
         let capture = registry.capture_class(class).expect("a registered class");
         assert!(matches!(capture.grouping, MaterialGrouping::Union { .. }));
+        assert_eq!(capture.blend_space, BlendSpace::Linear);
+    }
+
+    #[test]
+    fn wash_paint_interpolates_in_working_space() {
+        let wash = Wash {
+            shape: Shape::capsule(Rect::new(0.0, 0.0, 100.0, 40.0)),
+            progress: 1.0,
+            touch_x: 50.0,
+        };
+        let Paint::Linear(grad) = wash_paint(&wash) else {
+            panic!("expected linear gradient");
+        };
+        assert_eq!(grad.interpolation, Interpolation::Working);
     }
 
     #[test]

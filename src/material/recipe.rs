@@ -74,15 +74,15 @@ pub const REGULAR_MEASURED_RANGE: [f32; 2] = [34.33, 200.33];
 /// **[measured]**
 pub const CLEAR_MEASURED_RANGE: [f32; 2] = [40.0, 80.0];
 
-/// Encoded-space luma weights of §4.6 — the BT.709 weight set of the
-/// model's YCbCr construction. **[fitted, part of the §4.6 form]**
-pub const LUMA: [f32; 3] = [0.2126, 0.7152, 0.0722];
-/// Luma weights of the §4.5 luminance limit. **[fitted, part of the §4.5
+/// Encoded-space Display P3 luma weights of §4.6 — the Display P3 luminance
+/// row of the YCbCr construction. **[fitted, part of the §4.6 form]**
+pub const LUMA: [f32; 3] = [0.228_974_56, 0.691_738_52, 0.079_286_91];
+/// Display P3 luma weights of the §4.5 luminance limit. **[fitted, part of the §4.5
 /// form]**
-pub const LUMA_LIMIT: [f32; 3] = [0.2126, 0.7153, 0.0722];
-/// Luma weights of the §4.7 ambient gate. **[fitted, part of the §4.7
+pub const LUMA_LIMIT: [f32; 3] = [0.228_974_56, 0.691_738_52, 0.079_286_91];
+/// Display P3 luma weights of the §4.7 ambient gate. **[fitted, part of the §4.7
 /// form]**
-pub const LUMA_GATE: [f32; 3] = [0.2125, 0.7153, 0.0721];
+pub const LUMA_GATE: [f32; 3] = [0.228_974_56, 0.691_738_52, 0.079_286_91];
 
 /// Alpha floor and channel-zeroing threshold of the unpremultiply step.
 /// **[chosen: the spec's unpremultiply has no ε]**
@@ -321,12 +321,11 @@ fn ramp_144(m: f32) -> f32 {
     ((m - 56.0) / 144.0).clamp(0.0, 1.0)
 }
 
-/// §5.1: the dark appearance's luminance limit — 0.75 at `s = 0.5`, rising to
-/// 0.80 at `s = 0.0`. **[measured at `s = 0.5`; translucency interpolation
-/// chosen]**
+/// §5.1 / §12: the dark appearance's luminance limit — 0.85 at `s = 0.0`,
+/// 0.75 at `s = 0.5`, dropping to 0.55 at `s = 1.0`.
 #[must_use]
 fn luminance_limit(_m: f32, s: f32) -> f32 {
-    translucency_row(0.80, 0.75, 0.75, s)
+    translucency_row(0.85, 0.75, 0.55, s)
 }
 
 /// The §4.6 grade: a luma floor and ceiling and a chroma scale, applied
@@ -352,11 +351,11 @@ impl Grade {
         }
     }
 
-    /// Applies the grade to an unpremultiplied encoded colour through the
-    /// §4.6 YCbCr construction: `Y' = (K − F)·Y + F`,
-    /// `chroma' = S·(chroma − 0.5) + 0.5` on both `Cb` and `Cr`, then the
-    /// inverse BT.709 transform. Mirrors `apply_grade` in
-    /// `shaders/material.wgsl`.
+    /// Applies the grade to an unpremultiplied encoded Display P3 colour
+    /// through the §4.6 YCbCr construction: `Y' = (K − F)·Y + F`,
+    /// `chroma' = S·(chroma − 0.5) + 0.5` on both `Cb` and `Cr`, then
+    /// green reconstruction under Display P3 luma weights. Mirrors
+    /// `apply_grade` in `shaders/material.wgsl`.
     #[must_use]
     pub fn apply(&self, col: [f32; 3]) -> [f32; 3] {
         let lum = luma(col);
@@ -367,7 +366,7 @@ impl Grade {
         let cr2 = self.chroma.mul_add(cr - 0.5, 0.5);
         let red = 1.5748f32.mul_add(cr2 - 0.5, y2);
         let blu = 1.8556f32.mul_add(cb2 - 0.5, y2);
-        let green = 0.0722f32.mul_add(-blu, 0.2126f32.mul_add(-red, y2)) * (1.0 / 0.7152);
+        let green = LUMA[2].mul_add(-blu, LUMA[0].mul_add(-red, y2)) * (1.0 / 0.691_738_52);
         [red, green, blu]
     }
 
@@ -655,6 +654,10 @@ pub struct Recipe {
     pub highlight: Highlight,
     /// §4.13: tint sibling layers, if any.
     pub tint: Option<Tint>,
+    /// §7: press progress driving the touch-point specular rim boost (`0` at rest).
+    pub press_progress: f32,
+    /// §7: active touch point in element-local points for specular press boost.
+    pub touch_point: Option<[f32; 2]>,
 }
 
 impl Recipe {
@@ -704,6 +707,15 @@ impl Recipe {
     #[must_use]
     pub const fn with_tint(mut self, tint: Tint) -> Self {
         self.tint = Some(tint);
+        self
+    }
+
+    /// Sets the §7 press progress and optional element-local touch point for
+    /// touch-localized specular rim boost.
+    #[must_use]
+    pub const fn with_press(mut self, progress: f32, touch_point: Option<[f32; 2]>) -> Self {
+        self.press_progress = progress;
+        self.touch_point = touch_point;
         self
     }
 
@@ -760,19 +772,19 @@ impl Recipe {
         }
     }
 
-    /// §4.4 regular haze weights `(min_weight, max_weight, mix)` for `dark` and `s`.
+    /// §4.4 / §12 regular haze weights `(min_weight, max_weight, mix)` for `dark` and `s`.
     fn regular_haze_weights(dark: bool, s: f32) -> (f32, f32, f32) {
         if dark {
             (
-                translucency_row(0.435, 0.58, 0.58, s),
+                translucency_row(0.30, 0.58, 0.90, s),
                 0.0,
-                translucency_row(0.0, 0.08, 1.0, s),
+                translucency_row(0.0, 0.08, 0.50, s),
             )
         } else {
             (
                 0.0,
-                translucency_row(0.495, 0.66, 0.66, s),
-                translucency_row(0.0, 0.19, 1.0, s),
+                translucency_row(0.35, 0.66, 0.90, s),
+                translucency_row(0.0, 0.19, 0.55, s),
             )
         }
     }
@@ -806,7 +818,7 @@ impl Recipe {
             luminance_limit: if dark {
                 luminance_limit(m, s)
             } else {
-                translucency_row(0.85, 0.81, 0.81, s)
+                translucency_row(0.90, 0.81, 0.81, s)
             },
             grade,
             wash,
@@ -859,6 +871,8 @@ impl Recipe {
             ellipse_bend: if m >= 80.0 { 0.5 } else { 0.0 },
             highlight: Highlight::for_size(m),
             tint: None,
+            press_progress: 0.0,
+            touch_point: None,
         }
     }
 
@@ -916,6 +930,8 @@ impl Recipe {
             ellipse_bend: 0.0,
             highlight: Highlight::for_size(m),
             tint: None,
+            press_progress: 0.0,
+            touch_point: None,
         }
     }
 }
@@ -1299,11 +1315,11 @@ mod tests {
             &[0.333, 0.25, 0.125, 0.5, 0.5, 0.125],
             1e-3,
         );
-        // Haze min weight (dark) / max weight (light), and mix.
+        // Haze min weight (dark) / max weight (light), and mix (§12).
         let min_weight = |s| regular_s(200.33, s).haze_min_weight;
         assert_close(
             &[min_weight(0.0), min_weight(0.5), min_weight(1.0)],
-            &[0.435, 0.58, 0.58],
+            &[0.30, 0.58, 0.90],
             1e-6,
         );
         let max_weight = |s| {
@@ -1317,33 +1333,66 @@ mod tests {
         };
         assert_close(
             &[max_weight(0.0), max_weight(0.5), max_weight(1.0)],
-            &[0.495, 0.66, 0.66],
+            &[0.35, 0.66, 0.90],
             1e-6,
         );
-        let normal = |s| regular_s(200.33, s).haze_mix;
+        let dark_haze = |s| regular_s(200.33, s).haze_mix;
         assert_close(
-            &[normal(0.0), normal(0.5), normal(1.0)],
-            &[0.0, 0.08, 1.0],
+            &[dark_haze(0.0), dark_haze(0.5), dark_haze(1.0)],
+            &[0.0, 0.08, 0.50],
             1e-6,
         );
-        // Luminance limits, dark: 0.80@0 -> 0.75@0.5 -> 0.75@1.0.
+        let light_haze = |s| {
+            Recipe::for_size(
+                200.33,
+                Family::Regular,
+                Appearance::Light,
+                Translucency::new(s),
+            )
+            .haze_mix
+        };
+        assert_close(
+            &[light_haze(0.0), light_haze(0.5), light_haze(1.0)],
+            &[0.0, 0.19, 0.55],
+            1e-6,
+        );
+        regular_luminance_limit_translucency();
+        clear_translucency();
+    }
+
+    fn regular_luminance_limit_translucency() {
+        // Luminance limits (§12): dark 0.85@0 -> 0.75@0.5 -> 0.55@1.0;
+        // light 0.90@0 -> 0.81@0.5 -> 0.81@1.0.
         let lim = |m, s| regular_s(m, s).luminance_limit;
         assert_close(
             &[lim(200.33, 0.0), lim(200.33, 0.5), lim(200.33, 1.0)],
-            &[0.80, 0.75, 0.75],
+            &[0.85, 0.75, 0.55],
             1e-6,
         );
         assert_close(
             &[lim(80.0, 0.0), lim(80.0, 0.5), lim(80.0, 1.0)],
-            &[0.80, 0.75, 0.75],
+            &[0.85, 0.75, 0.55],
             1e-6,
         );
         assert_close(
             &[lim(60.0, 0.0), lim(60.0, 0.5), lim(60.0, 1.0)],
-            &[0.80, 0.75, 0.75],
+            &[0.85, 0.75, 0.55],
             1e-6,
         );
-        clear_translucency();
+        let light_lim = |s| {
+            Recipe::for_size(
+                80.0,
+                Family::Regular,
+                Appearance::Light,
+                Translucency::new(s),
+            )
+            .luminance_limit
+        };
+        assert_close(
+            &[light_lim(0.0), light_lim(0.5), light_lim(1.0)],
+            &[0.90, 0.81, 0.81],
+            1e-6,
+        );
     }
 
     fn clear_translucency() {
@@ -1383,16 +1432,49 @@ mod tests {
 
     #[test]
     fn translucency_midpoints_lie_on_the_linear_rows() {
-        // The observations at 0.25 and 0.75.
-        let normal = |s| regular_s(200.33, s).haze_mix;
-        assert!((normal(0.25) - 0.04).abs() < 1e-6);
-        assert!((normal(0.75) - 0.54).abs() < 1e-6);
+        // The observations at 0.25 and 0.75 (§12 piecewise-linear trow).
+        let dark_haze = |s| regular_s(200.33, s).haze_mix;
+        assert!((dark_haze(0.25) - 0.04).abs() < 1e-6);
+        assert!((dark_haze(0.75) - 0.29).abs() < 1e-6);
+        let light_haze = |s| {
+            Recipe::for_size(
+                200.33,
+                Family::Regular,
+                Appearance::Light,
+                Translucency::new(s),
+            )
+            .haze_mix
+        };
+        assert!((light_haze(0.25) - 0.095).abs() < 1e-6);
+        assert!((light_haze(0.75) - 0.37).abs() < 1e-6);
         let min_weight = |s| regular_s(200.33, s).haze_min_weight;
-        assert!((min_weight(0.25) - 0.5075).abs() < 1e-4);
-        assert!((min_weight(0.75) - 0.58).abs() < 1e-6);
-        let lim1 = |s| regular_s(200.33, s).luminance_limit;
-        assert!((lim1(0.25) - 0.775).abs() < 1e-6);
-        assert!((lim1(0.75) - 0.75).abs() < 1e-6);
+        assert!((min_weight(0.25) - 0.44).abs() < 1e-6);
+        assert!((min_weight(0.75) - 0.74).abs() < 1e-6);
+        let max_weight = |s| {
+            Recipe::for_size(
+                200.33,
+                Family::Regular,
+                Appearance::Light,
+                Translucency::new(s),
+            )
+            .haze_max_weight
+        };
+        assert!((max_weight(0.25) - 0.505).abs() < 1e-6);
+        assert!((max_weight(0.75) - 0.78).abs() < 1e-6);
+        let lim_dark = |s| regular_s(200.33, s).luminance_limit;
+        assert!((lim_dark(0.25) - 0.80).abs() < 1e-6);
+        assert!((lim_dark(0.75) - 0.65).abs() < 1e-6);
+        let lim_light = |s| {
+            Recipe::for_size(
+                200.33,
+                Family::Regular,
+                Appearance::Light,
+                Translucency::new(s),
+            )
+            .luminance_limit
+        };
+        assert!((lim_light(0.25) - 0.855).abs() < 1e-6);
+        assert!((lim_light(0.75) - 0.81).abs() < 1e-6);
         assert!((clear_s(80.0, 0.25).blur_radius - 0.375).abs() < 1e-6);
         assert!((clear_s(80.0, 0.75).blur_radius - 0.75).abs() < 1e-6);
         let wash_light = |s| {
@@ -1512,5 +1594,25 @@ mod tests {
         let t = r.tint.expect("tinted");
         assert_eq!(t.rgb, [1.0; 3]);
         assert_eq!(t.alpha, 0.3);
+    }
+
+    #[test]
+    fn p3_luma_and_grade_preserve_chromatic_colors() {
+        let sum: f32 = LUMA.iter().sum();
+        assert!((sum - 1.0).abs() < 1e-6);
+        assert_eq!(LUMA, LUMA_LIMIT);
+        assert_eq!(LUMA, LUMA_GATE);
+
+        let id = Grade::new(0.0, 1.0, 1.0);
+        for c in [[0.95, 0.12, 0.08], [0.1, 0.9, 0.2], [0.05, 0.35, 1.0]] {
+            let out = id.apply(c);
+            for i in 0..3 {
+                assert!((out[i] - c[i]).abs() < 1e-5, "{c:?} -> {out:?}");
+            }
+        }
+
+        let pressed = regular(60.0, Appearance::Light).with_press(0.85, Some([12.0, 17.0]));
+        assert_eq!(pressed.press_progress, 0.85);
+        assert_eq!(pressed.touch_point, Some([12.0, 17.0]));
     }
 }

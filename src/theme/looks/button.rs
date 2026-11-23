@@ -191,19 +191,24 @@ fn glass_chrome(
         enabled: !is_disabled(state),
         ..surfaces::ButtonSpec::new(kind, group)
     };
-    let pressed = |state: InteractionState| Press {
-        progress: f32::from(u8::from(state.contains(InteractionState::PRESSED))),
-        touch_x: None,
+    let pressed = |inputs: &Inputs<'_, ()>| {
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "a touch coordinate is display-resolution and far inside f32"
+        )]
+        let (touch_x, touch_y) = inputs
+            .press_point
+            .map_or((None, None), |pt| (Some(pt.x as f32), Some(pt.y as f32)));
+        Press {
+            progress: f32::from(u8::from(inputs.state.contains(InteractionState::PRESSED))),
+            touch_x,
+            touch_y,
+        }
     };
     let effect = Driven::follow(tint, move |tint: &WorkingColor, inputs: &Inputs<'_, ()>| {
         let spec = spec_of(inputs.state, tinted.then(|| rgba_of(*tint)));
-        let surface = surfaces::button(
-            &palette,
-            inputs.frame,
-            &spec,
-            pressed(inputs.state),
-            translucency,
-        );
+        let surface =
+            surfaces::button(&palette, inputs.frame, &spec, pressed(inputs), translucency);
         materials::effect(&surface.element)
     });
     // The capture class is the look's, not the frame's: the recipe's
@@ -256,13 +261,8 @@ fn glass_chrome(
 
     let content = Driven::new(move |inputs: &Inputs<'_, ()>| {
         let spec = spec_of(inputs.state, None);
-        let surface = surfaces::button(
-            &palette,
-            inputs.frame,
-            &spec,
-            pressed(inputs.state),
-            translucency,
-        );
+        let surface =
+            surfaces::button(&palette, inputs.frame, &spec, pressed(inputs), translucency);
         materials::content_effect(&surface.element.recipe)
     });
 

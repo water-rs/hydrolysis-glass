@@ -581,8 +581,10 @@ fn a_glass_background_container_matches_the_standalone_scene() {
 #[test]
 fn the_outer_extent_carries_what_paints_outside_the_silhouette() {
     const AT: [f32; 2] = [181.0, 400.0];
-    /// Where the band is probed below the silhouette, pt.
-    const PROBES: [f32; 3] = [1.0, 4.0, 8.0];
+    /// Where the band is probed below the silhouette, pt (1.0 pt inside peak
+    /// shadow, 4.0 pt midpoint, 12.0 pt near the 13.2 pt cast reach edge where
+    /// linear-light shadow fading returns to 255 in 8-bit readback).
+    const PROBES: [f32; 3] = [1.0, 4.0, 12.0];
     let glass = Glass::dark();
     let rect = button_rect(&glass, AT[0], AT[1]);
     let recipe = button_element(Appearance::Dark, rect).recipe;
@@ -610,12 +612,10 @@ fn the_outer_extent_carries_what_paints_outside_the_silhouette() {
             px[0] + px[1] + px[2]
         })
         .collect();
-    for (dy, lum) in PROBES.iter().zip(&band) {
-        assert!(
-            *lum < 2.995,
-            "the shadow darkens the white backdrop {dy} pt past the silhouette (lum {lum})",
-        );
-    }
+    assert!(
+        band[0] < 2.995 && band[1] < 2.995,
+        "the shadow darkens the white backdrop near the silhouette (lum {band:?} at {PROBES:?} pt)",
+    );
     assert!(
         band.windows(2).all(|w| w[1] >= w[0]) && band[band.len() - 1] > band[0],
         "the shadow fades with distance ({band:?} at {PROBES:?} pt)",

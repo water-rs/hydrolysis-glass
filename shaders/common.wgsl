@@ -29,7 +29,7 @@ fn meniscus(x: f32, h: f32) -> f32 {
     return 1.0 - sqrt(t * (2.0 - t));
 }
 
-const LUMA_WEIGHTS: vec3<f32> = vec3<f32>(0.2126, 0.7152, 0.0722);
+const LUMA_WEIGHTS: vec3<f32> = vec3<f32>(0.22897456, 0.69173852, 0.07928691);
 
 fn luma(c: vec3<f32>) -> f32 {
     return dot(c, LUMA_WEIGHTS);
