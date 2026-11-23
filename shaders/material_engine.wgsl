@@ -55,7 +55,7 @@
 
 const PI: f32 = 3.141592653589793;
 const EPS_ALPHA: f32 = 1e-4;
-const HIGHLIGHT_BAND: f32 = 1.33;
+const HIGHLIGHT_BAND: f32 = 1.0;
 
 // The recipe's constant block, asserted by `theme::materials::uniforms`:
 // `Highlight::for_size` shares every term but the aperture, and the
@@ -66,8 +66,8 @@ const HL_SECOND_GAIN: f32 = 0.5;
 const HL_FIRST_BEARING: f32 = 0.0;
 const HL_SECOND_BEARING: f32 = PI;
 const HL_KNEE: f32 = 0.5;
-const HL_GLOW_GAIN: f32 = 0.15;
-const HL_GLOW_WIDTH: f32 = 8.0;
+const HL_GLOW_GAIN: f32 = 0.14;
+const HL_GLOW_WIDTH: f32 = 6.0;
 const HL_GLOW_APERTURE: f32 = 0.65;
 const HL_FIRST_COLOUR: vec4<f32> = vec4<f32>(1.0);
 const HL_SECOND_COLOUR: vec4<f32> = vec4<f32>(1.0);
@@ -359,12 +359,14 @@ fn highlight_light(d: f32, n: vec2<f32>, cov: f32, aperture: f32) -> vec4<f32> {
     return vec4<f32>(c_narrow * band_narrow + c_broad * band_glow, select(0.0, 1.0, d < 0.5));
 }
 
-// The highlight `light` (`highlight_light`) added to the accumulated
-// colour under it; its gain follows that colour's luma [chosen: keeps
-// the current form].
-fn add_highlight(c: vec3<f32>, light: vec4<f32>) -> vec3<f32> {
-    let gain = 0.2 + 0.8 * luma(c);
-    return select(c, min(c + light.rgb * gain, vec3<f32>(1.0)), light.w > 0.5);
+// Chroma-preserving cubic soft-light composite for the specular rim
+// highlight `light`.
+fn add_highlight(c: vec3<f32>, light: vec4<f32>, k_mul: f32, k_add: f32) -> vec3<f32> {
+    let soft = min(
+        c * (1.0 + k_mul * light.rgb * (3.0 - 2.0 * c)) + k_add * light.rgb,
+        vec3<f32>(1.0),
+    );
+    return select(c, soft, light.w > 0.5);
 }
 
 // §4.13: the tint layers — a fill of the shape, then an edge gradient at
@@ -414,7 +416,8 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
     }
 
     // Past the element's exterior span the member writes nothing (§4.11);
-    // the shadow can still cover the pixel.
+    // the shadow can still cover the pixel (`exterior_span > 0.5` everywhere,
+    // so the 0.5 pt Light hairline is already 0 here).
     if d > params[5].w && cast_alpha < 1e-4 {
         return vec4<f32>(0.0);
     }
@@ -425,7 +428,11 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
     // evaluated here, as the standalone did on its field texture.
     let cov = gsat(0.5 - px.sdf / fw);
     if cov <= 0.0 {
-        return vec4<f32>(0.0, 0.0, 0.0, cast_alpha);
+        let is_light_reg = select(0.0, 1.0, params[7].w > 0.5)
+            * select(0.0, 1.0, params[1].z > 0.0);
+        let hairline_alpha = is_light_reg * 0.09 * gsat(1.0 - 2.0 * d);
+        let ext_alpha = 1.0 - (1.0 - cast_alpha) * (1.0 - hairline_alpha);
+        return vec4<f32>(0.0, 0.0, 0.0, ext_alpha);
     }
 
     // §2: the owning member's ellipse bend, applied to the field normal
@@ -441,15 +448,24 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
     c = clamp(c, vec3<f32>(0.0), vec3<f32>(params[12].z));
     // §4.12: the highlight sibling.
     // §4.13: the tint siblings; a flat tint (§8.1) lies under the
-    // highlight, every other tint over it. Each layer is computed once
-    // and only laid over twice: evaluating the layers' loops and branches
-    // once per order made D3D12's WARP device render wrong texels and
-    // stall.
+    // highlight, every other tint over it. Each layer is computed and laid
+    // over once: evaluating the layers' loops and branches once per order
+    // made D3D12's WARP device render wrong texels and stall.
+    let is_light = params[7].w > 0.5;
+    let is_prominent = params[15].w > 1.5;
+    let k = select(
+        select(vec2<f32>(0.110, 0.045), vec2<f32>(0.085, 0.025), is_light),
+        vec2<f32>(0.105, 0.038),
+        is_prominent,
+    );
     let light = highlight_light(d, n, cov, params[12].w);
     let tint = tint_alphas(params[13].a, params[15].w, d, cov);
-    let over = add_tint(add_highlight(c, light), params[13].rgb, tint);
-    let under = add_highlight(add_tint(c, params[13].rgb, tint), light);
-    c = select(over, under, params[15].w > 1.5);
+    let y_b = luma(c);
+    let prom_w = select(gsat(0.21 * (y_b - 0.16)), 0.40 * (1.0 - y_b), is_light);
+    let fill = mix(params[13].rgb, vec3<f32>(select(1.0, 0.0, is_light)), prom_w);
+    let pre = mix(c, fill, select(0.0, tint.x, is_prominent));
+    let lit = add_highlight(pre, light, k.x, k.y);
+    c = add_tint(lit, params[13].rgb, select(tint, vec2<f32>(0.0), is_prominent));
 
     // The standalone's `res = mix(shadow, interior, cov)` is the
     // premultiplied `(c·cov, a)` in encoded space. The member composite
@@ -458,7 +474,10 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
     // divide is safe — because `move_space` round-trips
     // `SPACE_SRGB_TO_P3`/`space_srgb_decode` back to that straight before
     // blending.
-    let a = cov + (1.0 - cov) * cast_alpha;
+    let is_light_reg = select(0.0, 1.0, is_light) * select(0.0, 1.0, params[1].z > 0.0);
+    let hairline_alpha = is_light_reg * select(0.0, 0.09, d > 0.0) * gsat(1.0 - 2.0 * d);
+    let ext_alpha = 1.0 - (1.0 - cast_alpha) * (1.0 - hairline_alpha);
+    let a = cov + (1.0 - cov) * ext_alpha;
     let straight = SPACE_SRGB_TO_P3 * space_srgb_decode(c * (cov / a));
     return vec4<f32>(straight * a, a);
 }

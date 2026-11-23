@@ -53,7 +53,7 @@ struct MaterialUniforms {
 @group(0) @binding(5) var linear_sampler: sampler;
 
 const EPS_ALPHA: f32 = 1e-4;
-const HIGHLIGHT_BAND: f32 = 1.33;
+const HIGHLIGHT_BAND: f32 = 1.0;
 
 const LUMA_LIMIT_W: vec3<f32> = vec3<f32>(0.2126, 0.7153, 0.0722);
 const LUMA_GATE_W: vec3<f32> = vec3<f32>(0.2125, 0.7153, 0.0721);
@@ -374,12 +374,14 @@ fn highlight_light(r: Recipe, d: f32, n: vec2<f32>, cov: f32) -> vec4<f32> {
     return vec4<f32>(c_narrow * band.x + c_broad * band.y, select(0.0, 1.0, d < 0.5));
 }
 
-// The highlight `light` (`highlight_light`) added to the accumulated
-// colour under it; its gain follows that colour's luma [chosen: keeps
-// the current form].
-fn add_highlight(outc: vec3<f32>, light: vec4<f32>) -> vec3<f32> {
-    let gain = 0.2 + 0.8 * luma(outc);
-    return select(outc, min(outc + light.rgb * gain, vec3<f32>(1.0)), light.w > 0.5);
+// Chroma-preserving cubic soft-light composite for the specular rim
+// highlight `light`.
+fn add_highlight(outc: vec3<f32>, light: vec4<f32>, k_mul: f32, k_add: f32) -> vec3<f32> {
+    let soft = min(
+        outc * (1.0 + k_mul * light.rgb * (3.0 - 2.0 * outc)) + k_add * light.rgb,
+        vec3<f32>(1.0),
+    );
+    return select(outc, soft, light.w > 0.5);
 }
 
 // §4.13: the tint layers — a fill of the shape, then an edge gradient at
@@ -397,6 +399,14 @@ fn tint_alphas(r: Recipe, d: f32, cov: f32) -> vec2<f32> {
     let t = sat(-d / 10.0);
     let a_rim = edge * r.tint.a * (1.0 - ease_cubic(t)) * cov;
     return select(vec2<f32>(0.0), vec2<f32>(a_flat, a_rim), r.hl_bb.w >= 0.5 && cov > 0.0);
+}
+
+// Prominent fill target tint modulated by the underlying body luma `Y_b`.
+fn prominent_tint_rgb(rgb: vec3<f32>, outc: vec3<f32>, is_light: bool) -> vec3<f32> {
+    let y_b = luma(outc);
+    let c_prom_light = rgb * (0.60 + 0.40 * y_b);
+    let c_prom_dark = mix(rgb, vec3<f32>(1.0), sat(0.21 * (y_b - 0.16)));
+    return select(c_prom_dark, c_prom_light, is_light);
 }
 
 // The tint `rgb` laid over `outc` at the alphas `a` (`tint_alphas`).
@@ -419,6 +429,9 @@ fn material_fragment(v: FullscreenOut) -> @location(0) vec4<f32> {
     let cov = sat(0.5 - f.d / fw);
     let backdrop = sample_backdrop(p);
 
+    let is_light = r.ambient_misc.z > 0.5;
+    let is_light_regular = is_light && r.rim.z > 0.0;
+
     // §4.10: the cast shadow — plain black, no backdrop sample, at the
     // shifted field.
     let f_s = load_field((p - r.cast_a.xy) * uni.scene.z);
@@ -428,13 +441,22 @@ fn material_fragment(v: FullscreenOut) -> @location(0) vec4<f32> {
             * falloff(4.0 * sat(0.25 * f_s.d / r.cast_a.z + 0.5) - 2.0);
     }
 
+    // Light-mode 0.5 pt exterior hairline outside the regular silhouette.
+    let hairline_alpha = select(
+        0.0,
+        0.09 * sat(1.0 - 2.0 * f.d),
+        is_light_regular && f.d > 0.0 && f.d <= 0.5,
+    );
+    let ext_alpha = 1.0 - (1.0 - cast_alpha) * (1.0 - hairline_alpha);
+
     // Past the element's exterior span the pass returns the backdrop
-    // (§4.11); the shadow can still cover the pixel.
-    if f.d > r.cast_b.y && cast_alpha < 1e-4 {
+    // (§4.11); the shadow or hairline can still cover the pixel.
+    if f.d > r.cast_b.y && ext_alpha < 1e-4 {
         return backdrop;
     }
 
-    var outc = backdrop;
+    let backdrop_hair = vec4<f32>(backdrop.rgb * (1.0 - hairline_alpha), backdrop.a);
+    var outc = backdrop_hair;
     if cov > 0.0 {
         let n = f.n / max(length(f.n), 1e-4);
         var C = glass_body(r, p, f.d, n, cov, uni.scene.z);
@@ -445,21 +467,29 @@ fn material_fragment(v: FullscreenOut) -> @location(0) vec4<f32> {
         // highlight, every other tint over it.
         // Each layer is computed once and laid over in either order, as
         // the engine's `backdrop_effect` does.
+        let is_prominent = r.hl_bb.w > 1.5;
+        let k_mul = select(select(0.110, 0.085, is_light), 0.105, is_prominent);
+        let k_add = select(select(0.045, 0.025, is_light), 0.038, is_prominent);
         let light = highlight_light(r, f.d, n, cov);
         let tint = tint_alphas(r, f.d, cov);
-        let over = add_tint(add_highlight(C, light), r.tint.rgb, tint);
-        let under = add_highlight(add_tint(C, r.tint.rgb, tint), light);
-        C = select(over, under, r.hl_bb.w > 1.5);
+        let fill = select(
+            r.tint.rgb,
+            prominent_tint_rgb(r.tint.rgb, C, is_light),
+            is_prominent,
+        );
+        let pre = mix(C, fill, select(0.0, tint.x, is_prominent));
+        let lit = add_highlight(pre, light, k_mul, k_add);
+        C = add_tint(lit, r.tint.rgb, select(tint, vec2<f32>(0.0), is_prominent));
         let interior = vec4<f32>(C, 1.0);
         let shadow = vec4<f32>(0.0, 0.0, 0.0, cast_alpha);
         let res = mix(shadow, interior, cov);
-        outc = res + backdrop * (1.0 - res.a);
+        outc = res + backdrop_hair * (1.0 - res.a);
     } else {
         // Outside the silhouette: the cast shadow, premultiplied black at
-        // `cast_alpha`, source-over the backdrop — it darkens the colour
-        // and keeps the backdrop's coverage.
+        // `cast_alpha`, source-over the hairline-darkened backdrop — it
+        // darkens the colour and keeps the backdrop's coverage.
         let shadow = vec4<f32>(0.0, 0.0, 0.0, cast_alpha);
-        outc = shadow + backdrop * (1.0 - cast_alpha);
+        outc = shadow + backdrop_hair * (1.0 - cast_alpha);
     }
     return outc;
 }
