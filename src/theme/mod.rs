@@ -681,7 +681,7 @@ mod tests {
 
     #[test]
     fn tabs_look_switches_layout_at_600pt_and_drives_selection_and_press_lens() {
-        use hydrolysis_style::theme::{TabItem, TabItemGeometry, TabItemLayout, ValueMotion};
+        use hydrolysis_style::theme::{TabItemGeometry, TabItemLayout, TabsValue, ValueMotion};
         use waterui::navigation::tab::NativeTabStyle;
 
         let g = Glass::dark();
@@ -689,6 +689,7 @@ mod tests {
         let look = g.tabs(&TabsSpec::new(NativeTabStyle::TabBar), &env);
         assert_eq!(look.item_layout(402.0), TabItemLayout::Vertical);
         assert_eq!(look.item_layout(600.0), TabItemLayout::Horizontal);
+        assert!(look.get_drag().is_some());
         let vertical = look.metrics(TabItemLayout::Vertical);
         assert!((vertical.bar_height - 60.0).abs() < 1e-9);
         assert!((vertical.button_min_width - 64.0).abs() < 1e-9);
@@ -698,39 +699,64 @@ mod tests {
         let ValueMotion::Always(anim) = &look.motion().value else {
             panic!("expected Always value motion on tab bar highlight");
         };
-        assert_eq!(*anim, segmented::SELECTION.physical());
+        assert_eq!(
+            *anim,
+            looks::spring_animation(crate::dynamics::Spring::SEGMENTED_PILL)
+        );
 
-        let bounds = Rect::new(0.0, 0.0, 80.0, 60.0);
-        let item = TabItem {
-            index: 0,
-            count: 2,
-            selected: true,
-            geometry: TabItemGeometry {
-                bounds,
+        let bar = Rect::new(0.0, 0.0, 200.0, 60.0);
+        let items: std::rc::Rc<[TabItemGeometry]> = [
+            TabItemGeometry {
+                bounds: Rect::new(0.0, 0.0, 100.0, 60.0),
                 icon: None,
-                title: Rect::new(16.0, 20.0, 64.0, 40.0),
+                title: Rect::new(16.0, 20.0, 84.0, 40.0),
                 layout: TabItemLayout::Vertical,
                 placement: NativeTabStyle::TabBar,
             },
+            TabItemGeometry {
+                bounds: Rect::new(100.0, 0.0, 200.0, 60.0),
+                icon: None,
+                title: Rect::new(116.0, 20.0, 184.0, 40.0),
+                layout: TabItemLayout::Vertical,
+                placement: NativeTabStyle::TabBar,
+            },
+        ]
+        .into();
+        let value = TabsValue {
+            selected: Some(0),
+            position: Some(0.5),
+            items,
         };
-        let chrome = look.item_chrome(&item, waterui::reactive::Computed::constant(true));
-        assert_eq!(chrome.press().get_scale(), Some(0.12));
-        let customs = chrome.customs();
-        assert_eq!(customs.len(), 1);
+        let rest_indicator = look
+            .get_selection_indicator()
+            .expect("bar-level selection indicator");
+        let lens_indicator = look
+            .get_selection_indicator_over_labels()
+            .expect("bar-level over-labels lens indicator");
+
         let rest_lens =
-            customs[0].realize(&Inputs::at_rest(bounds, InteractionState::empty(), &()));
+            lens_indicator.realize(&Inputs::at_rest(bar, InteractionState::SELECTED, &value));
         assert_eq!(rest_lens.opacity().expect("lens opacity").snapshot(), 0.0);
-        let pressed_lens =
-            customs[0].realize(&Inputs::at_rest(bounds, InteractionState::PRESSED, &()));
+        let pressed_lens = lens_indicator.realize(&Inputs::at_rest(
+            bar,
+            InteractionState::SELECTED.union(InteractionState::PRESSED),
+            &value,
+        ));
         assert_eq!(
             pressed_lens.opacity().expect("lens opacity").snapshot(),
             1.0
         );
         let layered = layered_recorder(|r| {
-            pressed_lens.record(r, bounds);
+            pressed_lens.record(r, bar);
         });
         assert_eq!(layered.runs.len(), 1);
         assert_eq!(layered.runs[0].material.shader(), materials::GLASS_SHADER);
+        assert!(
+            rest_indicator
+                .realize(&Inputs::at_rest(bar, InteractionState::SELECTED, &value))
+                .opacity()
+                .is_none()
+        );
     }
 
     #[test]
@@ -797,6 +823,53 @@ mod tests {
         assert!(look.has_selected_row());
         assert!(matches!(look.panel().fill(), Fill::Paint(_)));
         assert!(look.panel().get_border().is_some());
+        let motion = look
+            .get_presentation_motion()
+            .expect("popover presentation motion");
+        assert!((motion.content_scale_from - 0.92).abs() < 1e-9);
+        assert_eq!(motion.content_opacity_window, (0.25, 0.75));
+        assert_eq!(motion.content_scale_window, (0.15, 0.85));
+        assert_eq!(motion.trigger_opacity_window, Some((0.0, 0.25)));
+        assert!(look.has_presentation_panel());
+        let sample = hydrolysis_style::theme::MenuPresentationSample::at_rest(
+            Rect::new(20.0, 20.0, 100.0, 54.0),
+            Rect::new(20.0, 60.0, 200.0, 220.0),
+        );
+        let layered = layered_recorder(|r| {
+            assert!(look.record_presentation_panel(r, &sample));
+        });
+        assert_eq!(layered.runs.len(), 1);
+        assert_eq!(layered.runs[0].material.shader(), materials::GLASS_SHADER);
+    }
+
+    #[test]
+    fn glass_button_and_segmented_wire_capped_growth_jelly_drag_and_label_hiding() {
+        use hydrolysis_style::theme::SegmentedSpec;
+
+        let g = Glass::light();
+        let env = environment(&g);
+
+        let btn = g.button(&button_spec(ButtonStyle::Glass, ControlSize::Medium), &env);
+        let press = btn.chrome().press();
+        assert_eq!(press.get_max_growth(), Some(10.0));
+        assert!(press.get_drag_deformation().is_some());
+        assert!(
+            (press.effective_scale(cherenkov_record::kurbo::Size::new(322.0, 34.33))
+                - (1.0 + 10.0 / 161.0))
+                .abs()
+                < 1e-9
+        );
+
+        let seg = g.segmented_picker(
+            &SegmentedSpec::new(
+                ControlSize::Medium,
+                3,
+                LayoutDirection::LeftToRight,
+                SpecTint::default(),
+            ),
+            &env,
+        );
+        assert!(!seg.shows_label());
     }
 
     #[test]

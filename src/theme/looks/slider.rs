@@ -21,6 +21,7 @@ use waterui::theme::Tint;
 use waterui_core::Environment;
 
 use super::super::Glass;
+use super::super::PRESS_DURATION;
 use super::super::button::MIN_HIT_SIDE;
 use super::super::chrome::{
     FOCUS_RING_GAP, FOCUS_RING_WIDTH, HAIRLINE, MENU_CORNER_RADIUS, POPUP_SHADOW_ALPHA,
@@ -30,25 +31,29 @@ use super::super::materials::{self, GLASS_SHADER};
 use super::super::palette::{alpha, working};
 use super::super::slider::{
     self, DISABLED_OPACITY, HEIGHT, KNOB_HEIGHT, KNOB_WIDTH, LABEL_GAP, LABEL_SPACING, MIN_TRAVEL,
-    PRESS_SPRING, RELEASE_SPRING, SHADOW_ALPHA, SHADOW_OFFSET, SHADOW_SIGMA, TRAVEL_INSET,
-    VALUE_SPRING,
+    SHADOW_ALPHA, SHADOW_OFFSET, SHADOW_SIGMA, TRAVEL_INSET,
 };
 use super::super::switch::{self, KNOB_FILL};
-use super::super::{DRAG_DURATION, PRESS_DURATION};
-use super::{focus_ring_paint, held, is_disabled, paint};
+use super::{focus_ring_paint, held, is_disabled, paint, spring_animation, stretch_along_axis};
+use crate::dynamics;
 
-/// The slider's motion: eased hover and focus, the press and release
-/// springs of §8.1 for the press that makes the lens, an eased drag, and a
-/// value that moves by the value spring whatever animation a change asks
-/// for, and snaps when it asks for none (§8.3, Value motion).
+/// The slider's motion: eased hover and focus, button press/release springs
+/// for the lens, jelly drag release, and `SLIDER_VALUE` for external value
+/// changes (§6).
 fn motion() -> Motion {
     let eased = Transition::symmetric(Animation::ease_out(PRESS_DURATION));
     Motion {
         hover: eased.clone(),
         focus: eased,
-        press: Transition::new(PRESS_SPRING.physical(), RELEASE_SPRING.physical()),
-        drag: Transition::symmetric(Animation::ease_out(DRAG_DURATION)),
-        value: ValueMotion::Own(VALUE_SPRING.physical()),
+        press: Transition::new(
+            spring_animation(dynamics::Spring::BUTTON_PRESS),
+            spring_animation(dynamics::Spring::BUTTON_RELEASE),
+        ),
+        drag: Transition::new(
+            spring_animation(dynamics::Spring::JELLY_DRAG_ACTIVE),
+            spring_animation(dynamics::Spring::JELLY_DRAG_RELEASE),
+        ),
+        value: ValueMotion::Own(spring_animation(dynamics::Spring::SLIDER_VALUE)),
     }
 }
 
@@ -98,14 +103,16 @@ pub(in super::super) fn look(glass: &Glass, spec: &SliderSpec, env: &Environment
     look
 }
 
-/// The knob at the slider's value, grown about its centre by the press.
+/// The knob at the slider's value, grown about its centre by the press and
+/// stretched horizontally with drag velocity.
 fn knob_shape() -> Driven<ShapeData, f64> {
     Driven::new(|inputs: &Inputs<'_, f64>| {
-        switch::capsule(slider::knob_rect(
+        let rect = slider::knob_rect(
             inputs.frame,
             *inputs.value,
             f64::from(press_target(inputs.state)),
-        ))
+        );
+        switch::capsule(stretch_along_axis(rect, inputs.velocity, false))
     })
 }
 
@@ -133,12 +140,13 @@ fn track(
             Paint::from(if tinted { *tint } else { default_tint })
         },
     );
-    // The shadow fades as the lens takes over the knob.
+    // The shadow fades along smoothstep(0.05, 0.55) as the lens takes over.
     let shadow = Driven::new(|inputs: &Inputs<'_, f64>| {
         let flat = 1.0 - press_target(inputs.state);
         Shadow::new(SHADOW_SIGMA, working([0.0, 0.0, 0.0, SHADOW_ALPHA * flat]))
             .offset(Vec2::new(0.0, SHADOW_OFFSET))
-    });
+    })
+    .smoothstep_window(0.05, 0.55);
     Custom::new(
         (whole, unfilled, filled, fill, knob_shape(), shadow),
         |recorder, _frame, (whole, unfilled, filled, fill, knob, shadow)| {
@@ -172,13 +180,18 @@ fn knob_lens(glass: &Glass) -> Custom<f64, impl DrivenSet<f64> + use<>> {
             recorder.backdrop_material(shape, GLASS_SHADER, capture, effect);
         },
     )
+    .opacity(
+        Driven::new(|inputs: &Inputs<'_, f64>| press_target(inputs.state))
+            .smoothstep_window(0.05, 0.55),
+    )
 }
 
-/// The knob's white fill, which the lens clears as the press grows.
+/// The knob's white fill, which the lens clears along smoothstep(0.05, 0.55).
 fn knob_fill() -> Custom<f64, impl DrivenSet<f64> + use<>> {
     let white = Driven::new(|inputs: &Inputs<'_, f64>| {
         paint(alpha(KNOB_FILL, 1.0 - press_target(inputs.state)))
-    });
+    })
+    .smoothstep_window(0.05, 0.55);
     Custom::new((knob_shape(), white), |recorder, _frame, (shape, white)| {
         recorder.group(
             Group::new().blend_space(BlendSpace::SrgbEncoded),
@@ -196,10 +209,14 @@ fn focus_ring(glass: &Glass) -> Custom<f64, impl DrivenSet<f64> + use<>> {
     let accent = glass.palette.accent;
     let reach = FOCUS_RING_WIDTH.mul_add(0.5, FOCUS_RING_GAP);
     let ring = Driven::new(move |inputs: &Inputs<'_, f64>| {
-        let knob = slider::knob_rect(
-            inputs.frame,
-            *inputs.value,
-            f64::from(press_target(inputs.state)),
+        let knob = stretch_along_axis(
+            slider::knob_rect(
+                inputs.frame,
+                *inputs.value,
+                f64::from(press_target(inputs.state)),
+            ),
+            inputs.velocity,
+            false,
         );
         switch::capsule(knob.inflate(reach, reach))
     });

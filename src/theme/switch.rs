@@ -99,17 +99,16 @@ pub const DISABLED_OPACITY: f32 = 0.5;
 /// The knob's fill, white and opaque in both appearances.
 pub const KNOB_FILL: Rgba = [1.0; 4];
 
-/// The toggle spring moving the knob: critically damped, ω0 21 rad/s
-/// **[fitted]**.
+/// The toggle spring moving the knob: critically damped (`T_r = 0.299 s, ζ = 1.000`).
 pub const TOGGLE_SPRING: Spring = Spring {
-    omega0: 21.0,
+    omega0: 21.014,
     zeta: 1.0,
 };
 
-/// ω0 of the track fade turning on, rad/s **[fitted]**.
-pub const FADE_ON_OMEGA: f32 = 11.2;
-/// ω0 of the track fade turning off, rad/s **[fitted]**.
-pub const FADE_OFF_OMEGA: f32 = 20.2;
+/// ω0 of the track fade turning on (`T_r = 0.561 s, ζ = 1.000`), rad/s.
+pub const FADE_ON_OMEGA: f32 = 11.199_97;
+/// ω0 of the track fade turning off (`T_r = 0.311 s, ζ = 1.000`), rad/s.
+pub const FADE_OFF_OMEGA: f32 = 20.203_17;
 
 /// The material the held knob is: the clear family's recipe at the lens's
 /// size, `pressed` or not. The knob is opaque white while at rest, so the
