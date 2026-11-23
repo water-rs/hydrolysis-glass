@@ -385,16 +385,8 @@ fn tint_alphas(tint_a: f32, has_tint: f32, d: f32, cov: f32) -> vec2<f32> {
     return select(vec2<f32>(0.0), vec2<f32>(a_flat, a_rim), has_tint >= 0.5 && cov > 0.0);
 }
 
-// The tint `rgb` laid over `c` at the alphas `a` (`tint_alphas`); prominent
-// fills (`is_prominent`) modulate their target tint by the underlying body
-// luma `Y_b`.
-fn add_tint(
-    c: vec3<f32>,
-    rgb: vec3<f32>,
-    a: vec2<f32>,
-    is_prominent: bool,
-    is_light: bool,
-) -> vec3<f32> {
+// Prominent fill target tint modulated by the underlying body luma `Y_b`.
+fn prominent_tint_rgb(rgb: vec3<f32>, c: vec3<f32>, is_light: bool) -> vec3<f32> {
     let y_b = luma(c);
     let c_prom_light = rgb * (0.60 + 0.40 * y_b);
     let c_prom_dark = clamp(
@@ -402,11 +394,14 @@ fn add_tint(
         vec3<f32>(0.0),
         vec3<f32>(1.0),
     );
-    let prom_rgb = select(c_prom_dark, c_prom_light, is_light);
-    let fill_rgb = select(rgb, prom_rgb, is_prominent);
-    let outc = fill_rgb * a.x + c * (1.0 - a.x);
+    return select(c_prom_dark, c_prom_light, is_light);
+}
+
+// The tint `rgb` laid over `c` at the alphas `a` (`tint_alphas`).
+fn add_tint(c: vec3<f32>, rgb: vec3<f32>, a: vec2<f32>) -> vec3<f32> {
+    let outc = rgb * a.x + c * (1.0 - a.x);
     let gain = 0.2 + 0.8 * luma(outc);
-    return fill_rgb * gain * a.y + outc * (1.0 - a.y);
+    return rgb * gain * a.y + outc * (1.0 - a.y);
 }
 
 // The entry the group pass calls. Returns premultiplied colour in the
@@ -437,10 +432,11 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
     }
 
     // Light-mode 0.5 pt exterior hairline outside the regular silhouette.
-    var hairline_alpha = 0.0;
-    if is_light_regular && d > 0.0 && d <= 0.5 {
-        hairline_alpha = 0.09 * gsat(1.0 - 2.0 * d);
-    }
+    let hairline_alpha = select(
+        0.0,
+        0.09 * gsat(1.0 - 2.0 * d),
+        is_light_regular && d > 0.0 && d <= 0.5,
+    );
     let ext_alpha = 1.0 - (1.0 - cast_alpha) * (1.0 - hairline_alpha);
 
     // Past the element's exterior span the member writes nothing (§4.11);
@@ -472,28 +468,22 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
     // §4.12: the highlight sibling.
     // §4.13: the tint siblings; a flat tint (§8.1) lies under the
     // highlight, every other tint over it. Each layer is computed once
-    // and only laid over twice: evaluating the layers' loops and branches
-    // once per order made D3D12's WARP device render wrong texels and
-    // stall.
+    // before the uniform tint-mode branch: evaluating the loops inside
+    // a branch made D3D12's WARP device render wrong texels and stall.
     let is_prominent = params[15].w > 1.5;
     let k_mul = select(select(0.110, 0.085, is_light), 0.105, is_prominent);
     let k_add = select(select(0.045, 0.025, is_light), 0.038, is_prominent);
     let light = highlight_light(d, n, cov, params[12].w);
     let tint = tint_alphas(params[13].a, params[15].w, d, cov);
-    let over = add_tint(
-        add_highlight(c, light, k_mul, k_add),
-        params[13].rgb,
-        tint,
-        is_prominent,
-        is_light,
-    );
-    let under = add_highlight(
-        add_tint(c, params[13].rgb, tint, is_prominent, is_light),
-        light,
-        k_mul,
-        k_add,
-    );
-    c = select(over, under, is_prominent);
+    if is_prominent {
+        let fill = prominent_tint_rgb(params[13].rgb, c, is_light);
+        c = add_highlight(add_tint(c, fill, tint), light, k_mul, k_add);
+    } else {
+        c = add_highlight(c, light, k_mul, k_add);
+        if params[15].w >= 0.5 {
+            c = add_tint(c, params[13].rgb, tint);
+        }
+    }
 
     // The standalone's `res = mix(shadow, interior, cov)` is the
     // premultiplied `(c·cov, a)` in encoded space. The member composite

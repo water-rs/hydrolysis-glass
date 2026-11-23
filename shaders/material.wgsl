@@ -402,16 +402,8 @@ fn tint_alphas(r: Recipe, d: f32, cov: f32) -> vec2<f32> {
     return select(vec2<f32>(0.0), vec2<f32>(a_flat, a_rim), r.hl_bb.w >= 0.5 && cov > 0.0);
 }
 
-// The tint `rgb` laid over `outc` at the alphas `a` (`tint_alphas`); prominent
-// fills (`is_prominent`) modulate their target tint by the underlying body
-// luma `Y_b`.
-fn add_tint(
-    outc: vec3<f32>,
-    rgb: vec3<f32>,
-    a: vec2<f32>,
-    is_prominent: bool,
-    is_light: bool,
-) -> vec3<f32> {
+// Prominent fill target tint modulated by the underlying body luma `Y_b`.
+fn prominent_tint_rgb(rgb: vec3<f32>, outc: vec3<f32>, is_light: bool) -> vec3<f32> {
     let y_b = luma(outc);
     let c_prom_light = rgb * (0.60 + 0.40 * y_b);
     let c_prom_dark = clamp(
@@ -419,11 +411,14 @@ fn add_tint(
         vec3<f32>(0.0),
         vec3<f32>(1.0),
     );
-    let prom_rgb = select(c_prom_dark, c_prom_light, is_light);
-    let fill_rgb = select(rgb, prom_rgb, is_prominent);
-    let c = fill_rgb * a.x + outc * (1.0 - a.x);
+    return select(c_prom_dark, c_prom_light, is_light);
+}
+
+// The tint `rgb` laid over `outc` at the alphas `a` (`tint_alphas`).
+fn add_tint(outc: vec3<f32>, rgb: vec3<f32>, a: vec2<f32>) -> vec3<f32> {
+    let c = rgb * a.x + outc * (1.0 - a.x);
     let gain = 0.2 + 0.8 * luma(c);
-    return fill_rgb * gain * a.y + c * (1.0 - a.y);
+    return rgb * gain * a.y + c * (1.0 - a.y);
 }
 
 // ---------------------------------------------------------------- entry ---
@@ -452,10 +447,11 @@ fn material_fragment(v: FullscreenOut) -> @location(0) vec4<f32> {
     }
 
     // Light-mode 0.5 pt exterior hairline outside the regular silhouette.
-    var hairline_alpha = 0.0;
-    if is_light_regular && f.d > 0.0 && f.d <= 0.5 {
-        hairline_alpha = 0.09 * sat(1.0 - 2.0 * f.d);
-    }
+    let hairline_alpha = select(
+        0.0,
+        0.09 * sat(1.0 - 2.0 * f.d),
+        is_light_regular && f.d > 0.0 && f.d <= 0.5,
+    );
     let ext_alpha = 1.0 - (1.0 - cast_alpha) * (1.0 - hairline_alpha);
 
     // Past the element's exterior span the pass returns the backdrop
@@ -481,20 +477,15 @@ fn material_fragment(v: FullscreenOut) -> @location(0) vec4<f32> {
         let k_add = select(select(0.045, 0.025, is_light), 0.038, is_prominent);
         let light = highlight_light(r, f.d, n, cov);
         let tint = tint_alphas(r, f.d, cov);
-        let over = add_tint(
-            add_highlight(C, light, k_mul, k_add),
-            r.tint.rgb,
-            tint,
-            is_prominent,
-            is_light,
-        );
-        let under = add_highlight(
-            add_tint(C, r.tint.rgb, tint, is_prominent, is_light),
-            light,
-            k_mul,
-            k_add,
-        );
-        C = select(over, under, is_prominent);
+        if is_prominent {
+            let fill = prominent_tint_rgb(r.tint.rgb, C, is_light);
+            C = add_highlight(add_tint(C, fill, tint), light, k_mul, k_add);
+        } else {
+            C = add_highlight(C, light, k_mul, k_add);
+            if r.hl_bb.w >= 0.5 {
+                C = add_tint(C, r.tint.rgb, tint);
+            }
+        }
         let interior = vec4<f32>(C, 1.0);
         let shadow = vec4<f32>(0.0, 0.0, 0.0, cast_alpha);
         let res = mix(shadow, interior, cov);
