@@ -1732,11 +1732,11 @@ every value is [chosen].
 
 ### 8.8 Navigation bar and bar items
 
-Top navigation bars and bottom toolbars are standalone regular-family
-glass capsules (`toolbar_surface`) with no hairline separator beyond the
-glass element's rim highlight and cast shadow. Bar items sit horizontally
-inside the bar, and a pushed destination presents an interactive back
-button at the leading edge.
+At rest, top navigation bars and bottom toolbars leave their background
+transparent with no hairline separator (`toolbar_surface` provides the
+standalone regular-family glass capsule surface primitive when an explicit bar
+surface is requested). Bar items sit horizontally inside the bar, and a pushed
+destination presents an interactive back button at the leading edge.
 
 **Reference.** Nothing in this section was measured against a capture;
 every value is [chosen].
@@ -1767,8 +1767,8 @@ every value is [chosen].
 
 | Part | Dark appearance | Light appearance |
 |---|---|---|
-| bar surface | regular glass capsule (§5) | regular glass capsule (§5) |
-| separator | none (glass rim and shadow) | none (glass rim and shadow) |
+| bar surface | transparent at rest | transparent at rest |
+| separator | none | none |
 | back chevron | accent `(10, 132, 255)` | accent `(0, 122, 255)` |
 
 #### States
