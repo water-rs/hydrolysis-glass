@@ -393,6 +393,123 @@ fn a_material_group_fuses_neighbouring_chrome() {
     );
 }
 
+/// §8: inside a `.material_group()`, a prominent blue glass button
+/// illuminates an adjacent neutral glass button within `R_bleed = 36.0 pt`
+/// (matching the standalone GPU renderer) and contributes zero bleed beyond
+/// `36.0 pt`.
+#[test]
+fn a_material_group_bleeds_from_a_prominent_sibling_within_36_pt() {
+    const AT: [f32; 2] = [60.0, 400.0];
+    const NEAR_GAP: f32 = 16.0;
+    const FAR_GAP: f32 = 48.0;
+
+    let glass = Glass::dark();
+    let neutral_rect = button_rect(&glass, AT[0], AT[1]);
+    let near_blue_rect = button_rect(&glass, AT[0] + neutral_rect[2] + NEAR_GAP, AT[1]);
+    let far_blue_rect = button_rect(&glass, AT[0] + neutral_rect[2] + FAR_GAP, AT[1]);
+
+    let blue_btn = |x: f32, y: f32| {
+        button("")
+            .style(ButtonStyle::GlassProminent)
+            .size(SIZE)
+            .position_anchor(waterui::layout::UnitPoint::TOP_LEADING, x, y)
+    };
+    let prominent_element = |rect: [f32; 4]| {
+        theme(Appearance::Dark)
+            .button_surface(
+                kurbo_rect(rect),
+                ButtonStyle::GlassProminent,
+                SIZE,
+                InteractionState::empty(),
+            )
+            .expect("a prominent button carries a surface")
+            .element
+    };
+
+    let mut iso_app = GlassApp::mount(
+        move || absolute((backdrop_view(Backdrop::Grey), glass_button(AT[0], AT[1]))),
+        Glass::dark(),
+    );
+    let iso_img = iso_app.snapshot();
+
+    let mut near_app = GlassApp::mount(
+        move || {
+            let pair = absolute((
+                glass_button(neutral_rect[0], neutral_rect[1]),
+                blue_btn(near_blue_rect[0], near_blue_rect[1]),
+            ))
+            .material_group();
+            absolute((backdrop_view(Backdrop::Grey), pair))
+        },
+        Glass::dark(),
+    );
+    let near_img = near_app.export("material_bleed_near_dark_hydrolysis");
+
+    let mut far_app = GlassApp::mount(
+        move || {
+            let pair = absolute((
+                glass_button(neutral_rect[0], neutral_rect[1]),
+                blue_btn(far_blue_rect[0], far_blue_rect[1]),
+            ))
+            .material_group();
+            absolute((backdrop_view(Backdrop::Grey), pair))
+        },
+        Glass::dark(),
+    );
+    let far_img = far_app.export("material_bleed_far_dark_hydrolysis");
+
+    let near_standalone = Harness::new().render(
+        Backdrop::Grey,
+        &Scene::new(
+            SCENE_PT,
+            PX_PER_PT,
+            vec![Group::container(
+                vec![
+                    button_element(Appearance::Dark, neutral_rect),
+                    prominent_element(near_blue_rect),
+                ],
+                CONTAINER_UNION_SMOOTHING,
+            )],
+        ),
+    );
+    near_standalone.save("material_bleed_near_dark_standalone");
+    assert_agrees(
+        "material group bleed within 36 pt",
+        &near_img,
+        &near_standalone,
+    );
+
+    // Facing inner edge of the neutral button (1.5 pt inside right end) vs
+    // opposite inner edge (1.5 pt inside left end).
+    let y = neutral_rect[3].mul_add(0.5, neutral_rect[1]);
+    let facing_x = neutral_rect[0] + neutral_rect[2] - 1.5;
+    let opposite_x = neutral_rect[0] + 1.5;
+
+    let iso_facing = probe_px(&iso_img, facing_x, y);
+    let near_facing = probe_px(&near_img, facing_x, y);
+    let near_opposite = probe_px(&near_img, opposite_x, y);
+    let iso_opposite = probe_px(&iso_img, opposite_x, y);
+    let far_facing = probe_px(&far_img, facing_x, y);
+
+    assert!(
+        near_facing[2] > iso_facing[2] + 0.02
+            && (near_facing[2] - near_facing[0]) > (iso_facing[2] - iso_facing[0]) + 0.02,
+        "prominent blue sibling within 36 pt must illuminate facing edge \
+         (near {near_facing:?} vs isolated {iso_facing:?})",
+    );
+    assert!(
+        (near_facing[2] - iso_facing[2]) > (near_opposite[2] - iso_opposite[2]),
+        "bleed must decay toward the opposite edge (facing {near_facing:?} vs {iso_facing:?}; \
+         opposite {near_opposite:?} vs {iso_opposite:?})",
+    );
+    for c in 0..3 {
+        assert!(
+            (far_facing[c] - iso_facing[c]).abs() <= 1.0 / 255.0 + 1e-4,
+            "sibling beyond 36 pt must emit zero bleed (far {far_facing:?} vs isolated {iso_facing:?})",
+        );
+    }
+}
+
 /// A glass button of `size` whose label is a transparent `label` pt
 /// block, so the frame is the label plus the size's insets and nothing
 /// else draws over the chrome, with its top-left corner at `(x, y)`.
