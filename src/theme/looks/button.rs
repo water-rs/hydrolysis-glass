@@ -2,10 +2,12 @@
 //! capsule that grows and washes while pressed, and the plain, link and
 //! borderless styles, which draw no body.
 
+use cherenkov_record::kurbo::{Rect as KRect, Vec2};
 use cherenkov_record::{BlendSpace, Draw as _, Group, Paint, WorkingColor};
 use hydrolysis_style::theme::{
-    Backdrop, ButtonLook, ButtonSpec, Chrome, ContentEffect, CornerShape, Custom, Driven,
-    FocusIndicator, Inputs, Label, PressFeedback, StateLayer, Surface as ChromeSurface,
+    Backdrop, ButtonLook, ButtonSpec, Chrome, ContentEffect, CornerShape, Custom, DragDeformation,
+    Driven, FocusIndicator, Inputs, Label, PressFeedback, StateLayer, Surface as ChromeSurface,
+    Transition,
 };
 use waterui::color::Color;
 use waterui::interaction::InteractionState;
@@ -15,6 +17,8 @@ use waterui::theme::Tint;
 use waterui_controls::button::ButtonStyle;
 use waterui_core::Environment;
 
+use crate::dynamics::{self, PRESS_MAX_HALF_AXIS_GROWTH};
+use crate::material::geometry::Shape;
 use crate::material::recipe::{Family, Recipe};
 
 use super::super::button::{BorderShape, GROWTH_PER_PRESS, Kind, SizeGroup};
@@ -24,7 +28,7 @@ use super::super::surfaces::{self, Press, Wash};
 use super::super::{Glass, button};
 use super::{
     DISABLED_CONTENT_ALPHA, control_motion, faded, hit_region, is_disabled, paint, rgba_of,
-    state_chrome,
+    spring_animation, state_chrome,
 };
 
 /// The look of a button in `spec`.
@@ -129,6 +133,49 @@ fn bordered_chrome(glass: &Glass) -> Chrome {
     .hit(hit_region())
 }
 
+/// Elastic jelly drag deformation (§6–7): rubber-band lag (`<= 12 pt`) and
+/// area-preserving stretch (`lambda_par in [0.86, 1.16]`).
+fn jelly_drag() -> DragDeformation {
+    DragDeformation::new()
+        .lag(12.0, 24.0)
+        .displacement_stretch(0.14, 48.0)
+        .velocity_stretch(0.12, 600.0)
+        .stretch_bounds(0.86, 1.16)
+        .active_motion(spring_animation(dynamics::Spring::JELLY_DRAG_ACTIVE))
+}
+
+/// Applies active press growth (`<= 10 pt` half-axis cap) and jelly drag
+/// deformation to a wash capsule.
+fn wash_silhouette(frame: KRect, group: SizeGroup, inputs: &Inputs<'_, ()>) -> Shape {
+    let idle = button::shape(surfaces::rect(frame), BorderShape::Capsule, group);
+    let pressed = inputs.state.contains(InteractionState::PRESSED);
+    if !pressed {
+        return idle;
+    }
+    let mut shape = surfaces::grown(idle, 1.0);
+    if inputs.drag.is_some() || inputs.velocity.is_some() {
+        let drag = inputs.drag.unwrap_or(Vec2::ZERO);
+        let velocity = inputs.velocity.unwrap_or(Vec2::ZERO);
+        let deform = jelly_drag();
+        let rect = KRect::new(
+            f64::from(shape.rect.x),
+            f64::from(shape.rect.y),
+            f64::from(shape.rect.x + shape.rect.w),
+            f64::from(shape.rect.y + shape.rect.h),
+        );
+        let deformed = deform.deformed_rect(rect, drag, velocity);
+        let (sx, sy) = deform.axis_scales(drag, velocity);
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "axis stretch scale is within [0.86, 1.16], far inside f32"
+        )]
+        let r_scale = sx.min(sy) as f32;
+        shape.rect = surfaces::rect(deformed);
+        shape.radii = shape.radii.map(|r| r * r_scale);
+    }
+    shape
+}
+
 /// The chrome of a glass or prominent button: the glass body as a backdrop
 /// fill, the press growth, and the wash as a part over the body.
 fn glass_chrome(
@@ -180,22 +227,11 @@ fn glass_chrome(
     // width is the press progress's, so it is the gradient of a fully
     // pressed button while pressed and of none at rest.
     let wash_shape = Driven::new(move |inputs: &Inputs<'_, ()>| {
-        let idle = button::shape(surfaces::rect(inputs.frame), BorderShape::Capsule, group);
-        let shape = if inputs.state.contains(InteractionState::PRESSED) {
-            surfaces::grown(idle, 1.0)
-        } else {
-            idle
-        };
-        materials::shape_data(&shape)
+        materials::shape_data(&wash_silhouette(inputs.frame, group, inputs))
     });
     let wash_paint = Driven::new(move |inputs: &Inputs<'_, ()>| {
         let pressed = inputs.state.contains(InteractionState::PRESSED);
-        let idle = button::shape(surfaces::rect(inputs.frame), BorderShape::Capsule, group);
-        let shape = if pressed {
-            surfaces::grown(idle, 1.0)
-        } else {
-            idle
-        };
+        let shape = wash_silhouette(inputs.frame, group, inputs);
         #[expect(
             clippy::cast_possible_truncation,
             reason = "a touch coordinate is display-resolution and far inside f32"
@@ -233,15 +269,24 @@ fn glass_chrome(
         materials::content_effect(&surface.element.recipe)
     });
 
+    let mut motion = control_motion();
+    motion.drag = Transition::new(
+        spring_animation(dynamics::Spring::JELLY_DRAG_ACTIVE),
+        spring_animation(dynamics::Spring::JELLY_DRAG_RELEASE),
+    );
+
     Chrome::new(
         ChromeSurface::new(CornerShape::full().smoothing(CONTINUOUS_SMOOTHING), body)
             .content_effect(ContentEffect::new(GLASS_CONTENT_SHADER, content)),
         // The glass body has no state layer: a hover or a focus shows
         // nothing, and a press shows the wash.
         StateLayer::new(Glass::color(palette.state_layer)),
-        PressFeedback::new().scale(f64::from(GROWTH_PER_PRESS)),
+        PressFeedback::new()
+            .scale(f64::from(GROWTH_PER_PRESS))
+            .max_growth(f64::from(PRESS_MAX_HALF_AXIS_GROWTH))
+            .drag_deformation(jelly_drag()),
         FocusIndicator::Tint,
-        control_motion(),
+        motion,
     )
     .hit(hit_region())
     .custom(wash)

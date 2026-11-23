@@ -10,42 +10,35 @@ use hydrolysis_style::theme::{
     Backdrop, CheckboxLook, Custom, Driven, HitRegion, Inputs, Motion, SwitchDrag, SwitchLook,
     ToggleBackdrop, ToggleControl, ToggleSpec, Transition, ValueMotion,
 };
-use waterui::animation::Animation;
 use waterui::interaction::InteractionState;
 use waterui::theme::Tint;
 use waterui_core::Environment;
 
 use super::super::Glass;
-use super::super::button::Spring;
 use super::super::chrome::{FOCUS_RING_GAP, FOCUS_RING_WIDTH};
 use super::super::materials::{self, GLASS_SHADER};
 use super::super::palette::{alpha, working};
-use super::super::switch::{
-    self, DISABLED_OPACITY, FADE_OFF_OMEGA, FADE_ON_OMEGA, FRAME, KNOB_FILL, TOGGLE_SPRING, TRAVEL,
-};
-use super::{is_disabled, paint, state_layer_opacity};
+use super::super::switch::{self, DISABLED_OPACITY, FRAME, KNOB_FILL, TRAVEL};
+use super::{held, is_disabled, paint, spring_animation, state_layer_opacity, stretch_along_axis};
+use crate::dynamics;
 
-/// The toggle motion of §8.2: the toggle spring moves a value and eases
-/// hover, focus and drag; the press and release springs of §8.1 hold the
-/// press.
+/// The toggle motion (§6): the switch knob spring drives hover/focus/value,
+/// press/release springs hold the lens, and jelly drag springs govern drag.
 fn motion() -> Motion {
-    let toggle = Transition::symmetric(TOGGLE_SPRING.physical());
+    let toggle = Transition::symmetric(spring_animation(dynamics::Spring::SWITCH_KNOB));
     Motion {
         hover: toggle.clone(),
-        focus: toggle.clone(),
-        press: Transition::new(Spring::PRESS.physical(), Spring::RELEASE.physical()),
-        drag: toggle,
-        value: ValueMotion::Own(TOGGLE_SPRING.physical()),
+        focus: toggle,
+        press: Transition::new(
+            spring_animation(dynamics::Spring::BUTTON_PRESS),
+            spring_animation(dynamics::Spring::BUTTON_RELEASE),
+        ),
+        drag: Transition::new(
+            spring_animation(dynamics::Spring::JELLY_DRAG_ACTIVE),
+            spring_animation(dynamics::Spring::JELLY_DRAG_RELEASE),
+        ),
+        value: ValueMotion::Own(spring_animation(dynamics::Spring::SWITCH_KNOB)),
     }
-}
-
-/// A critically damped spring of natural frequency `omega`.
-fn critical(omega: f32) -> Animation {
-    Spring {
-        omega0: omega,
-        zeta: 1.0,
-    }
-    .physical()
 }
 
 /// The switch's touch target: 44 pt at least, a 10 pt slop for a waiting
@@ -71,8 +64,8 @@ pub(in super::super) fn switch(glass: &Glass, spec: &ToggleSpec, env: &Environme
     // The on fill is drawn over the off fill at the track fade's opacity,
     // which turns on by a slower spring than it turns off by.
     let (fade_in, fade_out) = (
-        ValueMotion::Own(critical(FADE_ON_OMEGA)),
-        ValueMotion::Own(critical(FADE_OFF_OMEGA)),
+        ValueMotion::Own(spring_animation(dynamics::Spring::SWITCH_TRACK_ON)),
+        ValueMotion::Own(spring_animation(dynamics::Spring::SWITCH_TRACK_OFF)),
     );
     let on = Driven::follow(
         tint,
@@ -105,32 +98,32 @@ pub(in super::super) fn switch(glass: &Glass, spec: &ToggleSpec, env: &Environme
         );
     });
 
-    // The knob at rest on the track, growing about its centre while held.
+    // The knob at rest on the track, growing about its centre while held
+    // and stretching horizontally with velocity.
     let knob = move || {
         Driven::new(move |inputs: &Inputs<'_, bool>| {
             let q = drag.progress(*inputs.value, inputs.drag);
-            let held = f64::from(u8::from(inputs.state.contains(InteractionState::PRESSED)));
+            let active = f64::from(u8::from(held(inputs.state)));
             let track = switch::track_rect(inputs.frame, direction);
-            switch::capsule(switch::knob_rect(track, direction, q, held))
+            let rect = switch::knob_rect(track, direction, q, active);
+            switch::capsule(stretch_along_axis(rect, inputs.velocity, false))
         })
     };
     let lens = Driven::new(move |inputs: &Inputs<'_, ()>| -> MaterialEffect {
-        switch::lens_effect(
-            appearance,
-            translucency,
-            inputs.state.contains(InteractionState::PRESSED),
-        )
+        switch::lens_effect(appearance, translucency, held(inputs.state))
     });
     let backdrop = Backdrop::new(
         GLASS_SHADER,
         materials::capture_class(false, switch::lens_capture_scale(appearance, translucency)),
         lens,
     );
-    // The knob's white is opaque at rest and clears as the lens takes over.
+    // The knob's white is opaque at rest and clears along smoothstep(0.05, 0.55)
+    // as the refractive lens takes over.
     let white = Driven::new(|inputs: &Inputs<'_, bool>| {
-        let held = f32::from(u8::from(inputs.state.contains(InteractionState::PRESSED)));
-        paint(alpha(KNOB_FILL, 1.0 - held))
-    });
+        let active = f32::from(u8::from(held(inputs.state)));
+        paint(alpha(KNOB_FILL, 1.0 - active))
+    })
+    .smoothstep_window(0.05, 0.55);
     let fill = Custom::<bool, _>::new(
         (knob(), white),
         |recorder, _frame, (shape, white): (Live<ShapeData>, Live<Paint>)| {

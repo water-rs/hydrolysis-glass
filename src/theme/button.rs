@@ -191,6 +191,19 @@ pub const fn growth(p: f32) -> f32 {
     GROWTH_PER_PRESS.mul_add(p, 1.0)
 }
 
+/// The uniform scale of a `width` × `height` button at press progress `p`,
+/// capped so neither half-axis grows or shrinks by more than
+/// [`crate::dynamics::PRESS_MAX_HALF_AXIS_GROWTH`].
+#[must_use]
+pub fn growth_for(width: f32, height: f32, p: f32) -> f32 {
+    let half_max = 0.5 * width.max(height);
+    if !half_max.is_finite() || half_max <= 0.0 {
+        return growth(p);
+    }
+    let limit = crate::dynamics::PRESS_MAX_HALF_AXIS_GROWTH / half_max;
+    (GROWTH_PER_PRESS * p).clamp(-limit, limit) + 1.0
+}
+
 /// Peak alpha of the press wash at full press **[measured]**.
 pub const WASH_ALPHA: f32 = 0.30;
 /// How much the wash fades toward the ends of the button
@@ -220,14 +233,14 @@ pub struct Spring {
 }
 
 impl Spring {
-    /// The spring a touch-down drives `p` toward 1 with.
+    /// The spring a touch-down drives `p` toward 1 with (`T_r = 0.223 s, ζ = 0.650`).
     pub const PRESS: Self = Self {
-        omega0: 28.2,
+        omega0: 28.175_71,
         zeta: 0.65,
     };
-    /// The spring a release or cancellation drives `p` toward 0 with.
+    /// The spring a release or cancellation drives `p` toward 0 with (`T_r = 0.398 s, ζ = 0.385`).
     pub const RELEASE: Self = Self {
-        omega0: 15.8,
+        omega0: 15.786_9,
         zeta: 0.385,
     };
 
