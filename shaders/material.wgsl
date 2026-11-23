@@ -434,7 +434,6 @@ fn material_fragment(v: FullscreenOut) -> @location(0) vec4<f32> {
     let backdrop = sample_backdrop(p);
 
     let is_light = r.ambient_misc.z > 0.5;
-    let is_light_regular = is_light && r.rim.z > 0.0;
 
     // §4.10: the cast shadow — plain black, no backdrop sample, at the
     // shifted field.
@@ -445,22 +444,13 @@ fn material_fragment(v: FullscreenOut) -> @location(0) vec4<f32> {
             * falloff(4.0 * sat(0.25 * f_s.d / r.cast_a.z + 0.5) - 2.0);
     }
 
-    // Light-mode 0.5 pt exterior hairline outside the regular silhouette.
-    let hairline_alpha = select(
-        0.0,
-        0.09 * sat(1.0 - 2.0 * f.d),
-        is_light_regular && f.d > 0.0 && f.d <= 0.5,
-    );
-    let ext_alpha = 1.0 - (1.0 - cast_alpha) * (1.0 - hairline_alpha);
-
     // Past the element's exterior span the pass returns the backdrop
-    // (§4.11); the shadow or hairline can still cover the pixel.
-    if f.d > r.cast_b.y && ext_alpha < 1e-4 {
+    // (§4.11); the shadow can still cover the pixel.
+    if f.d > r.cast_b.y && cast_alpha < 1e-4 {
         return backdrop;
     }
 
-    let backdrop_hair = vec4<f32>(backdrop.rgb * (1.0 - hairline_alpha), backdrop.a);
-    var outc = backdrop_hair;
+    var outc = backdrop;
     if cov > 0.0 {
         let n = f.n / max(length(f.n), 1e-4);
         var C = glass_body(r, p, f.d, n, cov, uni.scene.z);
@@ -476,24 +466,19 @@ fn material_fragment(v: FullscreenOut) -> @location(0) vec4<f32> {
         let k_add = select(select(0.045, 0.025, is_light), 0.038, is_prominent);
         let light = highlight_light(r, f.d, n, cov);
         let tint = tint_alphas(r, f.d, cov);
-        let fill = select(
-            r.tint.rgb,
-            prominent_tint_rgb(r.tint.rgb, C, is_light),
-            is_prominent,
-        );
+        let fill = r.tint.rgb;
         let pre = select(C, add_tint(C, fill, tint), is_prominent);
         let lit = add_highlight(pre, light, k_mul, k_add);
         C = select(add_tint(lit, fill, tint), lit, is_prominent);
         let interior = vec4<f32>(C, 1.0);
         let shadow = vec4<f32>(0.0, 0.0, 0.0, cast_alpha);
         let res = mix(shadow, interior, cov);
-        outc = res + backdrop_hair * (1.0 - res.a);
+        outc = res + backdrop * (1.0 - res.a);
     } else {
         // Outside the silhouette: the cast shadow, premultiplied black at
-        // `cast_alpha`, source-over the hairline-darkened backdrop — it
-        // darkens the colour and keeps the backdrop's coverage.
+        // `cast_alpha`, source-over the backdrop.
         let shadow = vec4<f32>(0.0, 0.0, 0.0, cast_alpha);
-        outc = shadow + backdrop_hair * (1.0 - cast_alpha);
+        outc = shadow + backdrop * (1.0 - cast_alpha);
     }
     return outc;
 }

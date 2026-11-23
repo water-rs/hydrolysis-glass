@@ -440,11 +440,7 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
     // evaluated here, as the standalone did on its field texture.
     let cov = gsat(0.5 - px.sdf / fw);
     if cov <= 0.0 {
-        let is_light_reg = select(0.0, 1.0, params[7].w > 0.5)
-            * select(0.0, 1.0, params[1].z > 0.0);
-        let hairline_alpha = is_light_reg * 0.09 * gsat(1.0 - 2.0 * d);
-        let ext_alpha = 1.0 - (1.0 - cast_alpha) * (1.0 - hairline_alpha);
-        return vec4<f32>(0.0, 0.0, 0.0, ext_alpha);
+        return vec4<f32>(0.0, 0.0, 0.0, cast_alpha);
     }
 
     // §2: the owning member's ellipse bend, applied to the field normal
@@ -470,11 +466,7 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
     let k_add = select(select(0.045, 0.025, is_light), 0.038, is_prominent);
     let light = highlight_light(d, n, cov, params[12].w);
     let tint = tint_alphas(params[13].a, params[15].w, d, cov);
-    let fill = select(
-        params[13].rgb,
-        prominent_tint_rgb(params[13].rgb, c, is_light),
-        is_prominent,
-    );
+    let fill = params[13].rgb;
     let over = add_tint(add_highlight(c, light, k_mul, k_add), fill, tint);
     let under = add_highlight(add_tint(c, fill, tint), light, k_mul, k_add);
     c = select(over, under, is_prominent);
@@ -486,10 +478,7 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
     // divide is safe — because `move_space` round-trips
     // `SPACE_SRGB_TO_P3`/`space_srgb_decode` back to that straight before
     // blending.
-    let is_light_reg = select(0.0, 1.0, is_light) * select(0.0, 1.0, params[1].z > 0.0);
-    let hairline_alpha = is_light_reg * select(0.0, 0.09, d > 0.0) * gsat(1.0 - 2.0 * d);
-    let ext_alpha = 1.0 - (1.0 - cast_alpha) * (1.0 - hairline_alpha);
-    let a = cov + (1.0 - cov) * ext_alpha;
+    let a = cov + (1.0 - cov) * cast_alpha;
     let straight = SPACE_SRGB_TO_P3 * space_srgb_decode(c * (cov / a));
     return vec4<f32>(straight * a, a);
 }
