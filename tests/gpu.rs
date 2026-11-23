@@ -319,3 +319,157 @@ fn sheet_scene() {
         }
     }
 }
+
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "scene coordinates are small non-negative points inside the test canvas"
+)]
+fn sample_pt(img: &Image, x_pt: f32, y_pt: f32) -> [f32; 4] {
+    let x = (x_pt * PX_PER_PT).round() as u32;
+    let y = (y_pt * PX_PER_PT).round() as u32;
+    img.pixels[(y * img.width + x) as usize]
+}
+
+#[test]
+fn wide_gamut_display_p3_preserves_chroma() {
+    use hydrolysis_glass::material::geometry::Rect;
+    use hydrolysis_glass::material::recipe::Tint;
+
+    let mut h = Harness::new();
+    let shape = Shape::capsule(Rect::new(120.0, 200.0, 140.0, 44.0));
+    let mut elem = element(
+        shape,
+        Family::Regular,
+        Appearance::Dark,
+        Translucency::default(),
+    );
+    elem.recipe = elem.recipe.with_tint(Tint::flat([1.0, 0.0, 0.0], 1.0));
+    let scene = Scene::new(SCENE_PT, PX_PER_PT, vec![Group::single(elem)]);
+    let img = h.render(Backdrop::Grey, &scene);
+    let px = sample_pt(&img, 190.0, 222.0);
+    assert!(
+        px[0] > 0.85 && px[1] < 0.25 && px[2] < 0.25,
+        "pure Display P3 red prominent tint preserves saturated chroma without sRGB clipping: {px:?}"
+    );
+}
+
+#[test]
+fn hdr_specular_rim_and_press_boost_exceed_sdr_peak() {
+    use hydrolysis_glass::material::geometry::Rect;
+    use hydrolysis_glass::material::recipe::Tint;
+
+    let mut h = Harness::new();
+    let bounds = Rect::new(100.0, 200.0, 160.0, 44.0);
+    let mut idle_elem = element(
+        Shape::capsule(bounds),
+        Family::Regular,
+        Appearance::Dark,
+        Translucency::default(),
+    );
+    // White prominent fill brings the upper specular rim right up to SDR white
+    // at rest so HDR press boost cleanly pushes past 1.0.
+    idle_elem.recipe = idle_elem
+        .recipe
+        .with_tint(Tint::flat([0.92, 0.92, 0.92], 1.0));
+
+    let touch = [180.0, 201.0];
+    let mut pressed_elem = idle_elem;
+    pressed_elem.recipe = pressed_elem.recipe.with_press(1.0, Some(touch));
+
+    let mut idle_scene = Scene::new(SCENE_PT, PX_PER_PT, vec![Group::single(idle_elem)]);
+    idle_scene.display_peak = 2.0;
+    let mut pressed_scene = Scene::new(SCENE_PT, PX_PER_PT, vec![Group::single(pressed_elem)]);
+    pressed_scene.display_peak = 2.0;
+
+    let idle_img = h.render(Backdrop::White, &idle_scene);
+    let pressed_img = h.render(Backdrop::White, &pressed_scene);
+
+    // Probe top rim 1 px inside top edge (y = 200.05 -> px 600, d = -0.17 pt inside 1.0 pt rim)
+    // and bottom rim 1 px inside bottom edge (y = 243.8 -> px 731, d = -0.17 pt).
+    let idle_near = sample_pt(&idle_img, 180.0, 200.05);
+    let pressed_near = sample_pt(&pressed_img, 180.0, 200.05);
+    let idle_far = sample_pt(&idle_img, 180.0, 243.8);
+    let pressed_far = sample_pt(&pressed_img, 180.0, 243.8);
+
+    assert!(
+        pressed_near[0] > 1.0 && pressed_near[1] > 1.0 && pressed_near[2] > 1.0,
+        "HDR pressed specular rim must exceed SDR 1.0 (got {pressed_near:?})"
+    );
+    assert!(
+        pressed_near[0] > idle_near[0] + 0.01,
+        "press boost must brighten rim near touch: pressed {pressed_near:?} vs idle {idle_near:?}"
+    );
+    assert!(
+        (pressed_near[0] - idle_near[0]) > (pressed_far[0] - idle_far[0]),
+        "touch-point localization must boost rim more near touch ({idle_near:?} -> {pressed_near:?}) than far ({idle_far:?} -> {pressed_far:?})",
+    );
+}
+
+#[test]
+fn cross_element_bleed_illuminates_adjacent_within_36pt() {
+    use hydrolysis_glass::material::geometry::Rect;
+    use hydrolysis_glass::material::recipe::Tint;
+
+    let mut h = Harness::new();
+    let neutral = element(
+        Shape::capsule(Rect::new(80.0, 200.0, 100.0, 44.0)),
+        Family::Regular,
+        Appearance::Dark,
+        Translucency::default(),
+    );
+    let blue_emitter = |x: f32| {
+        let mut e = element(
+            Shape::capsule(Rect::new(x, 200.0, 100.0, 44.0)),
+            Family::Regular,
+            Appearance::Dark,
+            Translucency::default(),
+        );
+        e.recipe = e.recipe.with_tint(Tint::flat([0.05, 0.35, 1.0], 1.0));
+        e
+    };
+
+    let isolated_scene = Scene::new(SCENE_PT, PX_PER_PT, vec![Group::single(neutral)]);
+    // Sibling spaced 8 pt away (< 36 pt bleed radius).
+    let near_scene = Scene::new(
+        SCENE_PT,
+        PX_PER_PT,
+        vec![Group::container(vec![neutral, blue_emitter(188.0)], 8.0)],
+    );
+    // Sibling spaced 48 pt away (> 36 pt bleed radius).
+    let far_scene = Scene::new(
+        SCENE_PT,
+        PX_PER_PT,
+        vec![Group::container(vec![neutral, blue_emitter(228.0)], 8.0)],
+    );
+
+    let isolated = h.render(Backdrop::Grey, &isolated_scene);
+    let near = h.render(Backdrop::Grey, &near_scene);
+    let far = h.render(Backdrop::Grey, &far_scene);
+
+    // Facing inner edge of neutral capsule (right cap at x = 180, probe at x = 178.5, y = 222.0)
+    // vs opposite inner edge (left cap at x = 80, probe at x = 81.5, y = 222.0).
+    let iso_facing = sample_pt(&isolated, 178.5, 222.0);
+    let near_facing = sample_pt(&near, 178.5, 222.0);
+    let near_opposite = sample_pt(&near, 81.5, 222.0);
+    let iso_opposite = sample_pt(&isolated, 81.5, 222.0);
+    let far_facing = sample_pt(&far, 178.5, 222.0);
+
+    assert!(
+        near_facing[2] > iso_facing[2] + 0.02
+            && (near_facing[2] - near_facing[0]) > (iso_facing[2] - iso_facing[0]) + 0.02,
+        "blue prominent sibling within 36 pt must illuminate facing edge with blue bleed: \
+         near {near_facing:?} vs isolated {iso_facing:?}"
+    );
+    assert!(
+        (near_facing[2] - iso_facing[2]) > (near_opposite[2] - iso_opposite[2]),
+        "bleed must be stronger on facing edge ({near_facing:?} vs {iso_facing:?}) \
+         than opposite edge ({near_opposite:?} vs {iso_opposite:?})"
+    );
+    for c in 0..3 {
+        assert!(
+            (far_facing[c] - iso_facing[c]).abs() < 1e-3,
+            "sibling beyond 36 pt must emit zero bleed: far {far_facing:?} vs isolated {iso_facing:?}"
+        );
+    }
+}
