@@ -2856,3 +2856,99 @@ fn menu_popup_scene() {
         app.export(&format!("menu_popup_{name}"));
     }
 }
+
+#[test]
+fn content_dispersion_refracts_and_fringes_glass_content() {
+    use waterui::layout::UnitPoint;
+
+    let mut app = GlassApp::sized(
+        || {
+            let white = |w: f32, h: f32| Color::new(Srgb::new(1.0, 1.0, 1.0)).width(w).height(h);
+            let clear = |w: f32, h: f32| {
+                Color::new(Srgb::new(0.0, 0.0, 0.0))
+                    .opacity(0.0)
+                    .width(w)
+                    .height(h)
+            };
+            let card = absolute((
+                clear(240.0, 120.0),
+                white(80.0, 10.0).position_anchor(UnitPoint::TOP_LEADING, 80.0, 0.0),
+                white(80.0, 40.0).position_anchor(UnitPoint::TOP_LEADING, 80.0, 62.0),
+            ))
+            .width(240.0)
+            .height(120.0)
+            .background(WaterGlass::regular())
+            .position_anchor(UnitPoint::TOP_LEADING, 40.0, 40.0);
+            let glass_btn = button(Label::new("Glass", move || white(120.0, 60.0)))
+                .style(ButtonStyle::Glass)
+                .position_anchor(UnitPoint::TOP_LEADING, 40.0, 176.0);
+            absolute((backdrop_view(Backdrop::Black), card, glass_btn))
+        },
+        theme(Appearance::Dark),
+        [320.0, 272.0],
+    );
+    app.settle();
+    let img = app.export("content_dispersion_dark");
+
+    // 1. Glass background: 1.5 pt edge fade at d = -0.25 vs interior at d = -4.0.
+    let faded_edge = probe_px(&img, 160.0, 40.25);
+    let band_interior = probe_px(&img, 160.0, 44.0);
+    assert!(
+        band_interior[0] > 0.85 && band_interior[1] > 0.85 && band_interior[2] > 0.85,
+        "interior white bar should remain bright, got {band_interior:?}"
+    );
+    assert!(
+        faded_edge[0] < band_interior[0] * 0.5,
+        "1.5 pt edge fade must attenuate opacity near silhouette: edge={faded_edge:?}, interior={band_interior:?}"
+    );
+
+    // 2. Outward meniscus displacement shifts the y = 50.0 bar edge past 50.0,
+    // with the R channel reaching farthest at y = 50.5.
+    let refracted = probe_px(&img, 160.0, 50.25);
+    assert!(
+        refracted[0] > 0.6 && refracted[1] > 0.35,
+        "expected outward meniscus refraction at y=50.25 below y=50.0 bar edge, got {refracted:?}"
+    );
+    let fringe = probe_px(&img, 160.0, 50.5);
+    assert!(
+        fringe[0] > fringe[1] && fringe[1] > fringe[2] && fringe[0] - fringe[2] > 0.2,
+        "expected warm R > G > B chromatic dispersion fringe at y=50.5, got {fringe:?}"
+    );
+
+    // 3. Neutral unshifted interior far from the rim (d = -45).
+    let flat_center = probe_px(&img, 160.0, 115.0);
+    assert!(
+        flat_center[0] > 0.9 && (flat_center[0] - flat_center[2]).abs() < 0.02,
+        "interior outside meniscus should stay neutral white, got {flat_center:?}"
+    );
+
+    // 4. Chromatic dispersion produces both cool (B > R) and warm (R > B) fringes
+    // across the top and bottom edges of the meniscus bar.
+    let mut max_warm = 0.0_f32;
+    let mut max_cool = 0.0_f32;
+    for step in 0..=40_u8 {
+        let off = f32::from(step) * 0.1;
+        let cool_px = probe_px(&img, 160.0, f32::mul_add(off, 0.6, 40.2));
+        max_cool = max_cool.max(cool_px[2] - cool_px[0]);
+        let warm_px = probe_px(&img, 160.0, f32::mul_add(off, 0.75, 49.0));
+        max_warm = max_warm.max(warm_px[0] - warm_px[2]);
+    }
+    assert!(
+        max_warm > 0.05 && max_cool > 0.05,
+        "expected chromatic fringes across glass background edges: max_warm={max_warm}, max_cool={max_cool}"
+    );
+
+    // 5. Mounted ButtonStyle::Glass also applies content dispersion to its label subtree.
+    let mut btn_peak = 0.0_f32;
+    let mut btn_fringe = 0.0_f32;
+    for step in 0..=240_u8 {
+        let y = f32::mul_add(f32::from(step), 0.35, 176.0);
+        let px = probe_px(&img, 110.0, y);
+        btn_peak = btn_peak.max(px[0].min(px[1]).min(px[2]));
+        btn_fringe = btn_fringe.max((px[0] - px[2]).abs());
+    }
+    assert!(
+        btn_peak > 0.85 && btn_fringe > 0.05,
+        "expected bright button content and chromatic dispersion fringe on ButtonStyle::Glass: peak={btn_peak}, fringe={btn_fringe}"
+    );
+}

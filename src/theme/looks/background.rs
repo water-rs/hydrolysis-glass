@@ -2,13 +2,13 @@
 //! in the outline of the `Glass`'s shape, which Hydrolysis supplies.
 
 use cherenkov_record::WorkingColor;
-use hydrolysis_style::theme::{Backdrop, Driven, GlassLook, Inputs};
+use hydrolysis_style::theme::{Backdrop, ContentEffect, Driven, GlassLook, Inputs};
 use waterui::background::{Glass as GlassBackground, GlassStyle};
 use waterui_core::Environment;
 
 use crate::material::recipe::{Family, Recipe};
 
-use super::super::materials::{self, GLASS_SHADER};
+use super::super::materials::{self, GLASS_CONTENT_SHADER, GLASS_SHADER};
 use super::super::{Glass, surfaces};
 use super::{control_motion, rgba_of};
 
@@ -47,6 +47,11 @@ pub(in super::super) fn look(
     // scale snaps up to. A member of a `.material_group()` takes the
     // container's class instead.
     let capture = Recipe::for_size(0.0, family, palette.appearance, translucency).capture_scale;
+    let content = Driven::new(move |inputs: &Inputs<'_, ()>| {
+        let recipe =
+            surfaces::background_recipe(&palette, inputs.frame, family, None, translucency);
+        materials::content_effect(&recipe)
+    });
     GlassLook::new(
         Backdrop::new(
             GLASS_SHADER,
@@ -55,4 +60,5 @@ pub(in super::super) fn look(
         ),
         control_motion(),
     )
+    .content_effect(ContentEffect::new(GLASS_CONTENT_SHADER, content))
 }
