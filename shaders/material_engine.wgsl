@@ -6,13 +6,12 @@
 // `BackdropPixel`, `backdrop_sample_level`, `backdrop_field`, the
 // premultiplied return in the capture's colour space — is documented in
 // cherenkov-record/src/backdrop.rs. The capture stores the canvas's
-// space — premultiplied linear P3 — and the glass capture class declares
-// `BlendSpace::SrgbEncoded`, so the engine converts the member's
-// premultiplied result into encoded space and runs the source-over
-// there: the specification's compositing space, exactly what the
-// standalone `material.wgsl` computed. The reads therefore move each
-// sample from linear P3 to the recipe's sRGB-encoded straight working
-// space, and the return moves the premultiplied result back.
+// space — premultiplied linear Display P3 — and the glass capture class
+// declares `BlendSpace::Linear`, so averaging, blending and compositing all
+// stay in native Display P3 without sRGB gamut clipping. Reads inside the
+// material body apply the Display P3 (IEC 61966-2-1) transfer curve directly
+// to `LinearDisplayP3` via `space_srgb_encode` (extended past 1.0 for HDR),
+// and the return decodes directly back via `space_srgb_decode`.
 //
 // The body is the standalone `shaders/material.wgsl` retargeted: field
 // reads are `px.sdf`/`backdrop_field`, every blurred read is
@@ -21,21 +20,21 @@
 // `px.normal` here. The recipe's 23-vec4 layout does not fit the
 // contract's sixteen parameters, so the packing keeps every
 // recipe-varying field and folds the recipe's constant block — the
-// highlight's shared terms and the border correction's measured
-// constants — into shader constants that `theme::materials::uniforms`
+// highlight's shared terms, the border correction's measured constants, and
+// the fixed ramps/mix — into shader constants that `theme::materials::uniforms`
 // asserts (see its packing table).
 //
 // Parameter layout (must match `theme::materials::uniforms`):
 //   p0  shifts          primary_shift, primary_depth, rim_shift, rim_depth
-//   p1  rim             ramp r0, ramp r1, rim mix, blur radius
+//   p1  rim             touch_x, touch_y, rim mix, blur radius
 //   p2  blur_depths     d0..d3
 //   p3  blur_gains      g0..g3
 //   p4  haze            radius, min weight, max weight, mix
-//   p5  limit/misc      luminance limit, grade mix, recipe capture scale, exterior span
+//   p5  limit/misc      luminance limit, press progress, recipe capture scale, exterior span
 //   p6  grade           floor, ceiling, chroma, wash alpha
 //   p7  wash            wash r, g, b, ambient favours light
 //   p8  ambient         shift, depth, blur radius, strength
-//   p9  ambient misc    ramp e0, ramp e1, ambient grade floor, ambient grade ceiling
+//   p9  ambient misc    has_touch (0/1), reserved, ambient grade floor, ambient grade ceiling
 //   p10 ambient/contour ambient grade chroma, contour density, shift, softness
 //   p11 contour/border  contour width, contour clip, border aperture, cast falloff
 //   p12 cast/highlight  cast density, cast gain, channel ceiling, hl aperture
@@ -78,11 +77,10 @@ const BORDER_BAND_WIDTH: f32 = 0.533;
 const BORDER_BAND_OFFSET: f32 = -0.533;
 const BORDER_COLOUR_BIAS: f32 = -0.3;
 
-// ITU-R BT.709 luma; the limit and gate use the measured weights, which
-// differ in the last digit.
-const LUMA_WEIGHTS: vec3<f32> = vec3<f32>(0.2126, 0.7152, 0.0722);
-const LUMA_LIMIT_W: vec3<f32> = vec3<f32>(0.2126, 0.7153, 0.0722);
-const LUMA_GATE_W: vec3<f32> = vec3<f32>(0.2125, 0.7153, 0.0721);
+// Display P3 luminance weights.
+const LUMA_WEIGHTS: vec3<f32> = vec3<f32>(0.22897456, 0.69173852, 0.07928691);
+const LUMA_LIMIT_W: vec3<f32> = vec3<f32>(0.22897456, 0.69173852, 0.07928691);
+const LUMA_GATE_W: vec3<f32> = vec3<f32>(0.22897456, 0.69173852, 0.07928691);
 
 // Named unlike the engine module's own `sat` (which takes a vec3): the
 // user source is appended to the same module, so names may not collide.
@@ -124,11 +122,11 @@ fn glass_unpremultiply(c: vec4<f32>) -> vec3<f32> {
     return s;
 }
 
-// A premultiplied linear-P3 sample to the recipe's straight sRGB-encoded
-// working space. The engine module's own `space_srgb_encode` and
-// `SPACE_P3_TO_SRGB` do the conversion.
+// A premultiplied linear Display P3 sample to the recipe's straight Display
+// P3-encoded working space using the extended IEC 61966-2-1 transfer curve
+// with no sRGB gamut clipping.
 fn glass_work_space(c: vec4<f32>) -> vec3<f32> {
-    return space_srgb_encode(SPACE_P3_TO_SRGB * glass_unpremultiply(c));
+    return space_srgb_encode(glass_unpremultiply(c));
 }
 
 // §3: the quarter-circle lobe, `shift · meniscus(−d; depth)`.
@@ -168,7 +166,7 @@ fn apply_grade(grade: vec3<f32>, c: vec3<f32>) -> vec3<f32> {
     let cr2 = 0.5 + grade.z * (cr - 0.5);
     let r = y2 + 1.5748 * (cr2 - 0.5);
     let b = y2 + 1.8556 * (cb2 - 0.5);
-    let g = (y2 - 0.2126 * r - 0.0722 * b) * (1.0 / 0.7152);
+    let g = (y2 - 0.22897456 * r - 0.07928691 * b) * (1.0 / 0.69173852);
     return vec3<f32>(r, g, b);
 }
 
@@ -252,10 +250,10 @@ fn glass_body(
         c = mix(c1, f, params[4].w);
     }
 
-    // §4.2: the rim sample and the rim-ramp mix; a rim mix of 0 takes no
-    // sample.
+    // §4.2: the rim sample and the rim-ramp mix (folded `rim_ramp = (-1, 0)`);
+    // a rim mix of 0 takes no sample.
     if params[1].z > 0.0 {
-        let rim_weight = params[1].z * gsat((d - params[1].x) / (params[1].y - params[1].x));
+        let rim_weight = params[1].z * gsat(d + 1.0);
         let o2 = lobe_at(d, params[0].w, params[0].z);
         let s_rim = glass_work_space(backdrop_sample_blur(
             p + n * (o2 * u),
@@ -270,16 +268,12 @@ fn glass_body(
     let a = gsat(1.0 - lum * (1.0 - params[5].x));
     c = mix(vec3<f32>(a * lum), a * c, 1.0 + (1.0 - a) * 0.3);
 
-    // §4.6: the grade — matrix, wash, composite by the grade mix.
+    // §4.6: the grade — matrix, wash (`grade_mix = 1.0` folded).
     let graded = apply_grade(params[6].xyz, c);
-    c = mix(
-        c,
-        (1.0 - params[6].w) * graded + params[6].w * params[7].xyz,
-        params[5].y,
-    );
+    c = (1.0 - params[6].w) * graded + params[6].w * params[7].xyz;
 
     // §4.7: the ambient pickup — a sample pushed out past the contour,
-    // graded, gated by the current luma; not clamped.
+    // graded, gated by the current luma (folded `ambient_ramp = (1, 0)`).
     let o_b = lobe_at(d, params[8].y, params[8].x);
     let ambient_sample = apply_grade(
         vec3<f32>(params[9].z, params[9].w, params[10].x),
@@ -290,7 +284,7 @@ fn glass_body(
     );
     let gate = dot(LUMA_GATE_W, c);
     let k = select(1.0 - gate, gate, params[7].w > 0.5);
-    let band = gsat((d - params[9].x) / (params[9].y - params[9].x));
+    let band = gsat(1.0 - d);
     let g = band * k * k;
     let w = params[8].w * g * g;
     c = mix(c, ambient_sample, w);
@@ -360,11 +354,12 @@ fn highlight_light(d: f32, n: vec2<f32>, cov: f32, aperture: f32) -> vec4<f32> {
 }
 
 // Chroma-preserving cubic soft-light composite for the specular rim
-// highlight `light`.
+// highlight `light`, keeping HDR highlights (> 1.0) unclamped.
 fn add_highlight(c: vec3<f32>, light: vec4<f32>, k_mul: f32, k_add: f32) -> vec3<f32> {
-    let soft = min(
-        c * (1.0 + k_mul * light.rgb * (3.0 - 2.0 * c)) + k_add * light.rgb,
-        vec3<f32>(1.0),
+    let c_soft = clamp(c, vec3<f32>(0.0), vec3<f32>(1.0));
+    let soft = max(
+        c * (1.0 + k_mul * light.rgb * (3.0 - 2.0 * c_soft)) + k_add * light.rgb,
+        vec3<f32>(0.0),
     );
     return select(c, soft, light.w > 0.5);
 }
@@ -392,11 +387,8 @@ fn add_tint(c: vec3<f32>, rgb: vec3<f32>, a: vec2<f32>) -> vec3<f32> {
 }
 
 // The entry the group pass calls. Returns premultiplied colour in the
-// capture's storage space — linear P3 — which the member's composite
-// converts into the class's declared blend space (`SrgbEncoded`, the
-// specification's compositing space) and source-overs over the canvas:
-// `move_space(res·cov) + canvas·(1 − res.a)` is the standalone's
-// `res + backdrop·(1 − res.a)` in encoded space.
+// capture's storage space — linear Display P3 — which the member's composite
+// blends in `BlendSpace::Linear` directly onto the linear Display P3 canvas.
 fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32> {
     let u = px.scale;
     let d = px.sdf / u;
@@ -458,7 +450,14 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
         vec2<f32>(0.105, 0.038),
         is_prominent,
     );
-    let light = highlight_light(d, n, cov, params[12].w);
+    let raw_light = highlight_light(d, n, cov, params[12].w);
+    let press_p = max(params[5].y, 0.0);
+    let touch_delta = px.local - params[1].xy;
+    let press_sigma = max(0.35 * params[15].x, 1e-3);
+    let press_boost = 1.0 + 0.35 * press_p * (
+        0.4 + 0.6 * exp(-dot(touch_delta, touch_delta) / (2.0 * press_sigma * press_sigma))
+    );
+    let light = vec4<f32>(raw_light.rgb * press_boost, raw_light.w);
     let tint = tint_alphas(params[13].a, params[15].w, d, cov);
     let y_b = luma(c);
     let prom_w = select(gsat(0.21 * (y_b - 0.16)), 0.40 * (1.0 - y_b), is_light);
@@ -467,17 +466,13 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
     let lit = add_highlight(pre, light, k.x, k.y);
     c = add_tint(lit, params[13].rgb, select(tint, vec2<f32>(0.0), is_prominent));
 
-    // The standalone's `res = mix(shadow, interior, cov)` is the
-    // premultiplied `(c·cov, a)` in encoded space. The member composite
-    // recovers it exactly from a premultiplied linear-P3 return whose
-    // straight is `c·cov/a` — `a ≥ cov > 0` inside this branch, so the
-    // divide is safe — because `move_space` round-trips
-    // `SPACE_SRGB_TO_P3`/`space_srgb_decode` back to that straight before
-    // blending.
+    // Convert Display P3-encoded straight colour directly back to extended
+    // linear Display P3 with no sRGB gamut transform, preserving wide-gamut
+    // primaries and unclamped HDR highlights (> 1.0).
     let is_light_reg = select(0.0, 1.0, is_light) * select(0.0, 1.0, params[1].z > 0.0);
     let hairline_alpha = is_light_reg * select(0.0, 0.09, d > 0.0) * gsat(1.0 - 2.0 * d);
     let ext_alpha = 1.0 - (1.0 - cast_alpha) * (1.0 - hairline_alpha);
     let a = cov + (1.0 - cov) * ext_alpha;
-    let straight = SPACE_SRGB_TO_P3 * space_srgb_decode(c * (cov / a));
+    let straight = space_srgb_decode(c * (cov / a));
     return vec4<f32>(straight * a, a);
 }
