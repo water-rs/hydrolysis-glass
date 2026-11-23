@@ -664,8 +664,24 @@ mod tests {
     }
 
     #[test]
-    fn tabs_look_switches_layout_at_600pt_and_cross_fades_selection() {
-        use hydrolysis_style::theme::{TabItemLayout, ValueMotion};
+    fn light_palette_uses_white_background_and_grouped_surface_polarity() {
+        use waterui::Resolvable as _;
+
+        assert_eq!(Palette::LIGHT.background, [1.0, 1.0, 1.0, 1.0]);
+        assert_eq!(Palette::LIGHT.surface, [0.949, 0.949, 0.969, 1.0]);
+        assert_eq!(Palette::LIGHT.surface_variant, [0.949, 0.949, 0.969, 1.0]);
+
+        let mut env = Environment::new();
+        Glass::light().install_tokens(&mut env);
+        let bg = waterui::theme::color::Background.resolve(&env).snapshot();
+        let surf = waterui::theme::color::Surface.resolve(&env).snapshot();
+        assert!((bg.components[0] - 1.0).abs() < 1e-4 && (bg.components[2] - 1.0).abs() < 1e-4);
+        assert!(surf.components[0] < bg.components[0] && surf.components[2] > surf.components[0]);
+    }
+
+    #[test]
+    fn tabs_look_switches_layout_at_600pt_and_drives_selection_and_press_lens() {
+        use hydrolysis_style::theme::{TabItem, TabItemGeometry, TabItemLayout, ValueMotion};
         use waterui::navigation::tab::NativeTabStyle;
 
         let g = Glass::dark();
@@ -679,13 +695,42 @@ mod tests {
         let horizontal = look.metrics(TabItemLayout::Horizontal);
         assert!((horizontal.bar_height - 48.0).abs() < 1e-9);
         assert!((horizontal.button_horizontal_inset - 16.0).abs() < 1e-9);
-        let ValueMotion::Own(anim) = &look.motion().value else {
-            panic!("expected Own value motion on tab bar highlight");
+        let ValueMotion::Always(anim) = &look.motion().value else {
+            panic!("expected Always value motion on tab bar highlight");
         };
+        assert_eq!(*anim, segmented::SELECTION.physical());
+
+        let bounds = Rect::new(0.0, 0.0, 80.0, 60.0);
+        let item = TabItem {
+            index: 0,
+            count: 2,
+            selected: true,
+            geometry: TabItemGeometry {
+                bounds,
+                icon: None,
+                title: Rect::new(16.0, 20.0, 64.0, 40.0),
+                layout: TabItemLayout::Vertical,
+                placement: NativeTabStyle::TabBar,
+            },
+        };
+        let chrome = look.item_chrome(&item, waterui::reactive::Computed::constant(true));
+        assert_eq!(chrome.press().get_scale(), Some(0.12));
+        let customs = chrome.customs();
+        assert_eq!(customs.len(), 1);
+        let rest_lens =
+            customs[0].realize(&Inputs::at_rest(bounds, InteractionState::empty(), &()));
+        assert_eq!(rest_lens.opacity().expect("lens opacity").snapshot(), 0.0);
+        let pressed_lens =
+            customs[0].realize(&Inputs::at_rest(bounds, InteractionState::PRESSED, &()));
         assert_eq!(
-            *anim,
-            waterui::animation::Animation::ease_out(PRESS_DURATION)
+            pressed_lens.opacity().expect("lens opacity").snapshot(),
+            1.0
         );
+        let layered = layered_recorder(|r| {
+            pressed_lens.record(r, bounds);
+        });
+        assert_eq!(layered.runs.len(), 1);
+        assert_eq!(layered.runs[0].material.shader(), materials::GLASS_SHADER);
     }
 
     #[test]

@@ -196,9 +196,12 @@ pub const WASH_ALPHA: f32 = 0.30;
 /// How much the wash fades toward the ends of the button
 /// (`1 − 0.37·u²`) **[measured]**.
 pub const WASH_EDGE_FADE: f32 = 0.37;
+/// Minimum half-width radius of the touch-point wash in points, so compact
+/// buttons keep a smooth radial falloff.
+pub const WASH_MIN_RADIUS: f32 = 40.0;
 
 /// Alpha of the white press wash at press progress `p`, `u` being the
-/// pixel's horizontal distance from the touch over half the grown width,
+/// pixel's horizontal distance from the touch over `max(w_grown / 2, 40)`,
 /// clamped to 1. Zero while `p` is negative.
 #[must_use]
 pub fn wash_alpha(p: f32, u: f32) -> f32 {
