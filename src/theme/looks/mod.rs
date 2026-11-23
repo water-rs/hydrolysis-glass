@@ -50,7 +50,6 @@ use hydrolysis_style::theme::{
     ValueMotion,
 };
 use waterui::animation::Animation;
-use waterui::color::working::to_srgb;
 use waterui::interaction::InteractionState;
 use waterui::text::font::{Font, Footnote};
 
@@ -68,15 +67,27 @@ fn paint(color: Rgba) -> Paint {
     Paint::from(working(color))
 }
 
-/// The encoded sRGB colour and alpha of a working colour, the space the
-/// palette's compositing arithmetic is stated in.
+/// Encodes a linear Display P3 component with the Display P3 transfer curve
+/// without converting gamut primaries.
+fn encode_display_p3(c: f32) -> f32 {
+    if c <= 0.0 {
+        0.0
+    } else if c <= 0.003_130_8 {
+        12.92 * c
+    } else {
+        1.055f32.mul_add(c.powf(1.0 / 2.4), -0.055)
+    }
+}
+
+/// The Display P3-encoded colour and alpha of a working colour, the space
+/// the palette's compositing arithmetic is stated in.
 fn rgba_of(color: WorkingColor) -> Rgba {
-    let encoded = to_srgb(color);
+    let [r, g, b, a] = color.components;
     [
-        encoded.red,
-        encoded.green,
-        encoded.blue,
-        color.components[3],
+        encode_display_p3(r),
+        encode_display_p3(g),
+        encode_display_p3(b),
+        a,
     ]
 }
 

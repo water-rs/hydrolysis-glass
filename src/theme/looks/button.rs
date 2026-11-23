@@ -248,12 +248,9 @@ fn glass_chrome(
     let wash = Custom::<(), _>::new(
         (wash_shape, wash_paint),
         |recorder, _frame, (shape, paint): (_, cherenkov_record::Live<Paint>)| {
-            recorder.group(
-                Group::new().blend_space(BlendSpace::SrgbEncoded),
-                |recorder| {
-                    recorder.fill(shape, paint);
-                },
-            );
+            recorder.group(Group::new().blend_space(BlendSpace::Linear), |recorder| {
+                recorder.fill(shape, paint);
+            });
         },
     );
 
