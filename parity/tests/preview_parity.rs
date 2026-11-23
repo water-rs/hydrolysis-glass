@@ -13,7 +13,7 @@ use waterui_testing::{
 
 const WATER_BIN_ENV: &str = "WATER_BIN";
 const ARTIFACTS_ENV: &str = "WATERUI_TEST_ARTIFACTS_DIR";
-const ASSERT_PARITY_ENV: &str = "WATERUI_ASSERT_APPLE_PARITY";
+const ASSERT_PARITY_ENV: &str = "WATERUI_ASSERT_PARITY";
 const PREVIEW_SCALE: f32 = 2.0;
 
 struct ParityTarget {
@@ -201,7 +201,7 @@ fn run_case(
     ctx: &CaseArtifacts<'_>,
     target: &ParityTarget,
     scheme: &str,
-) -> (CaseReport, String, Option<String>) {
+) -> (CaseReport, Option<String>) {
     let case_name = format!("{}_{scheme}", target.preview_fn);
     let case_dir = ctx.root.join("controls").join(&case_name);
     let reference_rel = format!("controls/{case_name}/00_idle__reference.png");
@@ -214,6 +214,11 @@ fn run_case(
     let (reference, candidate) =
         capture_pair(ctx, target, scheme, &reference_path, &candidate_path);
 
+    let ref_blank = reference.analyze_blank();
+    assert!(
+        !ref_blank.is_blank(),
+        "{case_name}: waterui-apple reference preview rendered blank: {ref_blank:?}"
+    );
     let blank = candidate.analyze_blank();
     assert!(
         !blank.is_blank(),
@@ -231,17 +236,6 @@ fn run_case(
     let failures = ctx.thresholds.evaluate(&metrics);
     let passed = failures.is_empty();
     let failure_line = (!passed).then(|| format!("{case_name}: {}", failures.join("; ")));
-
-    let row = format!(
-        "{:<30} | {:>4}x{:<4} | {:>9.4} | {:>8.4} | {:>10.4} | {:>8.4}",
-        case_name,
-        candidate.width(),
-        candidate.height(),
-        metrics.flip_mean,
-        metrics.flip_p95,
-        metrics.max_block_flip_mean,
-        metrics.max_local_error,
-    );
 
     let case = CaseReport {
         name: case_name,
@@ -266,7 +260,7 @@ fn run_case(
             failures,
         }],
     };
-    (case, row, failure_line)
+    (case, failure_line)
 }
 
 #[test]
@@ -283,14 +277,12 @@ fn ios_vs_glass_preview_parity() {
     };
 
     let mut cases = Vec::with_capacity(TARGETS.len() * 2);
-    let mut table_rows = Vec::with_capacity(TARGETS.len() * 2);
     let mut threshold_failures = Vec::new();
 
     for target in TARGETS {
         for scheme in ["light", "dark"] {
-            let (case, row, failure) = run_case(&ctx, target, scheme);
+            let (case, failure) = run_case(&ctx, target, scheme);
             cases.push(case);
-            table_rows.push(row);
             if let Some(line) = failure {
                 threshold_failures.push(line);
             }
@@ -307,16 +299,6 @@ fn ios_vs_glass_preview_parity() {
     let paths = write_gallery_artifacts(&root, &report).expect("write parity gallery artifacts");
     assert!(paths.report_json.is_file(), "missing report.json");
     assert!(paths.index_html.is_file(), "missing index.html");
-
-    println!("\n=== Preview Parity ({}) ===", paths.index_html.display());
-    println!(
-        "{:<30} | {:<9} | {:>9} | {:>8} | {:>10} | {:>8}",
-        "Case", "Pixels", "FLIP Mean", "FLIP P95", "MaxBlkMean", "MaxLocal"
-    );
-    println!("{:-<90}", "");
-    for row in &table_rows {
-        println!("{row}");
-    }
 
     if env::var_os(ASSERT_PARITY_ENV).is_some_and(|v| v == "1") {
         assert!(

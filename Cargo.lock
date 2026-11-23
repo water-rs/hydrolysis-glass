@@ -1328,7 +1328,6 @@ dependencies = [
  "waterui-core",
  "waterui-form",
  "waterui-graphics",
- "waterui-testing",
  "wgpu",
 ]
 
@@ -4397,19 +4396,6 @@ dependencies = [
  "waterui-graphics",
  "waterui-layout",
  "waterui-macros",
-]
-
-[[package]]
-name = "waterui-testing"
-version = "0.5.1"
-source = "git+https://github.com/water-rs/waterui?branch=main#85bc4fab7e0000c0e3ebdb9c30801473d93d0dce"
-dependencies = [
- "askama",
- "image",
- "rayon",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
 ]
 
 [[package]]

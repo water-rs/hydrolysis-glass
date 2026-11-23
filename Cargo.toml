@@ -52,9 +52,6 @@ pollster = "1.0"
 tracing = "0.1"
 # Writes the verification renders as PNG so a failing property can be looked at.
 image = { version = "0.25.10", default-features = false, features = ["png"] }
-# NVIDIA LDR-FLIP perceptual diff, Magma heatmaps, blank-frame analysis, and HTML
-# gallery emission (`features = ["gallery"]` adds zero UI/GPU dependencies).
-waterui-testing = { version = "0.5.1", default-features = false, features = ["gallery"] }
 
 [lints.rust]
 missing_docs = "warn"
@@ -103,7 +100,6 @@ waterui-locale = { git = "https://github.com/water-rs/waterui", branch = "main" 
 waterui-macros = { git = "https://github.com/water-rs/waterui", branch = "main" }
 waterui-navigation = { git = "https://github.com/water-rs/waterui", branch = "main" }
 waterui-shape = { git = "https://github.com/water-rs/waterui", branch = "main" }
-waterui-testing = { git = "https://github.com/water-rs/waterui", branch = "main" }
 waterui-text = { git = "https://github.com/water-rs/waterui", branch = "main" }
 waterui-url = { git = "https://github.com/water-rs/waterui", branch = "main" }
 waterui-watcher-set = { git = "https://github.com/water-rs/waterui", branch = "main" }

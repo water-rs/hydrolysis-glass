@@ -16,7 +16,7 @@ crate-type = ["lib"]
 dev = ["waterui/dynamic_linking"]
 
 [dependencies]
-hydrolysis-glass = { path = ".." }
+hydrolysis-glass = { path = "..", default-features = false }
 waterui = { default-features = false, features = ["navigation", "picker", "slider", "stepper", "toggle", "text-field"] , git = "https://github.com/water-rs/waterui", rev = "85bc4fab7e0000c0e3ebdb9c30801473d93d0dce" }
 
 [dev-dependencies]
@@ -40,9 +40,6 @@ undocumented_unsafe_blocks = "warn"
 multiple_crate_versions = "allow"
 
 [patch.crates-io]
-cherenkov-shader = { git = "https://github.com/water-rs/waterui", branch = "main" }
-cherenkov-simd = { git = "https://github.com/water-rs/waterui", branch = "main" }
-cherenkov-stroke = { git = "https://github.com/water-rs/waterui", branch = "main" }
 block = { git = "https://github.com/Dicklesworthstone/rust-block", rev = "b39ae859d1ee8e8cb5eef6a516471f1578d26b96" }
 cherenkov = { git = "https://github.com/water-rs/waterui", rev = "85bc4fab7e0000c0e3ebdb9c30801473d93d0dce" }
 cherenkov-cpu = { git = "https://github.com/water-rs/waterui", rev = "85bc4fab7e0000c0e3ebdb9c30801473d93d0dce" }
