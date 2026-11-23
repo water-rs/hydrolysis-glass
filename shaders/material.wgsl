@@ -4,8 +4,9 @@
 // capture (a full mip chain at the members' shared capture scale) and one
 // recipe per member. Output: the backdrop with the composited glass.
 //
-// Colour math runs on premultiplied sRGB-encoded values (the specification's
-// compositing space), unpremultiplied around the colour operations.
+// Colour math runs on premultiplied Display P3-encoded values (the
+// specification's compositing space), unpremultiplied around the colour
+// operations.
 
 struct Recipe {
     shifts: vec4<f32>,        // primary shift, primary depth, rim shift, rim depth
@@ -20,23 +21,29 @@ struct Recipe {
     ambient_misc: vec4<f32>,  // ramp e0, e1, favours light, -
     ambient_grade: vec4<f32>, // floor, ceiling, chroma, -
     contour: vec4<f32>,       // density, shift, softness, width
-    contour_misc: vec4<f32>,  // clip, -, -, -
+    contour_misc: vec4<f32>,  // clip, touch x, touch y, has touch
     border_a: vec4<f32>,      // strength, bearing, band width, band offset
     border_b: vec4<f32>,      // aperture, colour bias, -, -
     cast_a: vec4<f32>,        // shift x, y, falloff, density
     cast_b: vec4<f32>,        // gain, exterior span, channel ceiling, -
     hl_a: vec4<f32>,          // inner fade, first gain, second gain, aperture
-    hl_b: vec4<f32>,          // first bearing, second bearing, knee, -
+    hl_b: vec4<f32>,          // first bearing, second bearing, knee, press progress
     hl_bb: vec4<f32>,         // glow gain, width, aperture, has tint
     hl_first: vec4<f32>,      // straight rgba
     hl_second: vec4<f32>,     // straight rgba
     tint: vec4<f32>,          // straight rgb, effective alpha
 }
 
+struct ElementShape {
+    rect: vec4<f32>,          // x, y, w, h in pt
+    radii: vec4<f32>,         // TL, TR, BR, BL
+    params: vec4<f32>,        // curve (0 circular, 1 continuous), ellipse bend, -, -
+}
+
 struct MaterialUniforms {
     // scene width pt, scene height pt, px per pt, capture max lod
     scene: vec4<f32>,
-    // display peak, the capture's texels per pt, -, -
+    // display peak, the capture's texels per pt, continuous exponent, -
     misc: vec4<f32>,
     // region min pt, region size pt: the pass runs on a patch covering the
     // group's bounds plus reach, and the capture covers the same rect
@@ -51,12 +58,14 @@ struct MaterialUniforms {
 @group(0) @binding(3) var backdrop_tex: texture_2d<f32>;
 @group(0) @binding(4) var capture_tex: texture_2d<f32>;
 @group(0) @binding(5) var linear_sampler: sampler;
+@group(0) @binding(6) var<storage, read> elements: array<ElementShape>;
 
 const EPS_ALPHA: f32 = 1e-4;
 const HIGHLIGHT_BAND: f32 = 1.0;
+const BLEED_RADIUS: f32 = 36.0;
 
-const LUMA_LIMIT_W: vec3<f32> = vec3<f32>(0.2126, 0.7153, 0.0722);
-const LUMA_GATE_W: vec3<f32> = vec3<f32>(0.2125, 0.7153, 0.0721);
+const LUMA_LIMIT_W: vec3<f32> = vec3<f32>(0.22897456, 0.69173852, 0.07928691);
+const LUMA_GATE_W: vec3<f32> = vec3<f32>(0.22897456, 0.69173852, 0.07928691);
 
 // ---------------------------------------------------------------- field ---
 
@@ -197,7 +206,7 @@ fn unpremultiply(c: vec4<f32>) -> vec3<f32> {
     return s;
 }
 
-// §4.6's grade: the BT.709 YCbCr construction — luma remapped onto
+// §4.6's grade: the Display P3 YCbCr construction — luma remapped onto
 // [floor, ceiling], both chroma channels re-scaled about 0.5 by chroma.
 fn apply_grade(grade: vec3<f32>, c: vec3<f32>) -> vec3<f32> {
     let y = luma(c);
@@ -208,7 +217,7 @@ fn apply_grade(grade: vec3<f32>, c: vec3<f32>) -> vec3<f32> {
     let cr2 = 0.5 + grade.z * (cr - 0.5);
     let r = y2 + 1.5748 * (cr2 - 0.5);
     let b = y2 + 1.8556 * (cb2 - 0.5);
-    let g = (y2 - 0.2126 * r - 0.0722 * b) * (1.0 / 0.7152);
+    let g = (y2 - 0.22897456 * r - 0.07928691 * b) * (1.0 / 0.69173852);
     return vec3<f32>(r, g, b);
 }
 
@@ -375,11 +384,12 @@ fn highlight_light(r: Recipe, d: f32, n: vec2<f32>, cov: f32) -> vec4<f32> {
 }
 
 // Chroma-preserving cubic soft-light composite for the specular rim
-// highlight `light`.
+// highlight `light`, keeping HDR highlights (> 1.0) unclamped.
 fn add_highlight(outc: vec3<f32>, light: vec4<f32>, k_mul: f32, k_add: f32) -> vec3<f32> {
-    let soft = min(
-        outc * (1.0 + k_mul * light.rgb * (3.0 - 2.0 * outc)) + k_add * light.rgb,
-        vec3<f32>(1.0),
+    let c_soft = clamp(outc, vec3<f32>(0.0), vec3<f32>(1.0));
+    let soft = max(
+        outc * (1.0 + k_mul * light.rgb * (3.0 - 2.0 * c_soft)) + k_add * light.rgb,
+        vec3<f32>(0.0),
     );
     return select(outc, soft, light.w > 0.5);
 }
@@ -416,6 +426,84 @@ fn add_tint(outc: vec3<f32>, rgb: vec3<f32>, a: vec2<f32>) -> vec3<f32> {
     return rgb * gain * a.y + c * (1.0 - a.y);
 }
 
+// Analytic signed distance (pt) from `p` to sibling element `e` for §8 bleed.
+fn bleed_shape_distance(e: ElementShape, p: vec2<f32>) -> f32 {
+    let half = e.rect.zw * 0.5;
+    let c = e.rect.xy + half;
+    let l = p - c;
+    var corner = 0u;
+    if l.x >= 0.0 && l.y < 0.0 { corner = 1u; }
+    if l.x >= 0.0 && l.y >= 0.0 { corner = 2u; }
+    if l.x < 0.0 && l.y >= 0.0 { corner = 3u; }
+    let r = clamp(e.radii[corner], 0.0, min(half.x, half.y));
+    let q = abs(l) - (half - vec2<f32>(r));
+    if q.x > 0.0 && q.y > 0.0 {
+        let len = length(q);
+        if e.params.x > 0.5 && len > 1e-6 && r > 1e-6 {
+            let n = uni.misc.z;
+            let dir = q / len;
+            let reach = r / pow(pow(dir.x, n) + pow(dir.y, n), 1.0 / n);
+            return len - reach;
+        }
+        return len - r;
+    }
+    return max(q.x, q.y) - r;
+}
+
+// Outward unit normal of sibling element `e` at `p`, pointing away from `e`.
+fn bleed_shape_gradient(e: ElementShape, p: vec2<f32>) -> vec2<f32> {
+    let h = 0.05;
+    let gx = bleed_shape_distance(e, p + vec2<f32>(h, 0.0))
+        - bleed_shape_distance(e, p - vec2<f32>(h, 0.0));
+    let gy = bleed_shape_distance(e, p + vec2<f32>(0.0, h))
+        - bleed_shape_distance(e, p - vec2<f32>(0.0, h));
+    let g = vec2<f32>(gx, gy);
+    if length(g) < 1e-12 {
+        return vec2<f32>(0.0, -1.0);
+    }
+    return normalize(g);
+}
+
+// §8: cross-element emissive color bleed from tinted/prominent siblings
+// within `BLEED_RADIUS = 36.0 pt`.
+fn cross_element_bleed(
+    owner: u32,
+    p: vec2<f32>,
+    d_i: f32,
+    n_i: vec2<f32>,
+    c_i: vec3<f32>,
+) -> vec3<f32> {
+    let count = min(arrayLength(&recipes), arrayLength(&elements));
+    let headroom = max(vec3<f32>(1.0) - c_i, vec3<f32>(0.0));
+    let edge_decay = exp(min(d_i, 0.0) / 8.0);
+    var bleed = vec3<f32>(0.0);
+    for (var j = 0u; j < count; j += 1u) {
+        if j == owner {
+            continue;
+        }
+        let r_j = recipes[j];
+        if r_j.hl_bb.w < 0.5 || r_j.tint.a <= 0.0 {
+            continue;
+        }
+        let elem_j = elements[j];
+        let d_j = bleed_shape_distance(elem_j, p);
+        if d_j < 0.0 || d_j >= BLEED_RADIUS {
+            continue;
+        }
+        let n_j = bleed_shape_gradient(elem_j, p);
+        let t_rad = 1.0 - sat(d_j / BLEED_RADIUS);
+        let w_rad = t_rad * t_rad;
+        let w_face = 0.35 + 0.65 * edge_decay * max(0.0, -dot(n_i, n_j));
+        let is_j_prom = r_j.hl_bb.w > 1.5;
+        let is_j_light = r_j.ambient_misc.z > 0.5;
+        let e_prom = select(0.35, 0.20, is_j_light) * r_j.tint.a;
+        let e_reg = select(0.22, 0.12, is_j_light) * (r_j.tint.a / 0.4);
+        let e_j = select(e_reg, e_prom, is_j_prom);
+        bleed += e_j * w_rad * w_face * (r_j.tint.rgb * headroom);
+    }
+    return bleed;
+}
+
 // ---------------------------------------------------------------- entry ---
 
 @fragment
@@ -424,7 +512,8 @@ fn material_fragment(v: FullscreenOut) -> @location(0) vec4<f32> {
     let px = v.position.xy + uni.origin.xy;
     let p = px / uni.scene.z;
     let f = load_field(px);
-    let r = recipes[min(f.owner, arrayLength(&recipes) - 1u)];
+    let owner = min(f.owner, arrayLength(&recipes) - 1u);
+    let r = recipes[owner];
     let fw = fwidth(f.d);
     let cov = sat(0.5 - f.d / fw);
     let backdrop = sample_backdrop(p);
@@ -470,7 +559,16 @@ fn material_fragment(v: FullscreenOut) -> @location(0) vec4<f32> {
         let is_prominent = r.hl_bb.w > 1.5;
         let k_mul = select(select(0.110, 0.085, is_light), 0.105, is_prominent);
         let k_add = select(select(0.045, 0.025, is_light), 0.038, is_prominent);
-        let light = highlight_light(r, f.d, n, cov);
+        let raw_light = highlight_light(r, f.d, n, cov);
+        let own_elem = elements[min(owner, arrayLength(&elements) - 1u)];
+        let own_center = own_elem.rect.xy + own_elem.rect.zw * 0.5;
+        let touch_pt = select(own_center, r.contour_misc.yz, r.contour_misc.w > 0.5);
+        let touch_delta = p - touch_pt;
+        let press_sigma = max(0.35 * own_elem.rect.z, 1e-3);
+        let press_boost = 1.0 + 0.35 * max(r.hl_b.w, 0.0) * (
+            0.4 + 0.6 * exp(-dot(touch_delta, touch_delta) / (2.0 * press_sigma * press_sigma))
+        );
+        let light = vec4<f32>(raw_light.rgb * press_boost, raw_light.w);
         let tint = tint_alphas(r, f.d, cov);
         let fill = select(
             r.tint.rgb,
@@ -480,6 +578,7 @@ fn material_fragment(v: FullscreenOut) -> @location(0) vec4<f32> {
         let pre = mix(C, fill, select(0.0, tint.x, is_prominent));
         let lit = add_highlight(pre, light, k_mul, k_add);
         C = add_tint(lit, r.tint.rgb, select(tint, vec2<f32>(0.0), is_prominent));
+        C = C + cross_element_bleed(owner, p, f.d, n, C);
         let interior = vec4<f32>(C, 1.0);
         let shadow = vec4<f32>(0.0, 0.0, 0.0, cast_alpha);
         let res = mix(shadow, interior, cov);

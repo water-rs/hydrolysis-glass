@@ -89,6 +89,8 @@ impl Group {
                 member.recipe = Recipe {
                     tint: member.recipe.tint,
                     ellipse_bend: member.recipe.ellipse_bend,
+                    press_progress: member.recipe.press_progress,
+                    touch_point: member.recipe.touch_point,
                     ..shared
                 };
             }
@@ -304,7 +306,12 @@ impl From<&Recipe> for GpuRecipe {
                 r.contour_shade_softness,
                 r.contour_shade_width,
             ],
-            contour_misc: [r.contour_shade_clip, 0.0, 0.0, 0.0],
+            contour_misc: [
+                r.contour_shade_clip,
+                r.touch_point.map_or(0.0, |pt| pt[0]),
+                r.touch_point.map_or(0.0, |pt| pt[1]),
+                flag(r.touch_point.is_some()),
+            ],
             border_a: [
                 r.border_strength,
                 r.border_bearing,
@@ -320,7 +327,7 @@ impl From<&Recipe> for GpuRecipe {
             ],
             cast_b: [r.cast_gain, r.exterior_span, r.channel_ceiling, 0.0],
             hl_a: [h.inner_fade, h.first_gain, h.second_gain, h.aperture],
-            hl_b: [h.first_bearing, h.second_bearing, h.knee, 0.0],
+            hl_b: [h.first_bearing, h.second_bearing, h.knee, r.press_progress],
             hl_bb: [
                 h.glow_gain,
                 h.glow_width,
@@ -945,6 +952,7 @@ impl GlassRenderer {
                 texture_entry(3),
                 texture_entry(4),
                 sampler_entry(5),
+                storage_entry(6),
             ],
         });
         let foreground_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -1557,7 +1565,12 @@ impl GlassRenderer {
             0,
             bytemuck::bytes_of(&MaterialUniforms {
                 scene: [scene.size_pt[0], scene.size_pt[1], scene.px_per_pt, max_lod],
-                misc: [scene.display_peak, scale * scene.px_per_pt, 0.0, 0.0],
+                misc: [
+                    scene.display_peak,
+                    scale * scene.px_per_pt,
+                    CONTINUOUS_EXPONENT,
+                    0.0,
+                ],
                 region: region_pt,
                 origin: [region[0] as f32, region[1] as f32, 0.0, 0.0],
             }),
@@ -1593,6 +1606,10 @@ impl GlassRenderer {
                     wgpu::BindGroupEntry {
                         binding: 5,
                         resource: wgpu::BindingResource::Sampler(&self.sampler),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 6,
+                        resource: g.element_buf.as_entire_binding(),
                     },
                 ],
             }));

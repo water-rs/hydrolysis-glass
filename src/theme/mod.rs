@@ -150,6 +150,7 @@ impl Glass {
             // The renderer hands the chrome the touch in window space; the
             // press is centred on the frame until it is local.
             touch_x: None,
+            touch_y: None,
         };
         Some(surfaces::button(
             &self.palette,

@@ -168,6 +168,8 @@ pub struct Press {
     pub progress: f32,
     /// The touch point's horizontal position; `None` is the frame's centre.
     pub touch_x: Option<f32>,
+    /// The touch point's vertical position; `None` is the frame's centre.
+    pub touch_y: Option<f32>,
 }
 
 impl Press {
@@ -175,6 +177,7 @@ impl Press {
     pub const REST: Self = Self {
         progress: 0.0,
         touch_x: None,
+        touch_y: None,
     };
 }
 
@@ -207,13 +210,20 @@ pub fn button(
         }
     };
     // A pressed button grows uniformly about its centre; the recipe stays
-    // the idle one (§5.5, §8.1).
+    // the idle one (§5.5, §8.1), while the touch-localized specular rim boost
+    // (§7) rides on `press_progress` and `touch_point`.
     let p = if spec.enabled { press.progress } else { 0.0 };
     e.shape = grown(e.shape, p);
-    let wash = (p > 0.0).then(|| Wash {
+    let [cx, cy] = e.shape.rect.center();
+    let touch_x = press.touch_x.unwrap_or(cx);
+    let touch_y = press.touch_y.unwrap_or(cy);
+    if p > 0.0 {
+        e.recipe = e.recipe.with_press(p, Some([touch_x, touch_y]));
+    }
+    let wash = (p > 0.0).then_some(Wash {
         shape: e.shape,
         progress: p,
-        touch_x: press.touch_x.unwrap_or_else(|| e.shape.rect.center()[0]),
+        touch_x,
     });
     Surface {
         role: Role::Button,
@@ -416,6 +426,7 @@ mod tests {
         let down = Press {
             progress: 1.0,
             touch_x: None,
+            touch_y: None,
         };
         assert_eq!(surface(&off, down), surface(&off, Press::REST));
     }
@@ -428,6 +439,7 @@ mod tests {
             Press {
                 progress: 1.0,
                 touch_x: None,
+                touch_y: None,
             },
         );
         assert!((down.element.shape.rect.w - 76.0 * 1.245).abs() < 1e-3);
@@ -437,7 +449,11 @@ mod tests {
             down.element.shape.rect.center(),
             rest.element.shape.rect.center()
         );
-        assert_eq!(down.element.recipe, rest.element.recipe);
+        assert_eq!(
+            down.element.recipe.with_press(0.0, None),
+            rest.element.recipe
+        );
+        assert_eq!(down.element.recipe.press_progress, 1.0);
     }
 
     #[test]
@@ -447,6 +463,7 @@ mod tests {
             Press {
                 progress: 1.0,
                 touch_x: None,
+                touch_y: None,
             },
         );
         let wash = down.wash.expect("pressed");
@@ -460,6 +477,7 @@ mod tests {
             Press {
                 progress: 1.0,
                 touch_x: Some(end),
+                touch_y: None,
             },
         )
         .wash
@@ -473,6 +491,7 @@ mod tests {
             Press {
                 progress: 1.0,
                 touch_x: Some(20.0),
+                touch_y: None,
             },
             Translucency::default(),
         )
