@@ -409,6 +409,50 @@ mod tests {
     }
 
     #[test]
+    fn bordered_button_is_a_track_filled_capsule_with_accent_label_and_regular_padding() {
+        use hydrolysis_style::theme::Corners;
+
+        let g = Glass::light();
+        let env = environment(&g);
+        let look = g.button(
+            &button_spec(ButtonStyle::Bordered, ControlSize::Small),
+            &env,
+        );
+        let frame = Rect::new(0.0, 0.0, 96.0, 34.33);
+        let corners = look
+            .chrome()
+            .surface()
+            .shape()
+            .corners()
+            .target(&Inputs::at_rest(frame, InteractionState::empty(), &()));
+        assert!(
+            matches!(corners, Corners::Full),
+            "expected capsule corners on bordered button, got {corners:?}"
+        );
+        let Fill::Paint(fill) = look.chrome().surface().fill() else {
+            panic!("expected track paint fill on bordered button");
+        };
+        let cherenkov_record::Paint::Solid(fill_color) =
+            fill.target(&Inputs::at_rest(frame, InteractionState::empty(), &()))
+        else {
+            panic!("expected solid fill paint");
+        };
+        assert!((fill_color.components[3] - 0.16).abs() < 1e-4);
+        let label_color = look
+            .label()
+            .get_color()
+            .expect("label color")
+            .target(&Inputs::at_rest(frame, InteractionState::empty(), &()))
+            .resolve(&env)
+            .snapshot();
+        assert!(label_color.components[2] > 0.9 && label_color.components[0] < 0.05);
+        assert_eq!(
+            look.get_padding(),
+            cherenkov_record::kurbo::Vec2::new(14.0, 7.0)
+        );
+    }
+
+    #[test]
     fn a_glass_button_is_a_backdrop_fill_of_the_standalone_surface() {
         let g = Glass::light();
         let env = environment(&g);
@@ -555,13 +599,13 @@ mod tests {
             &env,
         );
         let metrics = look.metrics();
-        assert!((metrics.label_height - 20.0).abs() < 1e-9);
+        assert!((metrics.label_height - 21.0).abs() < 1e-9);
         assert!((metrics.min_width - 120.0).abs() < 1e-9);
         assert!((metrics.min_height - 36.0).abs() < 1e-9);
-        assert!((metrics.horizontal_inset - 12.0).abs() < 1e-9);
-        assert!((metrics.vertical_inset - 8.0).abs() < 1e-9);
-        assert!((look.floating_label().get_scale() - 0.75).abs() < 1e-9);
-        assert!((look.floating_label().get_top() - 4.0).abs() < 1e-9);
+        assert!(metrics.horizontal_inset.abs() < 1e-9);
+        assert!((metrics.vertical_inset - 6.0).abs() < 1e-9);
+        assert!((look.floating_label().get_scale() - 1.0).abs() < 1e-9);
+        assert!((look.floating_label().get_top() - 2.0).abs() < 1e-9);
         let blink = look.caret().blink();
         assert_eq!(blink.fade_cycle_duration, Duration::from_millis(1_000));
         assert_eq!(blink.frame_interval, Duration::from_millis(16));
@@ -570,20 +614,15 @@ mod tests {
         let Fill::Paint(fill) = look.container().surface().fill() else {
             panic!("expected paint fill on text field container");
         };
-        let Fill::Paint(_) = look.container().surface().fill() else {
-            unreachable!();
-        };
         let enabled_fill = fill.target(&Inputs::at_rest(frame, InteractionState::empty(), &()));
-        let disabled_fill = fill.target(&Inputs::at_rest(frame, InteractionState::DISABLED, &()));
-        let (cherenkov_record::Paint::Solid(ef), cherenkov_record::Paint::Solid(df)) =
-            (enabled_fill, disabled_fill)
-        else {
-            panic!("expected solid fill paints");
+        let cherenkov_record::Paint::Solid(ef) = enabled_fill else {
+            panic!("expected solid fill paint");
         };
         assert!(
-            ef.components[3].mul_add(-0.5, df.components[3]).abs() < 1e-6,
-            "expected disabled container alpha to halve"
+            ef.components[3].abs() < 1e-6,
+            "expected borderless transparent resting fill"
         );
+        assert!(look.container().surface().get_border().is_none());
 
         let assert_color_halves = |driven: &hydrolysis_style::theme::Driven<Color>, name: &str| {
             let enabled = driven
@@ -625,8 +664,24 @@ mod tests {
     }
 
     #[test]
-    fn tabs_look_switches_layout_at_600pt_and_cross_fades_selection() {
-        use hydrolysis_style::theme::{TabItemLayout, ValueMotion};
+    fn light_palette_uses_white_background_and_grouped_surface_polarity() {
+        use waterui::Resolvable as _;
+
+        assert_eq!(Palette::LIGHT.background, [1.0, 1.0, 1.0, 1.0]);
+        assert_eq!(Palette::LIGHT.surface, [0.949, 0.949, 0.969, 1.0]);
+        assert_eq!(Palette::LIGHT.surface_variant, [0.949, 0.949, 0.969, 1.0]);
+
+        let mut env = Environment::new();
+        Glass::light().install_tokens(&mut env);
+        let bg = waterui::theme::color::Background.resolve(&env).snapshot();
+        let surf = waterui::theme::color::Surface.resolve(&env).snapshot();
+        assert!((bg.components[0] - 1.0).abs() < 1e-4 && (bg.components[2] - 1.0).abs() < 1e-4);
+        assert!(surf.components[0] < bg.components[0] && surf.components[2] > surf.components[0]);
+    }
+
+    #[test]
+    fn tabs_look_switches_layout_at_600pt_and_drives_selection_and_press_lens() {
+        use hydrolysis_style::theme::{TabItem, TabItemGeometry, TabItemLayout, ValueMotion};
         use waterui::navigation::tab::NativeTabStyle;
 
         let g = Glass::dark();
@@ -640,13 +695,42 @@ mod tests {
         let horizontal = look.metrics(TabItemLayout::Horizontal);
         assert!((horizontal.bar_height - 48.0).abs() < 1e-9);
         assert!((horizontal.button_horizontal_inset - 16.0).abs() < 1e-9);
-        let ValueMotion::Own(anim) = &look.motion().value else {
-            panic!("expected Own value motion on tab bar highlight");
+        let ValueMotion::Always(anim) = &look.motion().value else {
+            panic!("expected Always value motion on tab bar highlight");
         };
+        assert_eq!(*anim, segmented::SELECTION.physical());
+
+        let bounds = Rect::new(0.0, 0.0, 80.0, 60.0);
+        let item = TabItem {
+            index: 0,
+            count: 2,
+            selected: true,
+            geometry: TabItemGeometry {
+                bounds,
+                icon: None,
+                title: Rect::new(16.0, 20.0, 64.0, 40.0),
+                layout: TabItemLayout::Vertical,
+                placement: NativeTabStyle::TabBar,
+            },
+        };
+        let chrome = look.item_chrome(&item, waterui::reactive::Computed::constant(true));
+        assert_eq!(chrome.press().get_scale(), Some(0.12));
+        let customs = chrome.customs();
+        assert_eq!(customs.len(), 1);
+        let rest_lens =
+            customs[0].realize(&Inputs::at_rest(bounds, InteractionState::empty(), &()));
+        assert_eq!(rest_lens.opacity().expect("lens opacity").snapshot(), 0.0);
+        let pressed_lens =
+            customs[0].realize(&Inputs::at_rest(bounds, InteractionState::PRESSED, &()));
         assert_eq!(
-            *anim,
-            waterui::animation::Animation::ease_out(PRESS_DURATION)
+            pressed_lens.opacity().expect("lens opacity").snapshot(),
+            1.0
         );
+        let layered = layered_recorder(|r| {
+            pressed_lens.record(r, bounds);
+        });
+        assert_eq!(layered.runs.len(), 1);
+        assert_eq!(layered.runs[0].material.shader(), materials::GLASS_SHADER);
     }
 
     #[test]

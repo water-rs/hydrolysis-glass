@@ -870,11 +870,12 @@ element's content (§2, item 5). A button is of one of two **kinds**:
 - **Glass**: the glass body with the label drawn on it.
 - **Prominent**: the glass body filled with the button's tint, with a white
   label.
-- **Bordered**: a non-glass push button drawn as a `6` pt rounded rectangle
-  filled with `(120, 120, 128)` at alpha `0.16` (halved while disabled), under
-  the theme's state layer and focus ring; the compact size group uses a
-  `13` pt regular-weight label (`16` pt line height) with `13 × 4` pt insets
-  [chosen].
+- **Bordered**: a non-glass button drawn as a continuous capsule filled with
+  the theme's `track` colour (`(120, 120, 128)` at alpha `0.16` in light
+  appearance and `0.32` in dark, halved while disabled) under the theme's
+  state layer and focus ring, with an accent label (or the tint when tinted),
+  using the same size-group typography and insets as the glass buttons
+  [measured].
 
 The tint defaults to the accent colour, (0, 145, 255) in dark appearance and
 (0, 136, 255) in light [measured].
@@ -885,26 +886,30 @@ The button's frame is its label's layout size plus the insets of its size
 group, and the glass fills that frame exactly: no part of the chrome reaches
 outside it apart from the material's own cast shadow [measured: the drawn
 silhouette matches the frame within 0.17 pt for every observed button].
+`ControlSize::ExtraSmall` selects the compact group; `ControlSize::Small`
+(the default un-sized button) and `ControlSize::Medium` select the regular
+group; `ControlSize::Large` and `ControlSize::ExtraLarge` select the large
+group.
 
 | Size group | Label text | Line height | Horizontal inset | Vertical inset | Height, one text line |
 |---|---|---|---|---|---|
-| mini, small | 15 pt, regular weight | 18 | 10 | 5 | 28 |
-| regular | 17 pt, regular weight | 20.33 | 12 | 7 | 34.33 |
+| compact (mini) | 15 pt, regular weight | 18 | 10 | 5 | 28 |
+| regular (small, medium) | 17 pt, regular weight | 20.33 | 14 | 7 | 34.33 |
 | large, extra large | 17 pt, regular weight | 20.33 | 20 | 15 | 50.33 |
 
-All values are measured. Mini and small are identical, and so are large and
-extra large. The label text is identified by its ink: "Glass" inks
-36 × 11.33 pt in the 28 pt button and 40.33 × 13 pt in the others, as plain
-15 pt and 17 pt text do.
+All values are measured. Mini maps to compact, small and medium map to
+regular, and large and extra large share the large group. The label text is
+identified by its ink: "Glass" inks 36 × 11.33 pt in the 28 pt button and
+40.33 × 13 pt in the others, as plain 15 pt and 17 pt text do.
 
 Observed frames (width × height) [measured]:
 
-| Content | mini, small | regular | large, extra large |
+| Content | compact | regular | large, extra large |
 |---|---|---|---|
-| "Glass" | 57.67 × 28 | 66 × 34.33 | 82 × 50.33 |
-| "Continue" | 82 × 28 | 92.67 × 34.33 | 108.67 × 50.33 |
-| a filled star symbol | 39.33 × 28.33 | 46 × 34.67 | 62 × 50.67 |
-| the symbol, then "Glass" | 85 × 28.62 | 96 × 35 | 112 × 51 |
+| "Glass" | 57.67 × 28 | 70 × 34.33 | 82 × 50.33 |
+| "Continue" | 82 × 28 | 96.67 × 34.33 | 108.67 × 50.33 |
+| a filled star symbol | 39.33 × 28.33 | 50 × 34.67 | 62 × 50.67 |
+| the symbol, then "Glass" | 85 × 28.62 | 100 × 35 | 112 × 51 |
 
 - **Label placement.** The content is centred in the frame on both axes. A
   multi-line label is centre-aligned and the frame grows by its lines: the
@@ -1035,7 +1040,7 @@ of 1 after 0.23 s. From a settled press, the release spring reaches −0.27 at
   label, composited in encoded space with alpha
 
   ```
-  a = max(p, 0) · 0.30 · (1 − 0.37·u²),   u = min(|x − x_touch| / (w/2), 1)
+  a = max(p, 0) · 0.30 · (1 − 0.37·u²),   u = min(|x − x_touch| / max(w/2, 40), 1)
   ```
 
   where `x` is the pixel's horizontal position, `x_touch` the touch point's
@@ -1601,37 +1606,36 @@ every value is [chosen].
 ### 8.6 Text and search fields
 
 A text field, a secure field, and a navigation search field share a
-`surface`-filled rounded-rectangle container with a `1` pt hairline border,
-carrying an optional inside label (or a prompt standing in when no label view
-is present), an optional placeholder, editable text (masked with `*` for a
+borderless, transparent container under the theme's state layer, carrying an
+optional inside label (or a prompt standing in when no label view is
+present), an optional placeholder, editable text (masked with `*` for a
 secure field), an animated floating label, a blinking caret, and a selection
 highlight. At rest no part is glass.
 
-**Reference.** Nothing in this section was measured against a capture;
-every value is [chosen].
+**Reference.** Resting typography and vertical spacing match the two-line
+`Name` / value layout; focus outlines and animations are [chosen].
 
 #### Geometry
 
-- **Container.** A rounded rectangle with `6` pt circular corners, a `1` pt
-  hairline border, and a minimum size of `120 × 36` pt (the menu picker
-  variant uses `10` pt borderless track-filled corners) [chosen].
+- **Container.** Borderless and transparent at rest (`10` pt circular focus
+  outline corner radius) with a minimum size of `120 × 36` pt (the menu
+  picker variant uses `10` pt borderless track-filled corners) [chosen].
 - **Typography.** Resting placeholder, value, and floating label text use
-  `13` pt regular body text with a `16` pt line height [chosen].
-- **Insets.** Content is inset `12` pt horizontally and `8` pt
-  vertically, with a `20` pt band reserved above the text when an inside
+  `17` pt regular body text with a `20.33` pt line height [measured].
+- **Insets.** Content is flush horizontally (`0` pt inset) and inset `6` pt
+  vertically, with a `21` pt band reserved above the text when an inside
   label or floating prompt is present; a single-line field with neither
   centres its text vertically inside the container [chosen].
 - **Floating label.** Rests vertically centred in the container; while
-  the field holds focus or content, it scales to `0.75` of its resting
-  size and moves `4` pt below the container's top edge [chosen].
+  the field holds focus or content, it keeps its full `1.0` scale (`17` pt)
+  and moves `2` pt below the container's top edge [chosen].
 - **Focus outlines.** While focused and enabled, an accent outline of
   width `1.5` pt sits flush inside the container's edge (`0.75` pt inset,
-  corner radius `5.25` pt; `9.25` pt on the `10` pt picker container), and
-  the theme's `2` pt accent focus ring sits `2` pt outside the container
-  [chosen].
+  corner radius `9.25` pt), and the theme's `2` pt accent focus ring sits
+  `2` pt outside the container [chosen].
 - **Search field.** Inside a navigation bar, a searchable view mounts an
   unlabelled field carrying the search prompt, `56` pt tall (matching the
-  `8` pt vertical insets, `20` pt floating prompt band, and body line
+  `6` pt vertical insets, `21` pt floating prompt band, and body line
   height without clipping), inset `16` pt from the bar's leading and
   trailing edges and `8` pt below the bar row [chosen].
 
@@ -1639,8 +1643,7 @@ every value is [chosen].
 
 | Part | Dark appearance | Light appearance |
 |---|---|---|
-| container fill | `(28, 28, 30)` (`surface`) | `(255, 255, 255)` (`surface`) |
-| container border | `(84, 84, 88)` at alpha `0.6` (`border`) | `(60, 60, 67)` at alpha `0.29` (`border`) |
+| container fill & border | transparent (menu picker uses `track`) | transparent (menu picker uses `track`) |
 | value and floating label | white | black |
 | placeholder | (235, 235, 245) at alpha 0.6 | (60, 60, 67) at alpha 0.6 |
 | caret, inner focus outline, focus ring | accent `(10, 132, 255)` | accent `(0, 122, 255)` |
@@ -1650,9 +1653,9 @@ every value is [chosen].
 
 | State | Container | Label, value and placeholder |
 |---|---|---|
-| enabled | as above, with state layer | as above |
+| enabled | transparent, with state layer on hover/focus | as above |
 | tinted | unchanged: the tint has no effect | unchanged |
-| disabled | container fill and border at opacity 0.5, no state layer or outlines | each at opacity 0.5 |
+| disabled | transparent, no state layer or outlines | each at opacity 0.5 |
 | focused (enabled) | inner 1.5 pt accent outline and outer 2 pt accent focus ring | label floats to top; caret blinks |
 
 - **State layer.** Hover and focus draw the theme's state layer at
@@ -1707,18 +1710,19 @@ every value is [chosen].
 
 #### States
 
-- **Selected item.** Draws the `4` pt inset highlight capsule at opacity
-  `1` (`state_layer` at alpha `0.08`) beneath the item's chrome [chosen].
+- **Selected item.** Draws the `4` pt inset continuous capsule highlight at
+  opacity `1` (`state_layer` at alpha `0.08`) beneath the item's chrome at rest,
+  fading out as the pressed clear lens takes over [chosen].
 - **Hover, focus and press.** Each item wears the theme's state layer
-  (`0.06` hover/focus, `0.12` press with press tint) and a `2` pt accent
-  focus ring `2` pt outside its `4` pt inset capsule [chosen].
+  (`0.06` hover/focus, `0.12` press) and a `2` pt accent focus ring `2` pt
+  outside its `4` pt inset capsule; while pressed, the pill grows by
+  `1 + 0.12·p` and becomes a clear-family refractive lens [chosen].
 - **Disabled item.** Draws no pointer target [chosen].
 
 #### Motion
 
-- **Selection cross-fade.** Selecting a different tab transitions the
-  outgoing and incoming highlight opacities by `ease_out` over
-  `ln(0.05) / ln(1 − 0.22) / 60 ≈ 0.201` s (`PRESS_DURATION`) [chosen].
+- **Selection transition.** Selecting a different tab runs on a spring
+  (`ω0 = 15.7` rad/s, `ζ = 0.85`, rise time `0.400` s) [chosen].
 - **Item state layer.** Hover and focus ease over `0.201` s; press and
   release run on the §8.1 springs [chosen].
 
@@ -1821,7 +1825,7 @@ every value is [chosen].
 
 | Part | Dark appearance | Light appearance |
 |---|---|---|
-| menu panel fill | (28, 28, 30) opaque | (255, 255, 255) opaque |
+| menu panel fill | (28, 28, 30) opaque | (242, 242, 247) opaque |
 | menu panel border and divider | (84, 84, 88) at alpha 0.6 | (60, 60, 67) at alpha 0.29 |
 | menu panel shadow | black at alpha 0.18 | black at alpha 0.18 |
 | selected picker row | accent `(10, 132, 255)` at alpha 0.14 | accent `(0, 122, 255)` at alpha 0.14 |

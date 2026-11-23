@@ -50,8 +50,8 @@ impl Palette {
     /// Roles for the light appearance.
     pub const LIGHT: Self = Self {
         appearance: Appearance::Light,
-        background: [0.949, 0.949, 0.969, 1.0],
-        surface: [1.0, 1.0, 1.0, 1.0],
+        background: [1.0, 1.0, 1.0, 1.0],
+        surface: [0.949, 0.949, 0.969, 1.0],
         surface_variant: [0.949, 0.949, 0.969, 1.0],
         border: [0.235, 0.235, 0.263, 0.29],
         foreground: [0.0, 0.0, 0.0, 1.0],
