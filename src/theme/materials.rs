@@ -45,15 +45,16 @@ use core::f32::consts::{FRAC_PI_2, PI};
 use cherenkov_record::kurbo::{Rect as KRect, RoundedRect, RoundedRectRadii};
 use cherenkov_record::{
     BackdropShaderSource, BlendSpace, CaptureClass, CaptureLevels, CapturePyramid, CaptureScale,
-    ContainerRecipe, ContinuousRect, Fixed, GroupMember, Interpolation, LinearGradient,
-    MaterialCapture, MaterialEffect, MaterialGrouping, MaterialRegistry, MaterialShader,
-    OuterExtent, Paint, Recorder, ShapeData, UnionSmoothing,
+    ContainerRecipe, ContentShader, ContentShaderSource, ContinuousRect, Fixed, GroupMember,
+    Interpolation, LinearGradient, MaterialCapture, MaterialEffect, MaterialGrouping,
+    MaterialRegistry, MaterialShader, OuterExtent, Paint, Recorder, ShapeData, UnionSmoothing,
 };
 
 use crate::material::geometry::{
     CONTAINER_UNION_SMOOTHING, CONTINUOUS_EXPONENT, CornerCurve, Element, Rect,
     STANDALONE_UNION_SMOOTHING, Shape,
 };
+use crate::material::gpu::DISPERSION_WIDTH_PT;
 use crate::material::recipe::{
     Grade, Highlight, Recipe, Tint, ambient_sigma, blur_read_reach, blur_sigma, haze_sigma,
 };
@@ -64,6 +65,12 @@ use super::surfaces::Wash;
 /// The key the glass `backdrop_effect` shader registers under: the one
 /// WGSL source serves every capture class.
 pub const GLASS_SHADER: MaterialShader = MaterialShader::new(1);
+
+/// The key the glass `content_effect` shader (§4.14) registers under.
+pub const GLASS_CONTENT_SHADER: ContentShader = ContentShader::new(1);
+
+/// Fraction of the primary-lobe shift applied to foreground content (§4.14).
+const CONTENT_DISPLACEMENT_SCALE: f32 = 0.1;
 
 /// The capture-scale lattice the registry declares, ascending.
 ///
@@ -191,8 +198,16 @@ fn shader_source() -> BackdropShaderSource {
     .reach(shader_reach())
 }
 
-/// Registers the glass backdrop shader and every capture class the
-/// theme's materials name. Called from
+/// The `content_effect` source the content shader key registers (§4.14),
+/// with the sampling reach its displaced spectral taps can cover.
+fn content_shader_source() -> ContentShaderSource {
+    let reach =
+        PRIMARY_LOBE_PT.mul_add(CONTENT_DISPLACEMENT_SCALE, DISPERSION_WIDTH_PT) * REACH_PX_PER_PT;
+    ContentShaderSource::wgsl(include_str!("../../shaders/content_engine.wgsl")).reach(reach)
+}
+
+/// Registers the glass backdrop shader, content dispersion shader, and
+/// every capture class the theme's materials name. Called from
 /// `WidgetTheme::register_backdrop_shaders`.
 ///
 /// # Panics
@@ -201,6 +216,7 @@ fn shader_source() -> BackdropShaderSource {
 /// can feed back.
 pub fn register(registry: &mut MaterialRegistry) {
     registry.register_shader(GLASS_SHADER, shader_source());
+    registry.register_content_shader(GLASS_CONTENT_SHADER, content_shader_source());
     registry.register_container_recipe(GLASS_SHADER, GlassContainer);
     for container in [false, true] {
         let base = if container {
@@ -672,6 +688,13 @@ fn assert_folded_constants(r: &Recipe) {
     );
 }
 
+/// Uniform parameters for [`GLASS_CONTENT_SHADER`] (§4.14) from `recipe`:
+/// `params[0].xy = (primary_shift, primary_depth)` in points.
+#[must_use]
+pub fn content_effect(recipe: &Recipe) -> MaterialEffect {
+    MaterialEffect::new(vec![recipe.primary_shift, recipe.primary_depth])
+}
+
 /// Records one glass element as a `Recorder::backdrop_material` at the
 /// recorder's top level.
 ///
@@ -943,5 +966,22 @@ mod tests {
             .capture(&members(&recorded));
         let capture = registry.capture_class(class).expect("a registered class");
         assert!(matches!(capture.grouping, MaterialGrouping::Union { .. }));
+    }
+
+    #[test]
+    fn content_shader_declares_foreground_constants() {
+        use crate::material::gpu::{DISPERSION_AXIS_ANGLE, FOREGROUND_FADE_PT};
+        let source = include_str!("../../shaders/content_engine.wgsl");
+        for line in [
+            format!("const CONTENT_DISPERSION_AXIS_ANGLE: f32 = {DISPERSION_AXIS_ANGLE:?};"),
+            format!("const CONTENT_DISPERSION_WIDTH_PT: f32 = {DISPERSION_WIDTH_PT:?};"),
+            format!("const CONTENT_FOREGROUND_FADE_PT: f32 = {FOREGROUND_FADE_PT:?};"),
+            format!("const CONTENT_DISPLACEMENT_SCALE: f32 = {CONTENT_DISPLACEMENT_SCALE:?};"),
+        ] {
+            assert!(
+                source.contains(line.as_str()),
+                "content_engine.wgsl declares `{line}`"
+            );
+        }
     }
 }

@@ -399,6 +399,11 @@ mod tests {
         let mut registry = MaterialRegistry::new();
         g.register_backdrop_shaders(&mut registry);
         assert!(registry.shader(materials::GLASS_SHADER).is_some());
+        assert!(
+            registry
+                .content_shader(materials::GLASS_CONTENT_SHADER)
+                .is_some()
+        );
         // 4 capture scales × standalone and container.
         assert_eq!(registry.capture_classes().count(), 8);
     }

@@ -4,8 +4,8 @@
 
 use cherenkov_record::{BlendSpace, Draw as _, Group, Paint, WorkingColor};
 use hydrolysis_style::theme::{
-    Backdrop, ButtonLook, ButtonSpec, Chrome, CornerShape, Custom, Driven, FocusIndicator, Inputs,
-    Label, PressFeedback, StateLayer, Surface as ChromeSurface,
+    Backdrop, ButtonLook, ButtonSpec, Chrome, ContentEffect, CornerShape, Custom, Driven,
+    FocusIndicator, Inputs, Label, PressFeedback, StateLayer, Surface as ChromeSurface,
 };
 use waterui::color::Color;
 use waterui::interaction::InteractionState;
@@ -18,7 +18,7 @@ use waterui_core::Environment;
 use crate::material::recipe::{Family, Recipe};
 
 use super::super::button::{BorderShape, GROWTH_PER_PRESS, Kind, SizeGroup};
-use super::super::materials::{self, CONTINUOUS_SMOOTHING, GLASS_SHADER};
+use super::super::materials::{self, CONTINUOUS_SMOOTHING, GLASS_CONTENT_SHADER, GLASS_SHADER};
 use super::super::palette::{alpha, over};
 use super::super::surfaces::{self, Press, Wash};
 use super::super::{Glass, button};
@@ -244,8 +244,21 @@ fn glass_chrome(
         },
     );
 
+    let content = Driven::new(move |inputs: &Inputs<'_, ()>| {
+        let spec = spec_of(inputs.state, None);
+        let surface = surfaces::button(
+            &palette,
+            inputs.frame,
+            &spec,
+            pressed(inputs.state),
+            translucency,
+        );
+        materials::content_effect(&surface.element.recipe)
+    });
+
     Chrome::new(
-        ChromeSurface::new(CornerShape::full().smoothing(CONTINUOUS_SMOOTHING), body),
+        ChromeSurface::new(CornerShape::full().smoothing(CONTINUOUS_SMOOTHING), body)
+            .content_effect(ContentEffect::new(GLASS_CONTENT_SHADER, content)),
         // The glass body has no state layer: a hover or a focus shows
         // nothing, and a press shows the wash.
         StateLayer::new(Glass::color(palette.state_layer)),
