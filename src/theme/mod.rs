@@ -864,6 +864,23 @@ mod tests {
         let ltr_chevron = format!("{:?}", record_chevron(false));
         let rtl_chevron = format!("{:?}", record_chevron(true));
         assert_ne!(ltr_chevron, rtl_chevron, "RTL mirrors the back chevron");
+
+        let bar_surface = hydrolysis_style::theme::BarSurface {
+            color: resolved(g.palette().surface),
+        };
+        let bar_frame = Rect::new(0.0, 0.0, 390.0, 44.0);
+        let realized_bar = look.bar().realize(&Inputs::at_rest(
+            bar_frame,
+            InteractionState::empty(),
+            &bar_surface,
+        ));
+        let layered_bar = layered_recorder(|r| {
+            realized_bar.record(r, bar_frame);
+        });
+        assert!(
+            layered_bar.runs.is_empty(),
+            "resting navigation bar draws no opaque or backdrop surface"
+        );
     }
 
     #[test]

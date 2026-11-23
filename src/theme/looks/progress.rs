@@ -29,16 +29,16 @@ use super::super::{
 use super::paint;
 
 /// The bar's length and thickness, pt.
-const BAR: Size = Size::new(120.0, 6.0);
+const BAR: Size = Size::new(120.0, 4.0);
 /// The height of the label above a bar, pt.
 const LABEL_HEIGHT: f64 = 18.0;
-/// The gap between a bar and its label above, pt.
-const LABEL_SPACING: f64 = 11.0;
-/// The gap between a bar and its value label below, pt.
-const VALUE_LABEL_SPACING: f64 = 12.0;
+/// The gap between an indicator and its label above, pt.
+const LABEL_SPACING: f64 = 6.0;
+/// The gap between an indicator and its value label below, pt.
+const VALUE_LABEL_SPACING: f64 = 8.0;
 /// The ring's diameter and the stroke's width, pt.
-const RING: f64 = 16.0;
-const RING_STROKE: f64 = 3.5;
+const RING: f64 = 20.0;
+const RING_STROKE: f64 = 2.5;
 /// The loading indicator's container and the rounded square inside it, pt.
 const LOADING_CONTAINER: f64 = 48.0;
 const LOADING_SHAPE: f64 = 28.0;
@@ -111,6 +111,8 @@ pub(in super::super) fn circular(
     } else {
         control.part(circular_indeterminate(spec, env))
     })
+    .label_band(LABEL_HEIGHT, LABEL_SPACING)
+    .value_label_band(VALUE_LABEL_SPACING)
 }
 
 /// The look of the loading indicator.
@@ -363,25 +365,30 @@ mod tests {
     }
 
     #[test]
-    fn linear_progress_uses_6pt_bar_and_spaced_label_bands() {
+    fn linear_progress_uses_4pt_bar_and_spaced_label_bands() {
         let glass = Glass::light();
         let mut env = Environment::new();
         glass.install_tokens(&mut env);
         let look = linear(&glass, &spec(ProgressStyle::Linear), &env);
-        assert_eq!(look.control().size(), Size::new(120.0, 6.0));
+        assert_eq!(look.control().size(), Size::new(120.0, 4.0));
         assert!((look.get_label_height() - 18.0).abs() < 1e-9);
-        assert!((look.get_label_spacing() - 11.0).abs() < 1e-9);
-        assert!((look.get_value_label_spacing() - 12.0).abs() < 1e-9);
+        assert!((look.get_label_spacing() - 6.0).abs() < 1e-9);
+        assert!((look.get_value_label_spacing() - 8.0).abs() < 1e-9);
         let layout = look.layout(120.0, Some(14.0), Some(14.0));
-        assert!((layout.height - 65.0).abs() < 1e-9);
+        assert!((layout.height - 54.0).abs() < 1e-9);
     }
 
     #[test]
-    fn circular_progress_uses_16pt_ring() {
+    fn circular_progress_uses_20pt_ring_and_spaced_label_bands() {
         let glass = Glass::dark();
         let mut env = Environment::new();
         glass.install_tokens(&mut env);
         let look = circular(&glass, &spec(ProgressStyle::Circular), &env);
-        assert_eq!(look.control().size(), Size::new(16.0, 16.0));
+        assert_eq!(look.control().size(), Size::new(20.0, 20.0));
+        assert!((look.get_label_height() - 18.0).abs() < 1e-9);
+        assert_eq!(look.get_label_spacing(), Some(6.0));
+        assert_eq!(look.get_value_label_spacing(), Some(8.0));
+        let layout = look.layout(120.0, Some(14.0), Some(14.0));
+        assert!((layout.height - 70.0).abs() < 1e-9);
     }
 }
