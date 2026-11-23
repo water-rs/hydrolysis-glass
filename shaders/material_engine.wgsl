@@ -417,9 +417,6 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
     // which is undefined after non-uniform early returns in the compositor.
     let fw = max(abs(px.normal.x) + abs(px.normal.y), 1e-4);
 
-    let is_light = params[7].w > 0.5;
-    let is_light_regular = is_light && params[1].z > 0.0;
-
     // §4.10: the cast shadow — plain black, no capture read, at the
     // shifted field. A zero falloff gives ±inf inside `gsat`, the
     // standalone's hard-edged shadow, so only the density gates it.
@@ -430,21 +427,10 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
             * falloff(4.0 * gsat(0.25 * (f_s.sdf / u) / params[11].w + 0.5) - 2.0);
     }
 
-    // Light-mode 0.5 pt exterior hairline outside the regular silhouette.
-    let hairline_alpha = select(
-        0.0,
-        0.09 * gsat(1.0 - 2.0 * d),
-        is_light_regular && d > 0.0 && d <= 0.5,
-    );
-    let ext_alpha = select(
-        cast_alpha,
-        1.0 - (1.0 - cast_alpha) * (1.0 - hairline_alpha),
-        is_light_regular,
-    );
-
     // Past the element's exterior span the member writes nothing (§4.11);
-    // the shadow or hairline can still cover the pixel.
-    if d > params[5].w && ext_alpha < 1e-4 {
+    // the shadow can still cover the pixel (`exterior_span > 0.5` everywhere,
+    // so the 0.5 pt Light hairline is already 0 here).
+    if d > params[5].w && cast_alpha < 1e-4 {
         return vec4<f32>(0.0);
     }
 
@@ -454,6 +440,11 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
     // evaluated here, as the standalone did on its field texture.
     let cov = gsat(0.5 - px.sdf / fw);
     if cov <= 0.0 {
+        var ext_alpha = cast_alpha;
+        if d <= 0.5 && params[7].w > 0.5 && params[1].z > 0.0 {
+            let hairline_alpha = 0.09 * gsat(1.0 - 2.0 * d);
+            ext_alpha = 1.0 - (1.0 - cast_alpha) * (1.0 - hairline_alpha);
+        }
         return vec4<f32>(0.0, 0.0, 0.0, ext_alpha);
     }
 
@@ -471,21 +462,20 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
     // §4.12: the highlight sibling.
     // §4.13: the tint siblings; a flat tint (§8.1) lies under the
     // highlight, every other tint over it. Each layer is computed once
-    // and laid over via `select`: evaluating the loops and branches
-    // inside `if` made D3D12's WARP device render wrong texels and stall.
+    // before the uniform tint-mode branch: evaluating the loops inside
+    // a branch made D3D12's WARP device render wrong texels and stall.
+    let is_light = params[7].w > 0.5;
     let is_prominent = params[15].w > 1.5;
     let k_mul = select(select(0.110, 0.085, is_light), 0.105, is_prominent);
     let k_add = select(select(0.045, 0.025, is_light), 0.038, is_prominent);
     let light = highlight_light(d, n, cov, params[12].w);
     let tint = tint_alphas(params[13].a, params[15].w, d, cov);
-    let fill = select(
-        params[13].rgb,
-        prominent_tint_rgb(params[13].rgb, c, is_light),
-        is_prominent,
-    );
-    let pre = select(c, add_tint(c, fill, tint), is_prominent);
-    let lit = add_highlight(pre, light, k_mul, k_add);
-    c = select(add_tint(lit, fill, tint), lit, is_prominent);
+    if is_prominent {
+        let fill = prominent_tint_rgb(params[13].rgb, c, is_light);
+        c = add_highlight(add_tint(c, fill, tint), light, k_mul, k_add);
+    } else {
+        c = add_tint(add_highlight(c, light, k_mul, k_add), params[13].rgb, tint);
+    }
 
     // The standalone's `res = mix(shadow, interior, cov)` is the
     // premultiplied `(c·cov, a)` in encoded space. The member composite
@@ -494,6 +484,11 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
     // divide is safe — because `move_space` round-trips
     // `SPACE_SRGB_TO_P3`/`space_srgb_decode` back to that straight before
     // blending.
+    var ext_alpha = cast_alpha;
+    if cov < 1.0 && d > 0.0 && d <= 0.5 && is_light && params[1].z > 0.0 {
+        let hairline_alpha = 0.09 * gsat(1.0 - 2.0 * d);
+        ext_alpha = 1.0 - (1.0 - cast_alpha) * (1.0 - hairline_alpha);
+    }
     let a = cov + (1.0 - cov) * ext_alpha;
     let straight = SPACE_SRGB_TO_P3 * space_srgb_decode(c * (cov / a));
     return vec4<f32>(straight * a, a);
