@@ -40,13 +40,14 @@ pub(super) use tabs::look as tabs;
 pub(super) use text_field::look as text_field;
 pub(super) use toggle::{checkbox, switch};
 
-use cherenkov_record::kurbo::{Line, Point, Size};
+use cherenkov_record::kurbo::{Line, Point, Rect, Size, Vec2};
 use cherenkov_record::{Draw as _, Live, Paint, ShapeData, Stroke, WorkingColor};
 use hydrolysis_style::theme::{
-    BadgeLook, BadgeMetrics, Chrome, CornerShape, Custom, Driven, FocusIndicator, HitRegion,
-    Inputs, ListControls, ListDividerMetrics, ListGestures, ListLook, ListMetrics, ListRowMetrics,
-    ListSectionMetrics, ListTrailingControlMetrics, Motion, PressFeedback, ScrollIndicatorLook,
-    StateLayer, Surface as ChromeSurface, TableLook, TableMetrics, Transition, ValueMotion,
+    BadgeLook, BadgeMetrics, Chrome, CornerShape, Custom, DragDeformation, Driven, FocusIndicator,
+    HitRegion, Inputs, ListControls, ListDividerMetrics, ListGestures, ListLook, ListMetrics,
+    ListRowMetrics, ListSectionMetrics, ListTrailingControlMetrics, Motion, PressFeedback,
+    ScrollIndicatorLook, StateLayer, Surface as ChromeSurface, TableLook, TableMetrics, Transition,
+    ValueMotion,
 };
 use waterui::animation::Animation;
 use waterui::color::working::to_srgb;
@@ -269,6 +270,28 @@ pub(super) fn list(glass: &Glass) -> ListLook {
             recorder.stroke(icon, Stroke::new(2.0), working(palette.error_foreground));
         },
     ))
+}
+
+/// Converts a [`crate::dynamics::Spring`] to a framework [`Animation`].
+pub(super) fn spring_animation(spring: crate::dynamics::Spring) -> Animation {
+    Animation::spring(spring.stiffness(), spring.damping())
+}
+
+/// Applies horizontal or vertical area-preserving velocity stretch
+/// (`λ_parallel ∈ [0.88, 1.16]`, `λ_perp = 1 / λ_parallel`) to `rect`.
+pub(super) fn stretch_along_axis(rect: Rect, velocity: Option<Vec2>, vertical: bool) -> Rect {
+    let Some(v) = velocity else {
+        return rect;
+    };
+    let axis_v = if vertical {
+        Vec2::new(0.0, v.y)
+    } else {
+        Vec2::new(v.x, 0.0)
+    };
+    DragDeformation::new()
+        .velocity_stretch(0.16, 600.0)
+        .stretch_bounds(0.88, 1.16)
+        .deformed_rect(rect, Vec2::ZERO, axis_v)
 }
 
 /// The look of a backend-rendered table.

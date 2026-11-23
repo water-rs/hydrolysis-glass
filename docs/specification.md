@@ -1710,21 +1710,25 @@ every value is [chosen].
 
 #### States
 
-- **Selected item.** Draws the `4` pt inset continuous capsule highlight at
-  opacity `1` (`state_layer` at alpha `0.08`) beneath the item's chrome at rest,
-  fading out as the pressed clear lens takes over [chosen].
+- **Selected indicator.** Draws one shared `4` pt inset continuous capsule
+  pill (`state_layer` at alpha `0.08`) beneath the tab labels at rest,
+  gliding across items on selection changes and drags [chosen].
 - **Hover, focus and press.** Each item wears the theme's state layer
   (`0.06` hover/focus, `0.12` press) and a `2` pt accent focus ring `2` pt
-  outside its `4` pt inset capsule; while pressed, the pill grows by
-  `1 + 0.12·p` and becomes a clear-family refractive lens [chosen].
+  outside its `4` pt inset capsule; while pressed or dragged, the shared pill
+  scales by `1 + 0.12·p` with elastic axis stretch and activates a
+  clear-family refractive lens over the tab labels via `smoothstep(0.05, 0.55)`
+  [chosen].
 - **Disabled item.** Draws no pointer target [chosen].
 
 #### Motion
 
-- **Selection transition.** Selecting a different tab runs on a spring
-  (`ω0 = 15.7` rad/s, `ζ = 0.85`, rise time `0.400` s) [chosen].
+- **Selection transition.** Gliding between tabs runs on a spring
+  (`T_r = 0.400` s, `ζ = 0.850`) and responds to horizontal/sidebar pointer
+  drags [chosen].
 - **Item state layer.** Hover and focus ease over `0.201` s; press and
-  release run on the §8.1 springs [chosen].
+  release run on the §8.1 springs, and drag snap-back uses the §6 jelly drag
+  springs [chosen].
 
 ### 8.8 Navigation bar and bar items
 
@@ -1785,12 +1789,15 @@ every value is [chosen].
 ### 8.9 Menus and pop-ups
 
 One pop-up menu look serves menu button pop-ups, menu picker pop-ups and
-context menus (including text-field context menus). Because Hydrolysis hosts
-pop-up menus in standalone borderless windows and flat picture recordings
-that do not sample a scene backdrop at rest (`water-rs/waterui#2003`), the
-pop-up panel is an opaque elevated surface rather than glass. The trigger
-of a menu picker wears the §8.6 field container with a trailing dropdown
-indicator.
+context menus (including text-field context menus). For anchored overlay
+presentations, the panel morphs as a single continuous-corner regular-family
+glass surface (`r_1 = 26` pt) from the triggering anchor (`T_r = 0.360` s,
+`ζ = 0.82` on present; `T_r = 0.280` s, `ζ = 0.90` on dismiss) while fading
+the trigger (`[0.0, 0.25]`) and revealing content (`[0.25, 0.75]` opacity,
+`0.92 -> 1.0` scale across `[0.15, 0.85]`). Standalone borderless popup
+windows that lack a scene backdrop retain the fallback opaque elevated
+surface (`water-rs/waterui#2003`). The trigger of a menu picker wears the
+§8.6 field container with a trailing dropdown indicator.
 
 **Reference.** Nothing in this section was measured against a capture;
 every value is [chosen].

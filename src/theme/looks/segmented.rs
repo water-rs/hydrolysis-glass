@@ -95,6 +95,7 @@ pub(in super::super) fn look(
         .minimum(Size::new(0.0, MIN_HIT_HEIGHT))
         .slop(TAP_SLOP);
     SegmentedLook::new(layout, label, motion())
+        .show_label(false)
         .hit(hit)
         .drag(SegmentedDrag::new(spec.direction()))
         // A disabled control is the enabled one composited at opacity 0.5 in
@@ -155,7 +156,8 @@ fn body(
                 1.0 - press(inputs.state) as f32
             },
         ))
-    });
+    })
+    .smoothstep_window(0.05, 0.55);
     Custom::new(
         (container, container_fill, thumb_shape, thumb_fill),
         |recorder, _frame, (container, container_fill, thumb, thumb_fill)| {
@@ -204,9 +206,10 @@ fn lens(
             recorder.backdrop_material(shape, GLASS_SHADER, capture, effect);
         },
     )
-    .opacity(Driven::new(|inputs: &Inputs<'_, SegmentedValue>| {
-        f32::from(u8::from(held(inputs.state)))
-    }))
+    .opacity(
+        Driven::new(|inputs: &Inputs<'_, SegmentedValue>| f32::from(u8::from(held(inputs.state))))
+            .smoothstep_window(0.05, 0.55),
+    )
 }
 
 /// The focus ring around the thumb, visible while the control has keyboard

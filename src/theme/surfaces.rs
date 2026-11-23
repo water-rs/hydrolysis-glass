@@ -222,12 +222,11 @@ pub fn button(
     }
 }
 
-/// A button silhouette grown `1 + 0.245·p` about its centre, the radii
-/// scaled the same.
-/// `shape` grown uniformly about its centre by the press progress `p`.
+/// `shape` grown uniformly about its centre by the press progress `p`,
+/// capped per half-axis at [`crate::dynamics::PRESS_MAX_HALF_AXIS_GROWTH`].
 #[must_use]
 pub fn grown(shape: Shape, p: f32) -> Shape {
-    let s = button::growth(p);
+    let s = button::growth_for(shape.rect.w, shape.rect.h, p);
     Shape {
         rect: shape.rect.scaled_about_center(s),
         radii: shape.radii.map(|r| r * s),

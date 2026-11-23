@@ -140,13 +140,13 @@ pub const fn thumb_fill(appearance: Appearance) -> Rgba {
     }
 }
 
-/// The selection spring **[fitted: simulator]**.
+/// The selection spring (`T_r = 0.400 s, ζ = 0.850`).
 ///
 /// The display position `s` moves to the new index by it on every selection
 /// change, whether or not the change was made with an animation. It reuses
 /// the button's spring primitive.
 pub const SELECTION: Spring = Spring {
-    omega0: 15.7,
+    omega0: 15.707_96,
     zeta: 0.85,
 };
 

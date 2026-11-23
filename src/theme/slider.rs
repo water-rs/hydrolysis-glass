@@ -87,10 +87,9 @@ pub const PRESS_SPRING: Spring = Spring::PRESS;
 pub const RELEASE_SPRING: Spring = Spring::RELEASE;
 
 /// The value spring that moves the display value `u` to a value changed
-/// from outside the slider: ω0 15.6 rad/s, ζ 0.79 on a unit mass
-/// **[fitted: simulator]**.
+/// from outside the slider: `T_r = 0.403 s`, `ζ = 0.790` on a unit mass.
 pub const VALUE_SPRING: Spring = Spring {
-    omega0: 15.6,
+    omega0: 15.591_03,
     zeta: 0.79,
 };
 
