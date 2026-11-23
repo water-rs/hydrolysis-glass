@@ -440,7 +440,11 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
     // evaluated here, as the standalone did on its field texture.
     let cov = gsat(0.5 - px.sdf / fw);
     if cov <= 0.0 {
-        return vec4<f32>(0.0, 0.0, 0.0, cast_alpha);
+        let is_light_reg = select(0.0, 1.0, params[7].w > 0.5)
+            * select(0.0, 1.0, params[1].z > 0.0);
+        let hairline_alpha = is_light_reg * 0.09 * gsat(1.0 - 2.0 * d);
+        let ext_alpha = 1.0 - (1.0 - cast_alpha) * (1.0 - hairline_alpha);
+        return vec4<f32>(0.0, 0.0, 0.0, ext_alpha);
     }
 
     // §2: the owning member's ellipse bend, applied to the field normal
@@ -478,7 +482,10 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
     // divide is safe — because `move_space` round-trips
     // `SPACE_SRGB_TO_P3`/`space_srgb_decode` back to that straight before
     // blending.
-    let a = cov + (1.0 - cov) * cast_alpha;
+    let is_light_reg = select(0.0, 1.0, is_light) * select(0.0, 1.0, params[1].z > 0.0);
+    let hairline_alpha = is_light_reg * select(0.0, 0.09, d > 0.0) * gsat(1.0 - 2.0 * d);
+    let ext_alpha = 1.0 - (1.0 - cast_alpha) * (1.0 - hairline_alpha);
+    let a = cov + (1.0 - cov) * ext_alpha;
     let straight = SPACE_SRGB_TO_P3 * space_srgb_decode(c * (cov / a));
     return vec4<f32>(straight * a, a);
 }
