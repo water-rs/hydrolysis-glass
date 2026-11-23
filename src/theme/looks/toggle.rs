@@ -59,7 +59,7 @@ pub(in super::super) fn switch(glass: &Glass, spec: &ToggleSpec, env: &Environme
     let (appearance, translucency) = (glass.palette.appearance, glass.translucency);
     let tinted = Tint::inherited(env).is_some();
     let tint = spec.tint().resolve(env);
-    let default_tint = working(switch::default_tint(appearance));
+    let default_tint = working(glass.palette.accent);
 
     // The on fill is drawn over the off fill at the track fade's opacity,
     // which turns on by a slower spring than it turns off by.
@@ -89,10 +89,13 @@ pub(in super::super) fn switch(glass: &Glass, spec: &ToggleSpec, env: &Environme
     let off = Driven::<Paint, bool>::constant(paint(switch::off_fill(appearance)));
     let track = Custom::<bool, _>::new((off, on), move |recorder, frame, (off, on)| {
         let track = switch::capsule(switch::track_rect(frame, direction));
-        recorder.group(Group::new().blend_space(BlendSpace::Linear), |recorder| {
-            recorder.fill(Fixed(track.clone()), off);
-            recorder.fill(Fixed(track), on);
-        });
+        recorder.group(
+            Group::new().blend_space(BlendSpace::SrgbEncoded),
+            |recorder| {
+                recorder.fill(Fixed(track.clone()), off);
+                recorder.fill(Fixed(track), on);
+            },
+        );
     });
 
     // The knob at rest on the track, growing about its centre while held

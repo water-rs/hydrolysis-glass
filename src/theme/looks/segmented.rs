@@ -161,10 +161,13 @@ fn body(
     Custom::new(
         (container, container_fill, thumb_shape, thumb_fill),
         |recorder, _frame, (container, container_fill, thumb, thumb_fill)| {
-            recorder.group(Group::new().blend_space(BlendSpace::Linear), |recorder| {
-                recorder.fill(container, container_fill);
-                recorder.fill(thumb, thumb_fill);
-            });
+            recorder.group(
+                Group::new().blend_space(BlendSpace::SrgbEncoded),
+                |recorder| {
+                    recorder.fill(container, container_fill);
+                    recorder.fill(thumb, thumb_fill);
+                },
+            );
         },
     )
 }

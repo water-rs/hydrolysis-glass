@@ -83,14 +83,10 @@ pub const fn off_fill(appearance: Appearance) -> Rgba {
     }
 }
 
-/// The default tint: green, (48, 209, 88) in dark appearance and
-/// (52, 199, 89) in light **[chosen]**.
+/// The default tint: the theme's Display P3 accent colour **[measured]**.
 #[must_use]
 pub const fn default_tint(appearance: Appearance) -> Rgba {
-    match appearance {
-        Appearance::Dark => [48.0 / 255.0, 209.0 / 255.0, 88.0 / 255.0, 1.0],
-        Appearance::Light => [52.0 / 255.0, 199.0 / 255.0, 89.0 / 255.0, 1.0],
-    }
+    super::button::default_tint(appearance)
 }
 
 /// Opacity of a disabled switch, track and knob together **[fitted]**.

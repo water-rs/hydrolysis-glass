@@ -877,8 +877,8 @@ element's content (§2, item 5). A button is of one of two **kinds**:
   using the same size-group typography and insets as the glass buttons
   [measured].
 
-The tint defaults to the accent colour, (0, 145, 255) in dark appearance and
-(0, 136, 255) in light [measured].
+The tint defaults to the accent colour, (63, 143, 247) in dark appearance and
+(59, 134, 247) in light [measured].
 
 #### Geometry
 
@@ -1128,7 +1128,7 @@ simulator]. The knob travels 22 pt.
 |---|---|---|
 | knob | white, opaque | white, opaque |
 | off track | (235, 235, 245) at alpha 0.30 over the backdrop | (60, 60, 67) at alpha 0.30 over the backdrop |
-| on track | the tint, opaque; default green (48, 209, 88) | the tint, opaque; default green (52, 199, 89) |
+| on track | the tint, opaque; default accent (63, 143, 247) | the tint, opaque; default accent (59, 134, 247) |
 
 All entries are [chosen: the simulator's rendering, awaiting a device
 capture]. The off track blends in encoded space [fitted: simulator, the
@@ -1147,15 +1147,14 @@ light]. The on track rendered the same colour over every backdrop
 | disabled | as enabled, then the whole switch at opacity 0.5 | as enabled, at opacity 0.5 |
 | pressed | as at rest | grown glass lens (below) [chosen] |
 
-- **Tint.** The tint defaults to the green above. Rendered tints
-  [chosen: simulator rendering]: the accent colour, (0, 145, 255) in dark
-  appearance and (0, 136, 255) in light; red, (255, 66, 69) and
-  (255, 56, 60).
+- **Tint.** The tint defaults to the theme's Display P3 accent colour,
+  (63, 143, 247) in dark appearance and (59, 134, 247) in light [measured].
+  Alternate tints [chosen: simulator rendering]: red, (255, 66, 69) in dark
+  appearance and (255, 56, 60) in light.
 - **Disabled.** The enabled switch is composited over the backdrop at
   opacity 0.5, track and knob together [fitted: simulator, within 1 level
   over black, grey 0.5 and white in both appearances: the knob 128 over
-  black and 192 over grey; the dark off track 35, 144 and 252, the dark
-  on track 24, 105, 44 over black and 151, 232, 171 over white]. A
+  black and 192 over grey; the dark off track 35, 144 and 252]. A
   disabled switch does not respond to touches [chosen: not observed].
 - **Focus.** Not observed. An implementation that shows a focused state
   states its own choice.
@@ -1293,8 +1292,8 @@ mini through extra large [measured: simulator].
 | knob shadow | black, alpha 0.137, Gaussian σ = 5.2 pt, offset 1.2 pt down | the same |
 
 All entries are [chosen: the simulator's rendering, awaiting a device
-capture]. The tint defaults to the accent colour, (0, 145, 255) in dark
-appearance and (0, 136, 255) in light, and rendered the same over every
+capture]. The tint defaults to the accent colour, (63, 143, 247) in dark
+appearance and (59, 134, 247) in light, and rendered the same over every
 backdrop [measured: simulator].
 
 - **Unfilled track.** Blends in encoded space [fitted: simulator, the blend
@@ -1408,15 +1407,14 @@ Let the frame be `W` wide with `n` segments.
 
 | Size group | Frame height | Container height | Thumb height |
 |---|---|---|---|
-| mini, small, regular | 31 | 32 | 28 |
-| large, extra large | 48 | 49 | 45 |
+| mini, small, regular | 31 | 31 | 27 |
+| large, extra large | 48 | 48 | 44 |
 
 All values are [measured: simulator, within 1/3 pt]. Mini, small and
 regular are identical, and so are large and extra large.
 
-- **Container.** A capsule `W` wide whose top edge is the frame's top edge;
-  it is 1 pt taller than the frame and overhangs its bottom edge by 1 pt,
-  which takes no layout space [measured: simulator]. The control takes the
+- **Container.** A capsule `W` wide matching the frame's height (no
+  vertical overhang) [measured]. The control takes the
   width it is given.
 - **Segments.** The container is divided into `n` segments of width
   `W / n`, whatever their labels: "Short" and "A much longer label" each
@@ -1710,8 +1708,8 @@ every value is [chosen].
 | bar surface | regular glass capsule (§5) | regular glass capsule (§5) |
 | divider | none (glass rim and shadow) | none (glass rim and shadow) |
 | selected highlight | white at alpha 0.08 | black at alpha 0.08 |
-| selected foreground | accent `(10, 132, 255)` | accent `(0, 122, 255)` |
-| unselected foreground | foreground `(255, 255, 255)` | foreground `(0, 0, 0)` |
+| selected foreground | accent `(63, 143, 247)` | accent `(59, 134, 247)` |
+| unselected foreground | foreground `(221, 221, 221)` | foreground `(39, 39, 39)` |
 
 #### States
 

@@ -126,7 +126,7 @@ fn track(
     let appearance = glass.palette.appearance;
     let tinted = Tint::inherited(env).is_some();
     let tint = spec.tint().resolve(env);
-    let default_tint = working(slider::default_tint(appearance));
+    let default_tint = working(glass.palette.accent);
 
     let whole =
         Driven::new(|inputs: &Inputs<'_, f64>| switch::capsule(slider::track_rect(inputs.frame)));
@@ -150,11 +150,14 @@ fn track(
     Custom::new(
         (whole, unfilled, filled, fill, knob_shape(), shadow),
         |recorder, _frame, (whole, unfilled, filled, fill, knob, shadow)| {
-            recorder.group(Group::new().blend_space(BlendSpace::Linear), |recorder| {
-                recorder.fill(whole, unfilled);
-                recorder.fill(filled, fill);
-                recorder.shadow(knob, shadow);
-            });
+            recorder.group(
+                Group::new().blend_space(BlendSpace::SrgbEncoded),
+                |recorder| {
+                    recorder.fill(whole, unfilled);
+                    recorder.fill(filled, fill);
+                    recorder.shadow(knob, shadow);
+                },
+            );
         },
     )
 }
