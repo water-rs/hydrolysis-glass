@@ -56,7 +56,8 @@ use crate::material::geometry::{
 };
 use crate::material::gpu::DISPERSION_WIDTH_PT;
 use crate::material::recipe::{
-    Grade, Highlight, Recipe, Tint, ambient_sigma, blur_read_reach, blur_sigma, haze_sigma,
+    Grade, Highlight, Recipe, TINT_EFFECTIVE_ALPHA, Tint, ambient_sigma, blur_read_reach,
+    blur_sigma, haze_sigma,
 };
 
 use super::palette::{Rgba, working};
@@ -304,6 +305,43 @@ pub fn effect(element: &Element) -> MaterialEffect {
     pack(&element.recipe, element.shape.rect)
 }
 
+/// Decodes a Display P3-encoded channel to linear Display P3 without
+/// converting gamut primaries (inverse IEC 61966-2-1 transfer curve).
+fn decode_display_p3(c: f32) -> f32 {
+    if c <= 0.0 {
+        0.0
+    } else if c <= 0.040_45 {
+        c / 12.92
+    } else {
+        ((c + 0.055) / 1.055).powf(2.4)
+    }
+}
+
+/// §8 cross-element bleed emission `[r, g, b, E_j]` in straight linear
+/// Display P3 plus scalar strength (`[0.0; 4]` for neutral glass).
+fn member_emission(r: &Recipe) -> [f32; 4] {
+    let Some(tint) = r.tint else {
+        return [0.0; 4];
+    };
+    let is_light = r.ambient_favours_light;
+    let strength = if tint.edge_gradient {
+        let base = if is_light { 0.12 } else { 0.22 };
+        base * (tint.alpha / TINT_EFFECTIVE_ALPHA)
+    } else {
+        let base = if is_light { 0.20 } else { 0.35 };
+        base * tint.alpha
+    };
+    if strength <= 0.0 {
+        return [0.0; 4];
+    }
+    [
+        decode_display_p3(tint.rgb[0]),
+        decode_display_p3(tint.rgb[1]),
+        decode_display_p3(tint.rgb[2]),
+        strength,
+    ]
+}
+
 /// Packs `recipe` and the member rect `rect` into the effect a member
 /// binds: [`effect`]'s packing, and the one [`GlassContainer`] repacks
 /// the container's terms through.
@@ -372,10 +410,12 @@ pub(super) fn pack(recipe: &Recipe, rect: Rect) -> MaterialEffect {
     let outer = r
         .exterior_span
         .max(CAST_REACH_FALLOFF.mul_add(r.cast_falloff, r.cast_shift[0].hypot(r.cast_shift[1])));
-    MaterialEffect::new(bytemuck::cast::<Packed, [f32; PACKED_LEN]>(packed).to_vec()).outer(
-        OuterExtent::new(outer)
-            .expect("the exterior span and cast reach keep the extent finite and non-negative"),
-    )
+    MaterialEffect::new(bytemuck::cast::<Packed, [f32; PACKED_LEN]>(packed).to_vec())
+        .outer(
+            OuterExtent::new(outer)
+                .expect("the exterior span and cast reach keep the extent finite and non-negative"),
+        )
+        .emission(member_emission(r))
 }
 
 /// Recovers the recipe and the member rect a [`pack`]ed effect carries:
@@ -1020,5 +1060,35 @@ mod tests {
                 "content_engine.wgsl declares `{line}`"
             );
         }
+    }
+
+    #[test]
+    fn member_emission_packs_linear_p3_and_strength() {
+        let rect = Rect::new(0.0, 0.0, 100.0, 44.0);
+        let neutral = Recipe::for_size(
+            44.0,
+            Family::Regular,
+            Appearance::Dark,
+            Translucency::default(),
+        );
+        assert_eq!(pack(&neutral, rect).member_emission(), [0.0; 4]);
+
+        let dark_prom = neutral.with_tint(Tint::flat([0.0, 0.5, 1.0], 1.0));
+        let dark_em = pack(&dark_prom, rect).member_emission();
+        assert!((dark_em[0]).abs() < 1e-6);
+        assert!((dark_em[1] - decode_display_p3(0.5)).abs() < 1e-6);
+        assert!((dark_em[2] - 1.0).abs() < 1e-6);
+        assert!((dark_em[3] - 0.35).abs() < 1e-6);
+
+        let light_reg = Recipe::for_size(
+            44.0,
+            Family::Regular,
+            Appearance::Light,
+            Translucency::default(),
+        )
+        .with_tint(Tint::declared([1.0, 0.0, 0.0], 0.5));
+        let light_em = pack(&light_reg, rect).member_emission();
+        assert!((light_em[0] - 1.0).abs() < 1e-6);
+        assert!((light_em[3] - 0.06).abs() < 1e-6);
     }
 }

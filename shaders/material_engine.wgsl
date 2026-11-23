@@ -55,6 +55,7 @@
 const PI: f32 = 3.141592653589793;
 const EPS_ALPHA: f32 = 1e-4;
 const HIGHLIGHT_BAND: f32 = 1.0;
+const BLEED_RADIUS: f32 = 36.0;
 
 // The recipe's constant block, asserted by `theme::materials::uniforms`:
 // `Highlight::for_size` shares every term but the aperture, and the
@@ -465,6 +466,36 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
     let pre = mix(c, fill, select(0.0, tint.x, is_prominent));
     let lit = add_highlight(pre, light, k.x, k.y);
     c = add_tint(lit, params[13].rgb, select(tint, vec2<f32>(0.0), is_prominent));
+
+    // §8: cross-element emissive color bleed from tinted/prominent union
+    // siblings within `BLEED_RADIUS = 36.0 pt`.
+    let sibling_count = backdrop_sibling_count();
+    let self_index = backdrop_sibling_index();
+    if sibling_count > 1u {
+        let headroom = max(vec3<f32>(1.0) - c, vec3<f32>(0.0));
+        let edge_decay = exp(min(d, 0.0) / 8.0);
+        var bleed = vec3<f32>(0.0);
+        for (var i = 0u; i < sibling_count; i = i + 1u) {
+            if i == self_index {
+                continue;
+            }
+            let sib = backdrop_sibling(i, px.p);
+            let e_j = sib.emission.w;
+            if e_j <= 0.0 {
+                continue;
+            }
+            let d_j = sib.sdf / u;
+            if d_j < 0.0 || d_j >= BLEED_RADIUS {
+                continue;
+            }
+            let t_rad = 1.0 - gsat(d_j / BLEED_RADIUS);
+            let w_rad = t_rad * t_rad;
+            let w_face = 0.35 + 0.65 * edge_decay * max(0.0, -dot(n, sib.normal));
+            let c_j = space_srgb_encode(sib.emission.rgb);
+            bleed += e_j * w_rad * w_face * (c_j * headroom);
+        }
+        c += bleed;
+    }
 
     // Convert Display P3-encoded straight colour directly back to extended
     // linear Display P3 with no sRGB gamut transform, preserving wide-gamut
