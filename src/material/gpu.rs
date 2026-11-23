@@ -1886,6 +1886,21 @@ mod tests {
         }
     }
 
+    /// Both material shaders declare the recipe's §4.12 sharp highlight band.
+    #[test]
+    fn shaders_declare_the_highlight_band() {
+        use crate::material::recipe::HIGHLIGHT_BAND;
+        let decl = format!("const HIGHLIGHT_BAND: f32 = {HIGHLIGHT_BAND:?};");
+        assert!(
+            MATERIAL_WGSL.contains(decl.as_str()),
+            "material.wgsl declares `{decl}`"
+        );
+        assert!(
+            include_str!("../../shaders/material_engine.wgsl").contains(decl.as_str()),
+            "material_engine.wgsl declares `{decl}`"
+        );
+    }
+
     /// §5.6 on the measured mixed container: a 60 pt circle beside the
     /// 300 × 200.33 pt card renders the card's recipe — its capture scale
     /// among it — with the circle's primary lobe and first blur depth, in
