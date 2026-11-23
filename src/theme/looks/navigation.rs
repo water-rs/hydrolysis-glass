@@ -1,5 +1,5 @@
-//! The navigation bar look (specification §8.8): every bar a standalone
-//! glass toolbar with no separator, and the back button a direction-aware
+//! The navigation bar look (specification §8.8): transparent bar chrome at
+//! rest with no hairline separator, and the back button a direction-aware
 //! accent chevron with state feedback and focus ring.
 
 use hydrolysis_style::theme::{
@@ -9,7 +9,7 @@ use hydrolysis_style::theme::{
 use waterui_core::{EasingCurve, Environment};
 
 use super::super::chrome;
-use super::super::{Glass, NAVIGATION_DURATION, record_standalone};
+use super::super::{Glass, NAVIGATION_DURATION};
 use super::{hit_region, state_chrome};
 
 /// The measures of the navigation chrome: 44 pt inline bars and 96 pt
@@ -50,19 +50,15 @@ const fn motion() -> NavigationMotion {
 
 /// The look of the navigation chrome in `spec` (§8.8).
 ///
-/// The bar is the theme's toolbar surface over the bar's frame, whatever
-/// background the application gives it. The back button draws its
-/// direction-aware chevron over a clear capsule with the theme's state
-/// layer, focus ring and 44 pt hit target.
+/// The bar leaves its resting background transparent over whatever content sits
+/// beneath it. The back button draws its direction-aware chevron over a clear
+/// capsule with the theme's state layer, focus ring and 44 pt hit target.
 pub(in super::super) fn look(
     glass: &Glass,
     spec: NavigationSpec,
     _env: &Environment,
 ) -> NavigationBarLook {
-    let toolbar = glass.clone();
-    let bar = Custom::<BarSurface, _>::new((), move |recorder, frame, ()| {
-        record_standalone(recorder, &toolbar.toolbar_surface(frame));
-    });
+    let bar = Custom::<BarSurface, _>::new((), |_recorder, _frame, ()| {});
     let palette = glass.palette;
     let rtl = spec.direction().is_right_to_left();
     let chevron = Custom::<(), _>::new((), move |recorder, frame, ()| {
