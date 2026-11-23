@@ -183,6 +183,16 @@ fn assert_agrees(label: &str, engine: &Image, reference: &Image) {
     }
 }
 
+/// Largest absolute per-channel difference across two same-sized frames.
+fn max_channel_diff(a: &Image, b: &Image) -> f32 {
+    assert_eq!((a.width, a.height), (b.width, b.height));
+    a.pixels
+        .iter()
+        .zip(b.pixels.iter())
+        .flat_map(|(p, q)| (0..4).map(|c| (p[c] - q[c]).abs()))
+        .fold(0.0f32, f32::max)
+}
+
 /// [`assert_agrees`]'s comparison, with the verdict returned: `Err` names
 /// the worst pixel when `engine` is outside the tolerance of `reference`.
 #[allow(
@@ -1572,9 +1582,14 @@ fn the_lens_fades_out_through_the_release() {
         100,
         "segmented_lens_light_release_t0100",
     );
+    let rest = segmented_at_rest(Appearance::Light, 1);
+    let held_vs_rest = max_channel_diff(&held, &rest);
+    let fading_vs_held = max_channel_diff(&fading, &held);
+    let fading_vs_rest = max_channel_diff(&fading, &rest);
     assert!(
-        agreement("fading is not held", &fading, &held).is_err(),
-        "the lens 0.1 s into the release is drawn as held"
+        fading_vs_held > 0.05 && fading_vs_rest > 0.05 && fading_vs_rest < held_vs_rest,
+        "the lens 0.1 s into the release is not partway between held and rest \
+         (held_delta={fading_vs_held}, rest_delta={fading_vs_rest}, held_rest={held_vs_rest})"
     );
     capture_at(
         &mut app,
@@ -1582,11 +1597,7 @@ fn the_lens_fades_out_through_the_release() {
         150,
         "segmented_lens_light_release_t0150",
     );
-    assert_agrees(
-        "settled after the release",
-        &app.snapshot(),
-        &segmented_at_rest(Appearance::Light, 1),
-    );
+    assert_agrees("settled after the release", &app.snapshot(), &rest);
 }
 
 /// §8.4, Drag: a press on the selected segment drags the thumb by the
