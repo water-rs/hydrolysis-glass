@@ -66,7 +66,7 @@ impl Wash {
     /// The wash alpha at horizontal position `x`.
     #[must_use]
     pub fn alpha_at(&self, x: f32) -> f32 {
-        let half = self.shape.rect.w * 0.5;
+        let half = (self.shape.rect.w * 0.5).max(button::WASH_MIN_RADIUS);
         button::wash_alpha(self.progress, (x - self.touch_x).abs() / half)
     }
 }
@@ -466,6 +466,21 @@ mod tests {
         .wash
         .expect("pressed");
         assert!((off.alpha_at(end) - 0.30).abs() < 1e-6);
+        // Narrow buttons clamp the wash falloff radius to 40 pt.
+        let narrow = button(
+            &P,
+            KRect::new(0.0, 0.0, 40.0, 34.33),
+            &spec(Kind::Glass),
+            Press {
+                progress: 1.0,
+                touch_x: Some(20.0),
+            },
+            Translucency::default(),
+        )
+        .wash
+        .expect("pressed");
+        assert!((narrow.alpha_at(60.0) - 0.30 * 0.63).abs() < 1e-6);
+        assert!((narrow.alpha_at(40.0) - 0.30 * (1.0 - 0.37 * 0.25)).abs() < 1e-6);
     }
 
     #[test]

@@ -1040,7 +1040,7 @@ of 1 after 0.23 s. From a settled press, the release spring reaches −0.27 at
   label, composited in encoded space with alpha
 
   ```
-  a = max(p, 0) · 0.30 · (1 − 0.37·u²),   u = min(|x − x_touch| / (w/2), 1)
+  a = max(p, 0) · 0.30 · (1 − 0.37·u²),   u = min(|x − x_touch| / max(w/2, 40), 1)
   ```
 
   where `x` is the pixel's horizontal position, `x_touch` the touch point's
@@ -1710,18 +1710,19 @@ every value is [chosen].
 
 #### States
 
-- **Selected item.** Draws the `4` pt inset highlight capsule at opacity
-  `1` (`state_layer` at alpha `0.08`) beneath the item's chrome [chosen].
+- **Selected item.** Draws the `4` pt inset continuous capsule highlight at
+  opacity `1` (`state_layer` at alpha `0.08`) beneath the item's chrome at rest,
+  fading out as the pressed clear lens takes over [chosen].
 - **Hover, focus and press.** Each item wears the theme's state layer
-  (`0.06` hover/focus, `0.12` press with press tint) and a `2` pt accent
-  focus ring `2` pt outside its `4` pt inset capsule [chosen].
+  (`0.06` hover/focus, `0.12` press) and a `2` pt accent focus ring `2` pt
+  outside its `4` pt inset capsule; while pressed, the pill grows by
+  `1 + 0.12·p` and becomes a clear-family refractive lens [chosen].
 - **Disabled item.** Draws no pointer target [chosen].
 
 #### Motion
 
-- **Selection cross-fade.** Selecting a different tab transitions the
-  outgoing and incoming highlight opacities by `ease_out` over
-  `ln(0.05) / ln(1 − 0.22) / 60 ≈ 0.201` s (`PRESS_DURATION`) [chosen].
+- **Selection transition.** Selecting a different tab runs on a spring
+  (`ω0 = 15.7` rad/s, `ζ = 0.85`, rise time `0.400` s) [chosen].
 - **Item state layer.** Hover and focus ease over `0.201` s; press and
   release run on the §8.1 springs [chosen].
 
@@ -1824,7 +1825,7 @@ every value is [chosen].
 
 | Part | Dark appearance | Light appearance |
 |---|---|---|
-| menu panel fill | (28, 28, 30) opaque | (255, 255, 255) opaque |
+| menu panel fill | (28, 28, 30) opaque | (242, 242, 247) opaque |
 | menu panel border and divider | (84, 84, 88) at alpha 0.6 | (60, 60, 67) at alpha 0.29 |
 | menu panel shadow | black at alpha 0.18 | black at alpha 0.18 |
 | selected picker row | accent `(10, 132, 255)` at alpha 0.14 | accent `(0, 122, 255)` at alpha 0.14 |
