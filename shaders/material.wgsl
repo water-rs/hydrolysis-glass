@@ -377,9 +377,8 @@ fn highlight_light(r: Recipe, d: f32, n: vec2<f32>, cov: f32) -> vec4<f32> {
 // Chroma-preserving cubic soft-light composite for the specular rim
 // highlight `light`.
 fn add_highlight(outc: vec3<f32>, light: vec4<f32>, k_mul: f32, k_add: f32) -> vec3<f32> {
-    let soft = clamp(
+    let soft = min(
         outc * (1.0 + k_mul * light.rgb * (3.0 - 2.0 * outc)) + k_add * light.rgb,
-        vec3<f32>(0.0),
         vec3<f32>(1.0),
     );
     return select(outc, soft, light.w > 0.5);
@@ -477,15 +476,14 @@ fn material_fragment(v: FullscreenOut) -> @location(0) vec4<f32> {
         let k_add = select(select(0.045, 0.025, is_light), 0.038, is_prominent);
         let light = highlight_light(r, f.d, n, cov);
         let tint = tint_alphas(r, f.d, cov);
-        if is_prominent {
-            let fill = prominent_tint_rgb(r.tint.rgb, C, is_light);
-            C = add_highlight(add_tint(C, fill, tint), light, k_mul, k_add);
-        } else {
-            C = add_highlight(C, light, k_mul, k_add);
-            if r.hl_bb.w >= 0.5 {
-                C = add_tint(C, r.tint.rgb, tint);
-            }
-        }
+        let fill = select(
+            r.tint.rgb,
+            prominent_tint_rgb(r.tint.rgb, C, is_light),
+            is_prominent,
+        );
+        let pre = select(C, add_tint(C, fill, tint), is_prominent);
+        let lit = add_highlight(pre, light, k_mul, k_add);
+        C = select(add_tint(lit, fill, tint), lit, is_prominent);
         let interior = vec4<f32>(C, 1.0);
         let shadow = vec4<f32>(0.0, 0.0, 0.0, cast_alpha);
         let res = mix(shadow, interior, cov);

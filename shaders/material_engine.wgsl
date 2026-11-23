@@ -362,9 +362,8 @@ fn highlight_light(d: f32, n: vec2<f32>, cov: f32, aperture: f32) -> vec4<f32> {
 // Chroma-preserving cubic soft-light composite for the specular rim
 // highlight `light`.
 fn add_highlight(c: vec3<f32>, light: vec4<f32>, k_mul: f32, k_add: f32) -> vec3<f32> {
-    let soft = clamp(
+    let soft = min(
         c * (1.0 + k_mul * light.rgb * (3.0 - 2.0 * c)) + k_add * light.rgb,
-        vec3<f32>(0.0),
         vec3<f32>(1.0),
     );
     return select(c, soft, light.w > 0.5);
@@ -437,7 +436,11 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
         0.09 * gsat(1.0 - 2.0 * d),
         is_light_regular && d > 0.0 && d <= 0.5,
     );
-    let ext_alpha = 1.0 - (1.0 - cast_alpha) * (1.0 - hairline_alpha);
+    let ext_alpha = select(
+        cast_alpha,
+        1.0 - (1.0 - cast_alpha) * (1.0 - hairline_alpha),
+        is_light_regular,
+    );
 
     // Past the element's exterior span the member writes nothing (§4.11);
     // the shadow or hairline can still cover the pixel.
@@ -468,22 +471,21 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
     // §4.12: the highlight sibling.
     // §4.13: the tint siblings; a flat tint (§8.1) lies under the
     // highlight, every other tint over it. Each layer is computed once
-    // before the uniform tint-mode branch: evaluating the loops inside
-    // a branch made D3D12's WARP device render wrong texels and stall.
+    // and laid over via `select`: evaluating the loops and branches
+    // inside `if` made D3D12's WARP device render wrong texels and stall.
     let is_prominent = params[15].w > 1.5;
     let k_mul = select(select(0.110, 0.085, is_light), 0.105, is_prominent);
     let k_add = select(select(0.045, 0.025, is_light), 0.038, is_prominent);
     let light = highlight_light(d, n, cov, params[12].w);
     let tint = tint_alphas(params[13].a, params[15].w, d, cov);
-    if is_prominent {
-        let fill = prominent_tint_rgb(params[13].rgb, c, is_light);
-        c = add_highlight(add_tint(c, fill, tint), light, k_mul, k_add);
-    } else {
-        c = add_highlight(c, light, k_mul, k_add);
-        if params[15].w >= 0.5 {
-            c = add_tint(c, params[13].rgb, tint);
-        }
-    }
+    let fill = select(
+        params[13].rgb,
+        prominent_tint_rgb(params[13].rgb, c, is_light),
+        is_prominent,
+    );
+    let pre = select(c, add_tint(c, fill, tint), is_prominent);
+    let lit = add_highlight(pre, light, k_mul, k_add);
+    c = select(add_tint(lit, fill, tint), lit, is_prominent);
 
     // The standalone's `res = mix(shadow, interior, cov)` is the
     // premultiplied `(c·cov, a)` in encoded space. The member composite
