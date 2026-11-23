@@ -27,24 +27,12 @@ use super::{
     state_chrome,
 };
 
-/// Bordered push button corner radius, pt.
-const BORDERED_RADIUS: f64 = 6.0;
-/// Bordered push button neutral fill opacity over the backdrop.
-const BORDERED_FILL_ALPHA: f32 = 0.16;
-/// Compact bordered push button text size, pt.
-const BORDERED_COMPACT_TEXT_SIZE: f32 = 13.0;
-/// Compact bordered push button line height, pt.
-const BORDERED_COMPACT_LINE_HEIGHT: f32 = 16.0;
-/// Compact bordered push button horizontal padding, pt.
-const BORDERED_COMPACT_INSET_X: f64 = 13.0;
-/// Compact bordered push button vertical padding, pt.
-const BORDERED_COMPACT_INSET_Y: f64 = 4.0;
-
 /// The look of a button in `spec`.
 ///
 /// The glass and prominent styles take a glass body whose recipe the
-/// button's frame and press decide; `ButtonStyle::Bordered` takes a flat
-/// rounded push fill; the remaining borderless styles take a state layer
+/// button's frame and press decide; `ButtonStyle::Bordered` takes a
+/// track-filled capsule pill with an accent label under the theme's state
+/// layer and focus ring; the remaining borderless styles take a state layer
 /// over no body.
 pub(in super::super) fn look(glass: &Glass, spec: &ButtonSpec, env: &Environment) -> ButtonLook {
     let group = SizeGroup::of(spec.size());
@@ -63,27 +51,12 @@ pub(in super::super) fn look(glass: &Glass, spec: &ButtonSpec, env: &Environment
             |kind| glass_chrome(glass, group, kind, tinted, tint.clone()),
         )
     };
-    let (text_size, line_height, inset_x, inset_y) = if bordered && group == SizeGroup::Compact {
-        (
-            BORDERED_COMPACT_TEXT_SIZE,
-            BORDERED_COMPACT_LINE_HEIGHT,
-            BORDERED_COMPACT_INSET_X,
-            BORDERED_COMPACT_INSET_Y,
-        )
-    } else {
-        (
-            metrics.text_size,
-            metrics.line_height,
-            f64::from(metrics.inset_x),
-            f64::from(metrics.inset_y),
-        )
-    };
     let mut label = Label::new()
         .font(
             Font::from(Body)
-                .size(text_size)
+                .size(metrics.text_size)
                 .weight(FontWeight::Normal)
-                .line_height(line_height),
+                .line_height(metrics.line_height),
         )
         .color(label_color(glass, spec.style(), kind, tinted, tint));
     if kind.is_some() {
@@ -92,12 +65,12 @@ pub(in super::super) fn look(glass: &Glass, spec: &ButtonSpec, env: &Environment
     // The frame is the label plus the size group's insets and nothing more
     // (§8.1), so the look carries no minimum size. A symbol takes the same
     // insets as a title.
-    ButtonLook::new(chrome, label).padding(inset_x, inset_y)
+    ButtonLook::new(chrome, label).padding(f64::from(metrics.inset_x), f64::from(metrics.inset_y))
 }
 
 /// The label's colour in every state: white on a prominent body, the tint
-/// on a link or a tinted glass body, the foreground otherwise, faint while
-/// disabled.
+/// on a link or a tinted glass/bordered body, the accent on an untinted
+/// bordered body, the foreground otherwise, faint while disabled.
 fn label_color(
     glass: &Glass,
     style: ButtonStyle,
@@ -116,7 +89,11 @@ fn label_color(
     };
     let own = if kind == Some(Kind::Prominent) {
         Some(palette.accent_foreground)
-    } else if style != ButtonStyle::Link && !(tinted && kind == Some(Kind::Glass)) {
+    } else if style == ButtonStyle::Bordered && !tinted {
+        Some(palette.accent)
+    } else if style != ButtonStyle::Link
+        && !(tinted && (kind == Some(Kind::Glass) || style == ButtonStyle::Bordered))
+    {
         Some(palette.foreground)
     } else {
         None
@@ -135,10 +112,10 @@ fn plain_chrome(glass: &Glass) -> Chrome {
     state_chrome(glass, ChromeSurface::clear(CornerShape::full())).hit(hit_region())
 }
 
-/// The chrome of a bordered push button: a soft track-filled rounded rectangle
+/// The chrome of a bordered capsule button: a track-filled continuous capsule
 /// under the theme's state layer and focus ring.
 fn bordered_chrome(glass: &Glass) -> Chrome {
-    let base = alpha(glass.palette.track, BORDERED_FILL_ALPHA);
+    let base = glass.palette.track;
     let fill = Driven::new(move |inputs: &Inputs<'_, ()>| {
         paint(faded(
             base,
@@ -147,7 +124,7 @@ fn bordered_chrome(glass: &Glass) -> Chrome {
     });
     state_chrome(
         glass,
-        ChromeSurface::new(CornerShape::radius(BORDERED_RADIUS), fill),
+        ChromeSurface::new(CornerShape::full().smoothing(CONTINUOUS_SMOOTHING), fill),
     )
     .hit(hit_region())
 }
