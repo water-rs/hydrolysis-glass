@@ -52,18 +52,9 @@ pollster = "1.0"
 tracing = "0.1"
 # Writes the verification renders as PNG so a failing property can be looked at.
 image = { version = "0.25.10", default-features = false, features = ["png"] }
-waterui-capture = { version = "0.5.1", default-features = false }
-waterui-conformance = { version = "0.5.1", default-features = false, features = ["capture"] }
-
-[target.'cfg(target_os = "macos")'.dev-dependencies]
-cocoa-ui = { git = "https://github.com/water-rs/waterui", branch = "main", default-features = false }
-libtest-mimic = "0.8"
-waterui = { version = "0.5.2", default-features = false, features = ["capture"] }
-waterui-apple = { git = "https://github.com/water-rs/waterui", branch = "main", features = ["native-test"] }
-
-[[test]]
-name = "apple_parity"
-harness = false
+# NVIDIA LDR-FLIP perceptual diff, Magma heatmaps, blank-frame analysis, and HTML
+# gallery emission (`features = ["gallery"]` adds zero UI/GPU dependencies).
+waterui-testing = { version = "0.5.1", default-features = false, features = ["gallery"] }
 
 [lints.rust]
 missing_docs = "warn"
@@ -100,7 +91,6 @@ multiple_crate_versions = "allow"
 waterui = { git = "https://github.com/water-rs/waterui", branch = "main" }
 waterui-assets-core = { git = "https://github.com/water-rs/waterui", branch = "main" }
 waterui-capture = { git = "https://github.com/water-rs/waterui", branch = "main" }
-waterui-conformance = { git = "https://github.com/water-rs/waterui", branch = "main" }
 waterui-controls = { git = "https://github.com/water-rs/waterui", branch = "main" }
 waterui-core = { git = "https://github.com/water-rs/waterui", branch = "main" }
 waterui-dylib = { git = "https://github.com/water-rs/waterui", branch = "main" }
@@ -113,6 +103,7 @@ waterui-locale = { git = "https://github.com/water-rs/waterui", branch = "main" 
 waterui-macros = { git = "https://github.com/water-rs/waterui", branch = "main" }
 waterui-navigation = { git = "https://github.com/water-rs/waterui", branch = "main" }
 waterui-shape = { git = "https://github.com/water-rs/waterui", branch = "main" }
+waterui-testing = { git = "https://github.com/water-rs/waterui", branch = "main" }
 waterui-text = { git = "https://github.com/water-rs/waterui", branch = "main" }
 waterui-url = { git = "https://github.com/water-rs/waterui", branch = "main" }
 waterui-watcher-set = { git = "https://github.com/water-rs/waterui", branch = "main" }
