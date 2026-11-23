@@ -741,7 +741,9 @@ mod tests {
 
     #[test]
     fn tabs_look_switches_layout_at_600pt_and_drives_selection_and_press_lens() {
-        use hydrolysis_style::theme::{TabItemGeometry, TabItemLayout, TabsValue, ValueMotion};
+        use hydrolysis_style::theme::{
+            TabBarWidth, TabItemGeometry, TabItemLayout, TabsValue, ValueMotion,
+        };
         use waterui::navigation::tab::NativeTabStyle;
 
         let g = Glass::dark();
@@ -750,6 +752,27 @@ mod tests {
         assert_eq!(look.item_layout(402.0), TabItemLayout::Vertical);
         assert_eq!(look.item_layout(600.0), TabItemLayout::Horizontal);
         assert!(look.get_drag().is_some());
+        assert_eq!(
+            look.get_bar_width(),
+            TabBarWidth::Compact {
+                item_min_width: 94.0,
+                max_width: None,
+                horizontal_padding: 0.0,
+            }
+        );
+        assert!((look.get_floating_margin() - 12.0).abs() < 1e-9);
+        let selected_fg = look
+            .get_selected_foreground()
+            .expect("selected tab foreground")
+            .resolve(&env)
+            .snapshot();
+        assert_eq!(selected_fg, resolved(g.palette().accent));
+        let unselected_fg = look
+            .get_unselected_foreground()
+            .expect("unselected tab foreground")
+            .resolve(&env)
+            .snapshot();
+        assert_eq!(unselected_fg, resolved(g.palette().foreground));
         let vertical = look.metrics(TabItemLayout::Vertical);
         assert!((vertical.bar_height - 60.0).abs() < 1e-9);
         assert!((vertical.button_min_width - 64.0).abs() < 1e-9);
@@ -822,10 +845,18 @@ mod tests {
     #[test]
     fn navigation_bar_look_enables_back_feedback_and_metrics() {
         use hydrolysis_style::theme::FocusIndicator;
+        use waterui::text::font::FontWeight;
 
         let g = Glass::dark();
         let env = environment(&g);
         let look = g.navigation_bar(&NavigationSpec::new(LayoutDirection::LeftToRight), &env);
+        let title_font = look
+            .get_title_font()
+            .expect("inline navigation title font")
+            .resolve(&env)
+            .snapshot();
+        assert!((title_font.size() - 17.0).abs() < 1e-4);
+        assert_eq!(title_font.weight(), FontWeight::SemiBold);
         let metrics = look.metrics();
         assert!((metrics.inline_bar_height - 44.0).abs() < 1e-9);
         assert!((metrics.large_bar_height - 96.0).abs() < 1e-9);
