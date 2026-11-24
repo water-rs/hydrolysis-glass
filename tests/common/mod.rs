@@ -653,6 +653,15 @@ impl GlassApp {
         }
     }
 
+    /// Pumps once to latch pending input/transitions, jumps the virtual clock
+    /// forward by `duration`, and pumps once more so steady-state scenes settle
+    /// without rendering every intermediate frame on software rasterizers.
+    pub fn fast_forward(&mut self, duration: Duration) {
+        self.pump(false);
+        self.at += duration;
+        self.pump(false);
+    }
+
     /// Reads the frame at the current virtual time back, without
     /// settling the scene's motion first.
     ///
