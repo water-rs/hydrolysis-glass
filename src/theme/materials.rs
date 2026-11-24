@@ -131,7 +131,7 @@ fn shader_reach() -> f32 {
             let texels_per_pt = scale * REACH_PX_PER_PT;
             let device = |sigma_texels: f32| blur_read_reach(sigma_texels, top) / scale;
             [
-                PRIMARY_LOBE_PT.mul_add(
+                (PRIMARY_LOBE_PT + 2.5).mul_add(
                     REACH_PX_PER_PT,
                     device(blur_sigma(LARGEST_BLUR_RADIUS) * texels_per_pt),
                 ),
@@ -317,19 +317,22 @@ fn decode_display_p3(c: f32) -> f32 {
     }
 }
 
-/// §8 cross-element bleed emission `[r, g, b, E_j]` in straight linear
-/// Display P3 plus scalar strength (`[0.0; 4]` for neutral glass).
+/// §3.2 cross-element bleed emission `[r, g, b, ±E_j]` in straight linear
+/// Display P3 plus signed emitter strength (`[0.0; 4]` for neutral glass;
+/// negative `w` signals a prominent non-fusing sibling while `|w|` holds `E_j`).
 fn member_emission(r: &Recipe) -> [f32; 4] {
     let Some(tint) = r.tint else {
         return [0.0; 4];
     };
     let is_light = r.ambient_favours_light;
-    let strength = if tint.edge_gradient {
+    let (strength, non_fusing) = if tint.edge_gradient {
         let base = if is_light { 0.12 } else { 0.22 };
-        base * (tint.alpha / TINT_EFFECTIVE_ALPHA)
+        (base * (tint.alpha / TINT_EFFECTIVE_ALPHA), false)
     } else {
-        let base = if is_light { 0.20 } else { 0.35 };
-        base * tint.alpha
+        let rest: f32 = if is_light { 0.06 } else { 0.10 };
+        let press: f32 = if is_light { 0.14 } else { 0.25 };
+        let e = press.mul_add(r.press_progress.clamp(0.0, 1.0), rest);
+        (e * tint.alpha, true)
     };
     if strength <= 0.0 {
         return [0.0; 4];
@@ -338,7 +341,7 @@ fn member_emission(r: &Recipe) -> [f32; 4] {
         decode_display_p3(tint.rgb[0]),
         decode_display_p3(tint.rgb[1]),
         decode_display_p3(tint.rgb[2]),
-        strength,
+        if non_fusing { -strength } else { strength },
     ]
 }
 
@@ -384,7 +387,7 @@ pub(super) fn pack(recipe: &Recipe, rect: Rect) -> MaterialEffect {
         ambient_blur: r.ambient_blur,
         ambient_strength: r.ambient_strength,
         has_touch: f32::from(r.touch_point.is_some()),
-        reserved: 0.0,
+        rim_span: r.rim_ramp[1] - r.rim_ramp[0],
         ambient_grade: [
             r.ambient_grade.floor,
             r.ambient_grade.ceiling,
@@ -450,7 +453,7 @@ fn unpack(effect: &MaterialEffect) -> (Recipe, Rect) {
         primary_depth: p.primary_depth,
         rim_shift: p.rim_shift,
         rim_depth: p.rim_depth,
-        rim_ramp: FOLDED_RIM_RAMP,
+        rim_ramp: [-p.rim_span, 0.0],
         rim_mix: p.rim_mix,
         luminance_limit: p.luminance_limit,
         grade: grade(p.grade),
@@ -550,7 +553,7 @@ struct Packed {
     ambient_blur: f32,
     ambient_strength: f32,
     has_touch: f32,
-    reserved: f32,
+    rim_span: f32,
     /// Floor, ceiling, chroma.
     ambient_grade: [f32; 3],
     contour_shade_density: f32,
@@ -696,7 +699,6 @@ const HIGHLIGHT_TERMS: [f32; 9] = [0.75, 0.5, 0.5, 0.5, 0.0, PI, 0.14, 6.0, 0.65
 const HIGHLIGHT_COLOUR: [f32; 4] = [1.0; 4];
 
 /// Folded ramp and mix constants in `material_engine.wgsl`.
-const FOLDED_RIM_RAMP: [f32; 2] = [-1.0, 0.0];
 const FOLDED_GRADE_MIX: f32 = 1.0;
 const FOLDED_AMBIENT_RAMP: [f32; 2] = [1.0, 0.0];
 
@@ -709,10 +711,11 @@ fn assert_folded_constants(r: &Recipe) {
     let near = |a: f32, b: f32| (a - b).abs() < 1e-4;
     let all_near = |a: &[f32], b: &[f32]| a.iter().zip(b).all(|(a, b)| near(*a, *b));
     assert!(
-        all_near(&r.rim_ramp, &FOLDED_RIM_RAMP)
+        near(r.rim_ramp[1], 0.0)
+            && r.rim_ramp[0] < 0.0
             && near(r.grade_mix, FOLDED_GRADE_MIX)
             && all_near(&r.ambient_ramp, &FOLDED_AMBIENT_RAMP),
-        "rim_ramp, grade_mix and ambient_ramp are folded into material_engine.wgsl"
+        "rim_ramp upper bound, grade_mix and ambient_ramp are folded into material_engine.wgsl"
     );
     assert!(
         all_near(
@@ -1078,7 +1081,11 @@ mod tests {
         assert!((dark_em[0]).abs() < 1e-6);
         assert!((dark_em[1] - decode_display_p3(0.5)).abs() < 1e-6);
         assert!((dark_em[2] - 1.0).abs() < 1e-6);
-        assert!((dark_em[3] - 0.35).abs() < 1e-6);
+        assert!((dark_em[3] + 0.10).abs() < 1e-6);
+
+        let dark_prom_pressed = dark_prom.with_press(1.0, None);
+        let dark_pressed_em = pack(&dark_prom_pressed, rect).member_emission();
+        assert!((dark_pressed_em[3] + 0.35).abs() < 1e-6);
 
         let light_reg = Recipe::for_size(
             44.0,

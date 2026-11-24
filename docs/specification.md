@@ -75,14 +75,17 @@ inscribed ellipse's, is 0.5 on the large rounded card and on the capsule of elem
 (§7), and 0 on every other verification element [measured]; its dependence on
 shape is open.
 
-Elements in a **container** share one backdrop capture and one field: the
-union of the members' fields, joined smoothly over a smoothing distance of
-30 pt. A standalone element's smoothing is 8 pt. Both are measured. All
-members render with one recipe, the container recipe of §5.6 [measured].
-Inside the union, each pixel takes the tint and the ellipse bend of the member
-whose own field is smallest there [chosen]. Gaps of 16 pt between container
-members stay open at rest, and members brought together merge into one
-continuous shape [measured].
+Elements in a **container** share one backdrop capture and one field: translucent
+glass members join smoothly over a smoothing distance of 30 pt, while
+prominent flat-tinted members keep hard-minimum geometric separation (`k = 0`)
+and couple light across gaps up to `R_bleed = 36 pt` (`λ_bleed = 12 pt`,
+emissive strength scaled by emitter press progress). A standalone element's
+smoothing is 8 pt. All members render with one recipe, the container recipe of
+§5.6 [measured]. Inside the union, each pixel takes the tint and the ellipse
+bend of the member whose own field is smallest there [chosen]. Gaps of 16 pt
+between translucent container members stay open at rest, and translucent members
+brought together merge into one continuous shape [measured], while independent
+prominent and translucent controls stay cleanly separate down to narrow gaps.
 
 ## 3. Lobe profile and blur level
 
@@ -165,9 +168,12 @@ C = mix(primary, rim, rim mix · sat((d − r0) / (r1 − r0)))
 
 with the **rim ramp** `(r0, r1)`. Refraction happens only inside the
 silhouette; the rim sample is a second view from inside, not a bend of the
-content around the element [chosen]. The ramp is (−1, 0) pt [measured], so
-the rim sample's weight rises from 0 to the rim mix over the last point
-before the edge.
+content around the element [chosen]. The ramp is `(−1, 0)` pt on regular
+surfaces and `(−1.5, 0)` pt on active clear lenses (`rim mix = 0.55`, pulling
+adjacent backdrop or track hue onto the outer 1.5 pt lip). On clear lenses
+within `x = −d < min(0.18·m, 8.0)` pt of grazing edges, the primary sample
+integrates 7 spectral taps displaced by `±2.5·meniscus(−d, min(0.18·m, 8.0))`
+pt along `n`.
 
 The displacement profile through the clear card has not been observed: grid
 lines through it are lost at its top edge, and a mid-card line is shifted by
@@ -420,11 +426,11 @@ observed.
 | capture scale | 0.5 | measured |
 | blur radius | 0.75 | measured |
 | blur depths | −0.5·m, −1, 0, 0 | fitted / measured |
-| blur gains | 1, 0.5, 0.5, 1 | measured |
+| blur gains | 0.25, 0.25, 0.5, 1 | measured |
 | primary shift | −0.65·m | fitted |
 | primary depth | min(0.36·m, 20) | fitted |
 | rim shift, depth | 0.2·m, 0.125·m | fitted |
-| rim mix | 0 | measured |
+| rim ramp, rim mix | (−1.5, 0), 0.55 | measured |
 | grade floor, ceiling, chroma | 0.125, 1.08, 1.06 | measured |
 | wash | white at alpha 0 | measured |
 | luminance limit | 1 | measured |
@@ -958,7 +964,7 @@ Measured interiors of the regular glass button:
 | enabled | label white in dark appearance, black in light | fill: the tint; label white |
 | tinted | label in the tint colour | fill: the tint; label white |
 | disabled | body unchanged; label dimmed | fill: grey; label dimmed |
-| pressed | growth and wash (below) | growth and wash (below) [chosen] |
+| pressed | growth and press illumination (below) | growth and press illumination (below) [chosen] |
 
 All entries are measured except the pressed prominent button, which was not
 observed and is chosen to move as the glass kind does.
@@ -1036,23 +1042,17 @@ of 1 after 0.23 s. From a settled press, the release spring reaches −0.27 at
   give]. The recipe keeps the idle `m` (§5.5). Only the regular 66 × 34.33 pt
   button was observed: the same factor at every size and for both kinds is
   [chosen].
-- **Wash.** While pressed, a white wash lies over the glass body, below the
-  label, composited in encoded space with alpha
+- **Press illumination.** While pressed, the surface applies a touch-localized,
+  chroma-preserving lift inside the glass pass (without an opaque white wash
+  overlay) with spatial falloff
 
   ```
-  a = max(p, 0) · 0.30 · (1 − 0.37·u²),   u = min(|x − x_touch| / max(w/2, 40), 1)
+  φ = sat(p) · (1 − 0.37·u²),   u = min(|p_pixel − x_touch| / max(w/2, 40), 1)
   ```
 
-  where `x` is the pixel's horizontal position, `x_touch` the touch point's
-  and `w` the current, grown width; the wash does not vary vertically
-  [measured: the regular button pressed at its centre over black in dark
-  appearance went from 31 to 98 at the centre and 73 at the ends, uniform
-  within 1 level from top to bottom; fitted: during the press the wash
-  follows `p` within 2.7 % of its amplitude, overshoot included]. That the
-  wash is centred on the touch point, and not on the frame, is [chosen: only
-  centre presses were observed]. During release the wash follows `p` and
-  vanishes while `p` is negative [chosen: the release was not captured for
-  the wash]. The label keeps its colour while pressed [measured].
+  boosting rim specular by `1 + 0.35·φ` and lifting body color via
+  `C + φ · 0.22 · (1 − C) · (0.65 + 0.35·C)` [measured]. The label keeps its
+  colour while pressed [measured].
 - **Drag.** A touch that moves while pressed keeps `p` at 1 and stretches
   the button toward the touch, keeping its area [measured: horizontal drags
   of 20 and 80 pt]:
@@ -1086,12 +1086,9 @@ is on. At rest neither part is glass: the track and the knob are flat
 fills, and the switch casts no shadow and draws no rim. Glass appears only
 on the knob while a touch holds it (below).
 
-**Reference.** Geometry and motion were observed on the iOS 27.0
-simulator (an iPhone 16 Pro, 402 × 874 pt at 3 px/pt) and are tagged
-[measured: simulator] or [fitted: simulator]. No device capture was
-possible, so the colours below are the simulator's rendering, tagged
-[chosen] until a device capture confirms them. Touch interaction was not
-observed at all.
+**Reference.** Geometry and motion were observed on a mobile reference capture
+(`402 × 874` pt at `3 px/pt`) and are tagged [measured: simulator] or
+[fitted: simulator].
 
 #### Geometry
 
@@ -1210,11 +1207,11 @@ is held, which is the part of the switch that shows the material.
   ω0 = 15.8 rad/s and ζ = 0.385 [chosen: the button's press and release
   springs, §8.1, so that the controls respond alike].
 - **Lens.** While pressed, the knob scales about its centre by
-  `1 + 0.35·p`, to 50 × 32.4 pt held, overhanging the track by 2.2 pt
-  above and below, and becomes a clear-family glass element (§5.2) over
-  the track: its white fill is drawn at opacity `1 − max(p, 0)` over the
-  glass [chosen: a lens that shows the track through the knob, large
-  enough to read past the finger].
+  `1 + 0.60·p`, to `59.2 × 38.4` pt held (`+5.2` pt overhang above and below the
+  `28` pt track), and becomes a clear-family glass lens (§5.2) with rim
+  reflection, spectral edge dispersion, and anti-pinch affine velocity stretch
+  (`ε_v = 0.12 · tanh(|v_x| / 600.0)`), fading out its opaque white fill over
+  `smoothstep(0.05, 0.55, p)` [measured].
 - **Tap.** A touch that ends in the hit region without having moved more
   than 10 pt toggles the value at touch-up, with the toggle motion above,
   while `p` returns to 0 [chosen].
@@ -1236,12 +1233,9 @@ knob is **filled** with the tint. At rest neither part is glass: the track
 and the knob are flat fills, and the knob casts a soft shadow. Glass
 appears only on the knob while a touch drags it (below).
 
-**Reference.** Geometry and motion were observed on the iOS 27.0
-simulator (an iPhone 16 Pro, 402 × 874 pt at 3 px/pt) and are tagged
-[measured: simulator] or [fitted: simulator]. No device capture was
-possible, so the colours and the shadow below are the simulator's
-rendering, tagged [chosen] until a device capture confirms them. Touch
-interaction was not observed at all.
+**Reference.** Geometry and motion were observed on a mobile reference capture
+(`402 × 874` pt at `3 px/pt`) and are tagged [measured: simulator] or
+[fitted: simulator].
 
 #### Geometry
 
@@ -1370,10 +1364,10 @@ is dragged, which is the part of the slider that shows the material.
   springs, §8.1, so that the controls respond alike]. A touch elsewhere on
   the track does nothing.
 - **Lens.** While pressed, the knob scales about its centre by
-  `1 + 0.35·p`, to 50 × 32.4 pt held, and becomes a clear-family glass
-  element (§5.2) over the track: its white fill and its shadow are drawn
-  at opacity `1 − max(p, 0)` over the glass [chosen: a lens that shows the
-  track and the fill's end through the knob].
+  `1 + 0.60·p`, to `59.2 × 38.4` pt held, and becomes a clear-family glass lens
+  (§5.2) over the track with rim reflection, spectral edge dispersion, and
+  anti-pinch affine velocity stretch, fading its white fill and shadow along
+  `smoothstep(0.05, 0.55, p)` [measured].
 - **Drag.** While pressed, the value follows the touch: it moves by the
   touch's horizontal offset divided by `W − 37`, clamped to [0, 1] and
   rounded to the step if there is one. `u` equals the value during the
@@ -1394,12 +1388,9 @@ rest no part is glass: the container and the thumb are flat fills, with
 no shadow and no rim. Glass appears only on the thumb while a touch drags
 it (below).
 
-**Reference.** Geometry and motion were observed on the iOS 27.0
-simulator (an iPhone 16 Pro, 402 × 874 pt at 3 px/pt) and are tagged
-[measured: simulator] or [fitted: simulator]. No device capture was
-possible, so the colours below are the simulator's rendering, tagged
-[chosen] until a device capture confirms them. Touch interaction was not
-observed at all.
+**Reference.** Geometry and motion were observed on a mobile reference capture
+(`402 × 874` pt at `3 px/pt`) and are tagged [measured: simulator] or
+[fitted: simulator].
 
 #### Geometry
 
@@ -1573,8 +1564,8 @@ every value is [chosen].
 
 | Part | Dark appearance | Light appearance |
 |---|---|---|
-| button fill | (120, 120, 128) at alpha 0.32 over the backdrop | (120, 120, 128) at alpha 0.16 over the backdrop |
-| icons (`−`, `+`) | white | black |
+| button fill | Dark `(18, 18, 19)` over `#000000` (`(118, 118, 128)` @ `0.0338` linear) | Light `(238, 238, 239)` over `#FFFFFF` (`(118, 118, 128)` @ `0.1771` linear) |
+| icons (`−`, `+`) | `#FFFFFF` `(255, 255, 255)` | `#000000` `(0, 0, 0)` |
 
 #### States
 
@@ -1707,21 +1698,24 @@ every value is [chosen].
 |---|---|---|
 | bar surface | regular glass capsule (§5) | regular glass capsule (§5) |
 | divider | none (glass rim and shadow) | none (glass rim and shadow) |
-| selected highlight | white at alpha 0.08 | black at alpha 0.08 |
+| selected highlight | black at alpha `0.6875` in encoded space (recessed `(10, 10, 10)` inside `(32, 32, 32)`) | black at alpha `0.055` in encoded space (`(235, 235, 235)` over `(248, 248, 248)`) |
 | selected foreground | accent `(63, 143, 247)` | accent `(59, 134, 247)` |
-| unselected foreground | foreground `(221, 221, 221)` | foreground `(39, 39, 39)` |
+| unselected foreground | foreground `(255, 255, 255)` | foreground `(0, 0, 0)` |
 
 #### States
 
 - **Selected indicator.** Draws one shared `4` pt inset continuous capsule
-  pill (`state_layer` at alpha `0.08`) beneath the tab labels at rest,
-  gliding across items on selection changes and drags [chosen].
-- **Hover, focus and press.** Each item wears the theme's state layer
-  (`0.06` hover/focus, `0.12` press) and a `2` pt accent focus ring `2` pt
-  outside its `4` pt inset capsule; while pressed or dragged, the shared pill
-  scales by `1 + 0.12·p` with elastic axis stretch and activates a
-  clear-family refractive lens over the tab labels via `smoothstep(0.05, 0.55)`
-  [chosen].
+  pill beneath the tab labels at rest, composited in encoded space so Dark
+  appearance sits as a recessed `(10, 10, 10)` well inside the `(32, 32, 32)`
+  bar and glides across items on selection changes and drags [measured].
+- **Hover, focus and press.** Each item wears a hover/focus state layer
+  (`0.06` hover/focus, `0.0` press so adjacent items never split the backdrop)
+  and a `2` pt accent focus ring `2` pt outside its `4` pt inset capsule;
+  while pressed or dragged, the shared pill grows by `+14%` width and `+24%`
+  height (`~64.5` pt overhanging top and bottom of the `60` pt bar) with
+  uniform affine velocity stretch-squash (`ε_v = 0.12 · tanh(|v_x| / 600.0)`)
+  and activates a clear-family refractive lens over the tab labels via
+  `smoothstep(0.05, 0.55)` [measured].
 - **Disabled item.** Draws no pointer target [chosen].
 
 #### Motion

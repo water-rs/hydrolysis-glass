@@ -887,13 +887,13 @@ impl Recipe {
             capture_scale: 0.5,
             blur_radius: translucency_row(0.0, 0.75, 0.75, s),
             blur_depths: [-0.5 * m, -1.0, 0.0, 0.0],
-            blur_gains: [w, 0.5 * w, 0.5 * w, w],
+            blur_gains: [0.25 * w, 0.25 * w, 0.5 * w, w],
             primary_shift: -0.65 * m,
             primary_depth: (0.36 * m).min(20.0),
             rim_shift: 0.2 * m,
             rim_depth: 0.125 * m,
-            rim_ramp: [-1.0, 0.0],
-            rim_mix: 0.0,
+            rim_ramp: [-1.5, 0.0],
+            rim_mix: 0.55,
             luminance_limit: 1.0,
             grade: Grade::new(0.125, 1.08, 1.06),
             wash: [1.0; 3],
@@ -1217,7 +1217,7 @@ mod tests {
             c.iter().map(|r| r.blur_depths[0]).collect::<Vec<_>>(),
             [-40.0, -30.0, -20.0]
         );
-        assert!(c.iter().all(|r| r.blur_gains == [1.0, 0.5, 0.5, 1.0]));
+        assert!(c.iter().all(|r| r.blur_gains == [0.25, 0.25, 0.5, 1.0]));
         assert_eq!(
             c.iter().map(|r| r.primary_shift).collect::<Vec<_>>(),
             [-52.0, -39.0, -26.0]
@@ -1232,8 +1232,8 @@ mod tests {
             assert!((r.rim_depth - oh).abs() < 1e-4);
         }
         for r in &c {
-            assert_eq!(r.rim_ramp, [-1.0, 0.0]);
-            assert_eq!(r.rim_mix, 0.0);
+            assert_eq!(r.rim_ramp, [-1.5, 0.0]);
+            assert_eq!(r.rim_mix, 0.55);
             assert_eq!(r.grade, Grade::new(0.125, 1.08, 1.06));
             assert_eq!(r.wash, [1.0; 3]);
             assert_eq!(r.wash_alpha, 0.0);
@@ -1407,8 +1407,8 @@ mod tests {
             1e-6,
         );
         assert_eq!(clear_s(80.0, 0.0).blur_gains, [0.0; 4]);
-        assert_eq!(clear_s(80.0, 0.5).blur_gains, [1.0, 0.5, 0.5, 1.0]);
-        assert_eq!(clear_s(80.0, 1.0).blur_gains, [1.0, 0.5, 0.5, 1.0]);
+        assert_eq!(clear_s(80.0, 0.5).blur_gains, [0.25, 0.25, 0.5, 1.0]);
+        assert_eq!(clear_s(80.0, 1.0).blur_gains, [0.25, 0.25, 0.5, 1.0]);
         assert_close(
             &[
                 clear_s(80.0, 0.0).haze_radius,

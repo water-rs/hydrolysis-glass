@@ -34,7 +34,7 @@
 //   p6  grade           floor, ceiling, chroma, wash alpha
 //   p7  wash            wash r, g, b, ambient favours light
 //   p8  ambient         shift, depth, blur radius, strength
-//   p9  ambient misc    has_touch (0/1), reserved, ambient grade floor, ambient grade ceiling
+//   p9  ambient misc    has_touch (0/1), rim_span, ambient grade floor, ambient grade ceiling
 //   p10 ambient/contour ambient grade chroma, contour density, shift, softness
 //   p11 contour/border  contour width, contour clip, border aperture, cast falloff
 //   p12 cast/highlight  cast density, cast gain, channel ceiling, hl aperture
@@ -56,6 +56,8 @@ const PI: f32 = 3.141592653589793;
 const EPS_ALPHA: f32 = 1e-4;
 const HIGHLIGHT_BAND: f32 = 1.0;
 const BLEED_RADIUS: f32 = 36.0;
+const CONTAINER_UNION_SMOOTHING_PT: f32 = 30.0;
+const DISPERSION_SHIFT_PT: f32 = 2.5;
 
 // The recipe's constant block, asserted by `theme::materials::uniforms`:
 // `Highlight::for_size` shares every term but the aperture, and the
@@ -206,6 +208,75 @@ fn ellipse_normal(rect: vec4<f32>, pt: vec2<f32>) -> vec2<f32> {
     return v / len;
 }
 
+// Evaluates the container smooth-union SDF (device px) and outward unit normal
+// over ONLY fusing (translucent, `emission.w >= 0.0`) members, so prominent
+// capsules never form a geometric bridge with translucent glass siblings (§3.1).
+fn fusing_union_field(q: vec2<f32>, count: u32, u: f32) -> vec3<f32> {
+    let k = CONTAINER_UNION_SMOOTHING_PT * u;
+    var fused = 0.0;
+    var fused_g = vec2<f32>(0.0);
+    var last_d = -3.4e38;
+    var last_j = -1;
+    var initialized = false;
+    for (var step = 0u; step < count; step += 1u) {
+        var next_d = 3.4e38;
+        var next_g = vec2<f32>(0.0);
+        var next_j = i32(count);
+        for (var j = 0u; j < count; j += 1u) {
+            let sib = backdrop_sibling(j, q);
+            if sib.emission.w < 0.0 {
+                continue;
+            }
+            let d = sib.sdf;
+            let ji = i32(j);
+            let after_last = d > last_d || (d == last_d && ji > last_j);
+            let before_next = d < next_d || (d == next_d && ji < next_j);
+            if after_last && before_next {
+                next_d = d;
+                next_g = sib.normal;
+                next_j = ji;
+            }
+        }
+        if next_j >= i32(count) {
+            break;
+        }
+        if !initialized {
+            fused = next_d;
+            fused_g = next_g;
+            initialized = true;
+        } else {
+            let h = max(k - abs(fused - next_d), 0.0) / k;
+            fused = min(fused, next_d) - h * h * k * 0.25;
+            fused_g = (1.0 - 0.5 * h) * fused_g + 0.5 * h * next_g;
+        }
+        last_d = next_d;
+        last_j = next_j;
+    }
+    let w = max(length(fused_g), 1e-6);
+    return vec3<f32>(fused, fused_g / w);
+}
+
+// Signed geometric distance (device px) at `q` with sibling geometry separated
+// from prominent capsules (§3.1).
+fn geom_sdf_at(
+    q: vec2<f32>,
+    sibling_count: u32,
+    self_index: u32,
+    is_prominent: bool,
+    has_prominent_sib: bool,
+    u: f32,
+) -> f32 {
+    if sibling_count > 1u {
+        if is_prominent {
+            return backdrop_sibling(self_index, q).sdf;
+        }
+        if has_prominent_sib {
+            return fusing_union_field(q, sibling_count, u).x;
+        }
+    }
+    return backdrop_field(q).sdf;
+}
+
 // The §4.2–§4.9 glass body: the straight encoded colour inside the
 // silhouette. `p` is the member pixel in device space, `d` the field
 // distance in pt, `n` the bent field normal, `u` device px per pt,
@@ -217,6 +288,10 @@ fn glass_body(
     n: vec2<f32>,
     u: f32,
     cov: f32,
+    sibling_count: u32,
+    self_index: u32,
+    is_prominent: bool,
+    has_prominent_sib: bool,
 ) -> vec3<f32> {
     // Recipe capture texels onto the bound capture's grid: the class's
     // scale may sit above the recipe's requested scale (classes are
@@ -229,13 +304,39 @@ fn glass_body(
     // deviations (pt) are read on.
     let tex_per_pt = backdrop_scale * u;
 
-    // §4.2: the primary sample, refracted by the primary lobe and blurred
-    // at its refracted depth.
+    // §1.2 / §4.2: the primary sample, refracted by the primary lobe and
+    // blurred at its refracted depth; Clear lenses integrate 7 spectral
+    // taps across grazing lips (`x < min(0.18 m, 8.0)`).
     let o1 = lobe_at(d, params[0].y, params[0].x);
-    var c = glass_work_space(backdrop_sample_blur(
-        p + n * (o1 * u),
-        BLUR_SIGMA_PT_PER_RADIUS * params[1].w * blur_gain(params[2], params[3], d + o1) * tex_per_pt,
-    ));
+    let p1 = p + n * (o1 * u);
+    let sigma1 = BLUR_SIGMA_PT_PER_RADIUS
+        * params[1].w
+        * blur_gain(params[2], params[3], d + o1)
+        * tex_per_pt;
+    var c: vec3<f32>;
+    let m_elem = min(params[15].x, params[15].y);
+    let is_clear = params[12].y < 0.2;
+    let h_disp = min(0.18 * m_elem, 8.0);
+    let mu_disp = meniscus(-d, h_disp);
+    if is_clear && mu_disp > 1e-4 {
+        let v_disp = n * (DISPERSION_SHIFT_PT * mu_disp * u);
+        var acc = vec3<f32>(0.0);
+        for (var step = 1; step <= 3; step += 1) {
+            let k = f32(step) / 3.0;
+            let enc = glass_work_space(backdrop_sample_blur(p1 + v_disp * k, sigma1));
+            acc.r += k * enc.r;
+            acc.g += (1.0 - k) * enc.g;
+        }
+        for (var step = 0; step <= 3; step += 1) {
+            let k = f32(step) / 3.0;
+            let enc = glass_work_space(backdrop_sample_blur(p1 - v_disp * k, sigma1));
+            acc.g += (1.0 - k) * enc.g;
+            acc.b += k * enc.b;
+        }
+        c = vec3<f32>(0.5 * acc.r, (1.0 / 3.0) * acc.g, 0.5 * acc.b);
+    } else {
+        c = glass_work_space(backdrop_sample_blur(p1, sigma1));
+    }
 
     // §4.4: the haze — the capture at the pixel blurred by a Gaussian of
     // the haze radius's deviation, in the working space; runs before the
@@ -251,10 +352,11 @@ fn glass_body(
         c = mix(c1, f, params[4].w);
     }
 
-    // §4.2: the rim sample and the rim-ramp mix (folded `rim_ramp = (-1, 0)`);
-    // a rim mix of 0 takes no sample.
+    // §1.1 / §4.2: the rim sample and the rim-ramp mix; a rim mix of 0
+    // takes no sample.
     if params[1].z > 0.0 {
-        let rim_weight = params[1].z * gsat(d + 1.0);
+        let rim_span = max(params[9].y, 1e-4);
+        let rim_weight = params[1].z * gsat(1.0 + d / rim_span);
         let o2 = lobe_at(d, params[0].w, params[0].z);
         let s_rim = glass_work_space(backdrop_sample_blur(
             p + n * (o2 * u),
@@ -295,8 +397,14 @@ fn glass_body(
     // coverage by the clip. The shape weight `wR` is taken as 1 for every
     // member [chosen].
     if params[10].y > 0.0 {
-        let f_r = backdrop_field(p - vec2<f32>(0.0, params[10].z * u));
-        let f_d = f_r.sdf / u;
+        let f_d = geom_sdf_at(
+            p - vec2<f32>(0.0, params[10].z * u),
+            sibling_count,
+            self_index,
+            is_prominent,
+            has_prominent_sib,
+            u,
+        ) / u;
         let alpha_r = params[10].y
             * gsat(
                 shadow_profile(f_d / params[10].w)
@@ -392,20 +500,54 @@ fn add_tint(c: vec3<f32>, rgb: vec3<f32>, a: vec2<f32>) -> vec3<f32> {
 // blends in `BlendSpace::Linear` directly onto the linear Display P3 canvas.
 fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32> {
     let u = px.scale;
-    let d = px.sdf / u;
+    let is_light = params[7].w > 0.5;
+    let is_prominent = params[15].w > 1.5;
+    let sibling_count = backdrop_sibling_count();
+    let self_index = backdrop_sibling_index();
+    var has_prominent_sib = false;
+    if sibling_count > 1u && !is_prominent {
+        for (var i = 0u; i < sibling_count; i = i + 1u) {
+            if backdrop_sibling(i, px.p).emission.w < 0.0 {
+                has_prominent_sib = true;
+                break;
+            }
+        }
+    }
+
+    var geom_sdf = px.sdf;
+    var geom_normal = px.normal;
+    if sibling_count > 1u {
+        if is_prominent {
+            geom_sdf = px.own_sdf;
+            geom_normal = backdrop_sibling(self_index, px.p).normal;
+        } else if has_prominent_sib {
+            let uf = fusing_union_field(px.p, sibling_count, u);
+            geom_sdf = uf.x;
+            geom_normal = uf.yz;
+        }
+    }
+
+    let d = geom_sdf / u;
     // The field's screen-space rate from its unit outward normal in device
     // pixels (`|∂sdf/∂x| + |∂sdf/∂y|`): analytical rather than `fwidth`,
     // which is undefined after non-uniform early returns in the compositor.
-    let fw = max(abs(px.normal.x) + abs(px.normal.y), 1e-4);
+    let fw = max(abs(geom_normal.x) + abs(geom_normal.y), 1e-4);
 
     // §4.10: the cast shadow — plain black, no capture read, at the
     // shifted field. A zero falloff gives ±inf inside `gsat`, the
     // standalone's hard-edged shadow, so only the density gates it.
     var cast_alpha = 0.0;
     if params[12].x > 0.0 {
-        let f_s = backdrop_field(px.p - params[14].xy * u);
+        let f_s_sdf = geom_sdf_at(
+            px.p - params[14].xy * u,
+            sibling_count,
+            self_index,
+            is_prominent,
+            has_prominent_sib,
+            u,
+        );
         cast_alpha = params[12].x * params[12].y
-            * falloff(4.0 * gsat(0.25 * (f_s.sdf / u) / params[11].w + 0.5) - 2.0);
+            * falloff(4.0 * gsat(0.25 * (f_s_sdf / u) / params[11].w + 0.5) - 2.0);
     }
 
     // Past the element's exterior span the member writes nothing (§4.11);
@@ -415,13 +557,11 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
         return vec4<f32>(0.0);
     }
 
-    // The silhouette coverage: a half-device-pixel ramp at the fused
-    // field's edge. The composite's own coverage is the outer band's
-    // (`w_own · AA(field < outer)`), so the silhouette's ramp is
-    // evaluated here, as the standalone did on its field texture.
-    let cov = gsat(0.5 - px.sdf / fw);
+    // The silhouette coverage: a half-device-pixel ramp at the member's
+    // effective field edge.
+    let cov = gsat(0.5 - geom_sdf / fw);
     if cov <= 0.0 {
-        let is_light_reg = select(0.0, 1.0, params[7].w > 0.5)
+        let is_light_reg = select(0.0, 1.0, is_light)
             * select(0.0, 1.0, params[1].z > 0.0);
         let hairline_alpha = is_light_reg * 0.09 * gsat(1.0 - 2.0 * d);
         let ext_alpha = 1.0 - (1.0 - cast_alpha) * (1.0 - hairline_alpha);
@@ -430,13 +570,24 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
 
     // §2: the owning member's ellipse bend, applied to the field normal
     // the way the standalone's field pass bent it before shading.
-    var n = px.normal;
+    var n = geom_normal;
     if params[15].z > 0.0 {
         let rect = vec4<f32>(params[14].z, params[14].w, params[15].x, params[15].y);
         n = normalize(mix(n, ellipse_normal(rect, px.local), params[15].z));
     }
 
-    var c = glass_body(params, px.p, d, n, u, cov);
+    var c = glass_body(
+        params,
+        px.p,
+        d,
+        n,
+        u,
+        cov,
+        sibling_count,
+        self_index,
+        is_prominent,
+        has_prominent_sib,
+    );
     // §4.11: the per-channel ceiling; display headroom is the target's.
     c = clamp(c, vec3<f32>(0.0), vec3<f32>(params[12].z));
     // §4.12: the highlight sibling.
@@ -444,8 +595,6 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
     // highlight, every other tint over it. Each layer is computed and laid
     // over once: evaluating the layers' loops and branches once per order
     // made D3D12's WARP device render wrong texels and stall.
-    let is_light = params[7].w > 0.5;
-    let is_prominent = params[15].w > 1.5;
     let k = select(
         select(vec2<f32>(0.110, 0.045), vec2<f32>(0.085, 0.025), is_light),
         vec2<f32>(0.105, 0.038),
@@ -453,11 +602,12 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
     );
     let raw_light = highlight_light(d, n, cov, params[12].w);
     let press_p = max(params[5].y, 0.0);
-    let touch_delta = px.local - params[1].xy;
-    let press_sigma = max(0.35 * params[15].x, 1e-3);
-    let press_boost = 1.0 + 0.35 * press_p * (
-        0.4 + 0.6 * exp(-dot(touch_delta, touch_delta) / (2.0 * press_sigma * press_sigma))
-    );
+    let own_center = params[14].zw + params[15].xy * 0.5;
+    let touch_pt = select(own_center, params[1].xy, params[9].x > 0.5);
+    let touch_radius = max(0.5 * params[15].x, 40.0);
+    let u_t = min(length(px.local - touch_pt) / touch_radius, 1.0);
+    let phi = gsat(press_p) * (1.0 - 0.37 * u_t * u_t);
+    let press_boost = 1.0 + 0.35 * phi;
     let light = vec4<f32>(raw_light.rgb * press_boost, raw_light.w);
     let tint = tint_alphas(params[13].a, params[15].w, d, cov);
     let y_b = luma(c);
@@ -466,11 +616,14 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
     let pre = mix(c, fill, select(0.0, tint.x, is_prominent));
     let lit = add_highlight(pre, light, k.x, k.y);
     c = add_tint(lit, params[13].rgb, select(tint, vec2<f32>(0.0), is_prominent));
+    if phi > 0.0 {
+        let c_sat = clamp(c, vec3<f32>(0.0), vec3<f32>(1.0));
+        let lift_room = max(vec3<f32>(1.0) - c, vec3<f32>(0.0));
+        c = c + phi * 0.22 * lift_room * (0.65 + 0.35 * c_sat);
+    }
 
-    // §8: cross-element emissive color bleed from tinted/prominent union
-    // siblings within `BLEED_RADIUS = 36.0 pt`.
-    let sibling_count = backdrop_sibling_count();
-    let self_index = backdrop_sibling_index();
+    // §3.2: cross-element emissive color bleed from tinted/prominent union
+    // siblings within `BLEED_RADIUS = 36.0 pt` (`lambda_bleed = 12.0 pt`).
     if sibling_count > 1u {
         let headroom = max(vec3<f32>(1.0) - c, vec3<f32>(0.0));
         let edge_decay = exp(min(d, 0.0) / 8.0);
@@ -480,7 +633,7 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
                 continue;
             }
             let sib = backdrop_sibling(i, px.p);
-            let e_j = sib.emission.w;
+            let e_j = abs(sib.emission.w);
             if e_j <= 0.0 {
                 continue;
             }
@@ -488,11 +641,10 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
             if d_j < 0.0 || d_j >= BLEED_RADIUS {
                 continue;
             }
-            let t_rad = 1.0 - gsat(d_j / BLEED_RADIUS);
-            let w_rad = t_rad * t_rad;
+            let w_bleed = exp(-d_j / 12.0) * (1.0 - gsat(d_j / BLEED_RADIUS));
             let w_face = 0.35 + 0.65 * edge_decay * max(0.0, -dot(n, sib.normal));
             let c_j = space_srgb_encode(sib.emission.rgb);
-            bleed += e_j * w_rad * w_face * (c_j * headroom);
+            bleed += e_j * w_bleed * w_face * (c_j * headroom);
         }
         c += bleed;
     }

@@ -186,7 +186,7 @@ impl From<&Element> for GpuElement {
                     CornerCurve::Continuous => 1.0,
                 },
                 e.recipe.ellipse_bend,
-                0.0,
+                super::recipe::Tint::flag(e.recipe.tint),
                 0.0,
             ],
         }

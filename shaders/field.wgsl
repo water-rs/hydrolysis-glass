@@ -9,7 +9,7 @@
 struct FieldElement {
     rect: vec4<f32>,     // x, y, w, h in pt
     radii: vec4<f32>,    // TL, TR, BR, BL
-    params: vec4<f32>,   // curve (0 circular, 1 continuous), ellipse bend, -, -
+    params: vec4<f32>,   // curve (0 circular, 1 continuous), ellipse bend, tint flag, -
 }
 
 struct FieldUniforms {
@@ -61,27 +61,48 @@ fn sorts_after(d: f32, j: i32, after_d: f32, after_j: i32) -> bool {
 fn fused_distance(p: vec2<f32>) -> Fused {
     let count = i32(field.misc.x);
     let k = field.scene.w;
-    // Every member, folded in ascending distance order with the quadratic
-    // smooth minimum, as `UnionField` does: the fold is not associative,
-    // so the order is part of the field. Each step selects the next member
-    // in that order, so no member count bounds the pass.
+    // Translucent fusing members fold in ascending distance order with the
+    // quadratic smooth minimum; prominent flat-tinted members (`params.z > 1.5`)
+    // never fuse geometrically and combine via hard minimum while keeping overall
+    // nearest-member ownership (§3.1).
     var out: Fused;
+    var min_all = 3.4e38;
+    out.owner = 0u;
+    var min_prom = 3.4e38;
+    for (var j = 0; j < count; j += 1) {
+        let d = shape_distance(members[j], p);
+        if d < min_all {
+            min_all = d;
+            out.owner = u32(j);
+        }
+        if members[j].params.z > 1.5 {
+            min_prom = min(min_prom, d);
+        }
+    }
+
     var fused = 0.0;
+    var initialized = false;
     var last_d = -3.4e38;
     var last_j = -1;
     for (var step = 0; step < count; step += 1) {
         var next_d = 3.4e38;
         var next_j = count;
         for (var j = 0; j < count; j += 1) {
+            if members[j].params.z > 1.5 {
+                continue;
+            }
             let d = shape_distance(members[j], p);
             if sorts_after(d, j, last_d, last_j) && sorts_after(next_d, next_j, d, j) {
                 next_d = d;
                 next_j = j;
             }
         }
-        if step == 0 {
+        if next_j >= count {
+            break;
+        }
+        if !initialized {
             fused = next_d;
-            out.owner = u32(next_j);
+            initialized = true;
         } else {
             let h = max(k - abs(fused - next_d), 0.0) / k;
             fused = min(fused, next_d) - h * h * k * 0.25;
@@ -89,7 +110,8 @@ fn fused_distance(p: vec2<f32>) -> Fused {
         last_d = next_d;
         last_j = next_j;
     }
-    out.distance = max(fused, NEGATIVE_SENTINEL);
+    let combined = select(min_prom, min(fused, min_prom), initialized);
+    out.distance = max(combined, NEGATIVE_SENTINEL);
     return out;
 }
 

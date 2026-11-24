@@ -681,21 +681,20 @@ mod tests {
     }
 
     #[test]
-    fn dark_palette_uses_elevated_background_and_surface_hierarchy() {
+    fn dark_palette_uses_oled_black_background_and_surface_hierarchy() {
         use waterui::Resolvable as _;
 
-        assert_eq!(
-            Palette::DARK.background,
-            [30.0 / 255.0, 30.0 / 255.0, 30.0 / 255.0, 1.0]
-        );
+        assert_eq!(Palette::DARK.background, [0.0, 0.0, 0.0, 1.0]);
         assert_eq!(
             Palette::DARK.surface,
-            [44.0 / 255.0, 44.0 / 255.0, 46.0 / 255.0, 1.0]
+            [28.0 / 255.0, 28.0 / 255.0, 30.0 / 255.0, 1.0]
         );
         assert_eq!(
             Palette::DARK.surface_variant,
-            [58.0 / 255.0, 58.0 / 255.0, 60.0 / 255.0, 1.0]
+            [44.0 / 255.0, 44.0 / 255.0, 46.0 / 255.0, 1.0]
         );
+        assert_eq!(Palette::DARK.foreground, [1.0, 1.0, 1.0, 1.0]);
+        assert_eq!(Palette::LIGHT.foreground, [0.0, 0.0, 0.0, 1.0]);
 
         let mut env = Environment::new();
         Glass::dark().install_tokens(&mut env);
@@ -704,7 +703,8 @@ mod tests {
         let variant = waterui::theme::color::SurfaceVariant
             .resolve(&env)
             .snapshot();
-        assert!(bg.components[0] > 0.0 && bg.components[0] < surf.components[0]);
+        assert_eq!(bg.components[0], 0.0);
+        assert!(bg.components[0] < surf.components[0]);
         assert!(surf.components[0] < variant.components[0]);
     }
 
