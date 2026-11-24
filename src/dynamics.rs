@@ -66,11 +66,21 @@ impl Spring {
     /// ~20% opposite-axis squash-rebound).
     pub const JELLY_DRAG_RELEASE: Self = Self::new(0.349, 0.450);
 
-    /// Popover / menu presentation spring (`T_r = 0.360 s`, `zeta = 0.820`).
-    pub const POPOVER_PRESENT: Self = Self::new(0.360, 0.820);
+    /// Popover / menu horizontal presentation spring (`T_r = 0.286 s`, `zeta = 0.760`,
+    /// ~2.4% horizontal overshoot).
+    pub const POPOVER_PRESENT: Self = Self::new(0.286, 0.760);
 
-    /// Popover / menu dismissal spring (`T_r = 0.280 s`, `zeta = 0.900`).
-    pub const POPOVER_DISMISS: Self = Self::new(0.280, 0.900);
+    /// Popover / menu vertical presentation spring (`T_r = 0.311 s`, `zeta = 0.333`,
+    /// ~34% vertical overshoot).
+    pub const POPOVER_PRESENT_VERTICAL: Self = Self::new(0.311, 0.333);
+
+    /// Popover / menu horizontal dismissal spring (`T_r = 0.624 s`, `zeta = 0.619`,
+    /// ~14% pinch undershoot before rebounding to the trigger width).
+    pub const POPOVER_DISMISS: Self = Self::new(0.624, 0.619);
+
+    /// Popover / menu vertical dismissal spring (`T_r = 0.807 s`, `zeta = 0.756`,
+    /// lagging width by ~45 ms during contraction).
+    pub const POPOVER_DISMISS_VERTICAL: Self = Self::new(0.807, 0.756);
 
     /// Constructs a unit-mass spring from its response period (seconds) and damping ratio.
     #[must_use]

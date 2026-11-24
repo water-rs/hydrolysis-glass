@@ -36,8 +36,10 @@ fn spring_presets_match_specification_coefficients() {
     assert_eq!(Spring::SEGMENTED_PILL, Spring::new(0.400, 0.850));
     assert_eq!(Spring::JELLY_DRAG_ACTIVE, Spring::new(0.340, 0.600));
     assert_eq!(Spring::JELLY_DRAG_RELEASE, Spring::new(0.349, 0.450));
-    assert_eq!(Spring::POPOVER_PRESENT, Spring::new(0.360, 0.820));
-    assert_eq!(Spring::POPOVER_DISMISS, Spring::new(0.280, 0.900));
+    assert_eq!(Spring::POPOVER_PRESENT, Spring::new(0.286, 0.760));
+    assert_eq!(Spring::POPOVER_PRESENT_VERTICAL, Spring::new(0.311, 0.333));
+    assert_eq!(Spring::POPOVER_DISMISS, Spring::new(0.624, 0.619));
+    assert_eq!(Spring::POPOVER_DISMISS_VERTICAL, Spring::new(0.807, 0.756));
 }
 
 #[test]

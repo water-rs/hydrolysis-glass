@@ -24,19 +24,22 @@ use super::super::palette::working;
 use super::super::surfaces;
 use super::spring_animation;
 
-/// The measures of a menu: rows 40 pt tall, padded 16 by 6, 120 to 280 pt
-/// wide at 8 pt a character before text layout, with full-width hairline
-/// separators.
+/// The measures of a menu: rows 45 pt tall, padded 20 by 8, 250 to 280 pt
+/// wide at 8 pt a character before text layout, with inset hairline
+/// separators aligned to the row text.
 const LAYOUT: MenuLayout = MenuLayout {
-    row_height: 40.0,
-    horizontal_padding: 16.0,
-    vertical_padding: 6.0,
-    min_width: 120.0,
+    row_height: 45.0,
+    horizontal_padding: 20.0,
+    vertical_padding: 8.0,
+    min_width: 250.0,
     max_width: 280.0,
     width_per_char: 8.0,
-    separator_horizontal_inset: 0.0,
+    separator_horizontal_inset: 20.0,
     separator_thickness: HAIRLINE,
 };
+
+/// Initial Gaussian blur radius for menu content reveal, pt.
+const CONTENT_BLUR_FROM: f64 = 8.0;
 
 /// The look of a menu in `spec`: a fallback opaque surface when no scene
 /// backdrop is present, paired with animated popover presentation morphing
@@ -61,10 +64,20 @@ pub(in super::super) fn look(glass: &Glass, _spec: MenuSpec, _env: &Environment)
         spring_animation(Spring::POPOVER_PRESENT),
         spring_animation(Spring::POPOVER_DISMISS),
     )
-    .trigger_opacity_window(0.0, 0.25)
-    .content_opacity_window(0.25, 0.75)
+    .present_vertical(spring_animation(Spring::POPOVER_PRESENT_VERTICAL))
+    .dismiss_vertical(spring_animation(Spring::POPOVER_DISMISS_VERTICAL))
+    .trigger_chrome_opacity_window(0.0, 0.0)
+    .trigger_opacity_window(0.55, 0.96)
+    .dismiss_trigger_opacity_window(0.90, 1.0)
+    .content_opacity_window(0.40, 0.96)
+    .dismiss_content_opacity_window(0.55, 1.0)
     .content_scale_from(0.92)
-    .content_scale_window(0.15, 0.85);
+    .content_scale_window(0.15, 0.85)
+    .content_blur_from(CONTENT_BLUR_FROM)
+    .content_blur_window(0.30, 0.96)
+    .dismiss_content_blur_window(0.65, 1.0)
+    .surface_corner_radius(f64::from(POPOVER_TARGET_RADIUS))
+    .cover_trigger(true);
     MenuLook::new(
         LAYOUT,
         panel,
@@ -81,12 +94,14 @@ pub(in super::super) fn look(glass: &Glass, _spec: MenuSpec, _env: &Environment)
         if rect.w <= 0.0 || rect.h <= 0.0 {
             return;
         }
-        let q = sample.progress.max(0.0);
-        let r0 = 0.5 * sample.origin.width().min(sample.origin.height());
-        let r1 = f64::from(POPOVER_TARGET_RADIUS);
         let max_r = 0.5 * sample.surface.width().min(sample.surface.height());
+        let target_radius = if sample.surface_corner_radius > 0.0 {
+            sample.surface_corner_radius
+        } else {
+            f64::from(POPOVER_TARGET_RADIUS)
+        };
         #[expect(clippy::cast_possible_truncation, reason = "corner radius fits in f32")]
-        let radius = (r1 - r0).mul_add(q, r0).clamp(0.0, max_r) as f32;
+        let radius = target_radius.clamp(0.0, max_r) as f32;
         let element = Element {
             shape: Shape::rounded_rect(rect, radius, CornerCurve::Continuous),
             recipe: Recipe::for_size(rect.m(), Family::Regular, appearance, translucency),

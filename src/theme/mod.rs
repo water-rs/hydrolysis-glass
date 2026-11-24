@@ -921,13 +921,13 @@ mod tests {
         let env = environment(&g);
         let look = g.menu(&MenuSpec::new(LayoutDirection::LeftToRight), &env);
         let layout = look.layout();
-        assert!((layout.row_height - 40.0).abs() < 1e-9);
-        assert!((layout.horizontal_padding - 16.0).abs() < 1e-9);
-        assert!((layout.vertical_padding - 6.0).abs() < 1e-9);
-        assert!((layout.min_width - 120.0).abs() < 1e-9);
+        assert!((layout.row_height - 45.0).abs() < 1e-9);
+        assert!((layout.horizontal_padding - 20.0).abs() < 1e-9);
+        assert!((layout.vertical_padding - 8.0).abs() < 1e-9);
+        assert!((layout.min_width - 250.0).abs() < 1e-9);
         assert!((layout.max_width - 280.0).abs() < 1e-9);
         assert!((layout.width_per_char - 8.0).abs() < 1e-9);
-        assert!(layout.separator_horizontal_inset.abs() < 1e-9);
+        assert!((layout.separator_horizontal_inset - 20.0).abs() < 1e-9);
         assert!((layout.separator_thickness - chrome::HAIRLINE).abs() < 1e-9);
         assert!(look.has_selected_row());
         assert!(matches!(look.panel().fill(), Fill::Paint(_)));
@@ -935,10 +935,20 @@ mod tests {
         let motion = look
             .get_presentation_motion()
             .expect("popover presentation motion");
+        assert!(motion.present_vertical.is_some());
+        assert!(motion.dismiss_vertical.is_some());
         assert!((motion.content_scale_from - 0.92).abs() < 1e-9);
-        assert_eq!(motion.content_opacity_window, (0.25, 0.75));
+        assert!((motion.content_blur_from - 8.0).abs() < 1e-9);
+        assert_eq!(motion.content_opacity_window, (0.40, 0.96));
+        assert_eq!(motion.dismiss_content_opacity_window, Some((0.55, 1.0)));
         assert_eq!(motion.content_scale_window, (0.15, 0.85));
-        assert_eq!(motion.trigger_opacity_window, Some((0.0, 0.25)));
+        assert_eq!(motion.content_blur_window, (0.30, 0.96));
+        assert_eq!(motion.dismiss_content_blur_window, Some((0.65, 1.0)));
+        assert_eq!(motion.trigger_opacity_window, Some((0.55, 0.96)));
+        assert_eq!(motion.dismiss_trigger_opacity_window, Some((0.90, 1.0)));
+        assert_eq!(motion.trigger_chrome_opacity_window, Some((0.0, 0.0)));
+        assert_eq!(motion.surface_corner_radius, Some(26.0));
+        assert!(motion.cover_trigger);
         assert!(look.has_presentation_panel());
         let sample = hydrolysis_style::theme::MenuPresentationSample::at_rest(
             Rect::new(20.0, 20.0, 100.0, 54.0),
