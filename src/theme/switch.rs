@@ -56,9 +56,9 @@ pub fn knob_rect(track: Rect, direction: LayoutDirection, q: f64, p: f64) -> Rec
     Rect::from_center_size(rest.center(), rest.size() * LENS_GROWTH.mul_add(p, 1.0))
 }
 
-/// How much a held knob grows: the lens is the knob scaled by `1 + 0.35·p`
-/// about its centre **[measured]**.
-pub const LENS_GROWTH: f64 = 0.35;
+/// How much a held knob grows: the lens is the knob scaled by `1 + 0.60·p`
+/// about its centre (§1.4: `59.2 × 38.4 pt`).
+pub const LENS_GROWTH: f64 = 0.60;
 
 /// The capsule of `rect`, with the continuous corners every glass capsule
 /// has.
@@ -222,12 +222,12 @@ mod tests {
     }
 
     #[test]
-    fn a_held_knob_is_a_lens_50_by_32_overhanging_the_track() {
+    fn a_held_knob_is_a_lens_59_by_38_overhanging_the_track() {
         let track = track_rect(Rect::new(0.0, 0.0, FRAME[0], FRAME[1]), LTR);
         let held = knob_rect(track, LTR, 0.0, 1.0);
-        near(held.width(), 49.95, 0.01);
-        near(held.height(), 32.4, 1e-3);
-        near(track.y0 - held.y0, 2.2, 1e-3);
+        near(held.width(), 59.2, 0.01);
+        near(held.height(), 38.4, 1e-3);
+        near(track.y0 - held.y0, 5.2, 1e-3);
         near(
             held.center().x,
             knob_rect(track, LTR, 0.0, 0.0).center().x,

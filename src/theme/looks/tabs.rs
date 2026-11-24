@@ -4,26 +4,25 @@
 //! becomes a clear refractive lens (`1 + 0.12·p`) while pressed or dragged.
 
 use cherenkov_record::kurbo::{Rect, RoundedRectRadii, Size};
-use cherenkov_record::{ContinuousRect, Draw as _, ShapeData};
+use cherenkov_record::{BlendSpace, ContinuousRect, Draw as _, Group, ShapeData};
 use hydrolysis_style::theme::{
-    CornerShape, Custom, Driven, DrivenSet, HitRegion, Inputs, Surface as ChromeSurface,
-    TabBarWidth, TabsDrag, TabsLook, TabsMetrics, TabsSpec, TabsValue, Transition, ValueMotion,
+    Chrome, CornerShape, Custom, Driven, DrivenSet, FocusIndicator, HitRegion, Inputs,
+    PressFeedback, StateLayer, Surface as ChromeSurface, TabBarWidth, TabsDrag, TabsLook,
+    TabsMetrics, TabsSpec, TabsValue, Transition, ValueMotion,
 };
 use waterui::interaction::InteractionState;
 use waterui::navigation::tab::NativeTabStyle;
 use waterui_core::Environment;
 
-use crate::dynamics::{self, TAB_BAR_PRESS_SCALE_GAIN};
+use crate::dynamics;
 use crate::material::geometry::{CornerCurve, Element, Rect as ElementRect, Shape};
-use crate::material::recipe::{Family, Recipe};
+use crate::material::recipe::{Appearance, Family, Recipe};
 
 use super::super::button::{CANCEL_DISTANCE, MIN_HIT_SIDE};
+use super::super::chrome::{FOCUS_RING_GAP, FOCUS_RING_WIDTH, HOVER_ALPHA};
 use super::super::materials::{self, CONTINUOUS_SMOOTHING, GLASS_SHADER};
-use super::super::palette::alpha;
 use super::super::{Glass, record_standalone};
-use super::{
-    control_motion, is_disabled, paint, spring_animation, state_chrome, stretch_along_axis,
-};
+use super::{control_motion, is_disabled, paint, spring_animation, stretch_along_axis};
 
 /// The measures of compact vertical items: a 60 pt bar, items at least
 /// 64 pt wide with their labels inset 12 pt, and 6 pt between an icon and
@@ -45,11 +44,16 @@ const FLOATING_MARGIN: f64 = 12.0;
 /// Inset of the selected highlight capsule inside the item's bounds, pt
 /// (§8.7, Geometry).
 const HIGHLIGHT_INSET: f64 = 4.0;
-/// The alpha of the state-layer colour the selected item's highlight takes
-/// (§8.7, Colours).
-const HIGHLIGHT_ALPHA: f32 = 0.08;
-/// Growth of a pressed/dragged tab pill about its centre (`1 + 0.12·p`).
-const LENS_GROWTH: f64 = TAB_BAR_PRESS_SCALE_GAIN as f64;
+/// Alpha of the resting selection pill over the tab bar in encoded space (§5):
+/// black @ `0.055` produces `(235, 235, 235)` over Light `(248, 248, 248)`,
+/// while black @ `0.6875` produces the recessed `(10, 10, 10)` well inside
+/// Dark `(32, 32, 32)`.
+const REST_PILL_ALPHA_LIGHT: f32 = 0.055;
+const REST_PILL_ALPHA_DARK: f32 = 0.6875;
+/// Active glass lens expansion over the resting pill (§1.4): `+14%` width and
+/// `+24%` height (`h ≈ 64.5 pt` overhanging top and bottom of the `60 pt` bar).
+const LENS_GROWTH_X: f64 = 0.14;
+const LENS_GROWTH_Y: f64 = 0.24;
 
 /// Whether the bar-level tab pill should show the active refractive lens.
 const fn active_lens(state: InteractionState) -> bool {
@@ -66,9 +70,43 @@ fn capsule(rect: Rect) -> ShapeData {
     )
 }
 
-/// Shared translucent selection pill recorded beneath the tab labels at rest.
+/// Exact grown and anti-pinch stretched lens bounds for the current input state.
+fn lens_rect(inputs: &Inputs<'_, TabsValue>, vertical: bool) -> Rect {
+    let Some(bounds) = inputs.value.indicator_bounds() else {
+        return Rect::ZERO;
+    };
+    let rest = bounds.inset(-HIGHLIGHT_INSET);
+    let active = f64::from(u8::from(active_lens(inputs.state)));
+    let is_sidebar = inputs
+        .value
+        .items
+        .first()
+        .map_or(vertical, |item| item.placement == NativeTabStyle::Sidebar);
+    let (gx, gy) = if is_sidebar {
+        (LENS_GROWTH_Y, LENS_GROWTH_X)
+    } else {
+        (LENS_GROWTH_X, LENS_GROWTH_Y)
+    };
+    let size = rest.size();
+    let grown = Rect::from_center_size(
+        rest.center(),
+        Size::new(
+            size.width * gx.mul_add(active, 1.0),
+            size.height * gy.mul_add(active, 1.0),
+        ),
+    );
+    stretch_along_axis(grown, inputs.velocity, is_sidebar)
+}
+
+/// Shared selection pill recorded beneath the tab labels at rest, composited
+/// in encoded space so Dark renders a recessed `(10, 10, 10)` well inside the
+/// `(32, 32, 32)` bar and Light renders `(235, 235, 235)` over `(248, 248, 248)`.
 fn rest_selection_indicator(glass: &Glass) -> Custom<TabsValue, impl DrivenSet<TabsValue> + use<>> {
-    let palette = glass.palette;
+    let appearance = glass.palette.appearance;
+    let rest_alpha = match appearance {
+        Appearance::Dark => REST_PILL_ALPHA_DARK,
+        Appearance::Light => REST_PILL_ALPHA_LIGHT,
+    };
     let rest_pill = Driven::new(|inputs: &Inputs<'_, TabsValue>| {
         let rect = inputs
             .value
@@ -78,22 +116,24 @@ fn rest_selection_indicator(glass: &Glass) -> Custom<TabsValue, impl DrivenSet<T
     });
     let rest_paint = Driven::new(move |inputs: &Inputs<'_, TabsValue>| {
         let visible = inputs.value.indicator_bounds().is_some() && !active_lens(inputs.state);
-        paint(alpha(
-            palette.state_layer,
-            if visible { HIGHLIGHT_ALPHA } else { 0.0 },
-        ))
+        paint([0.0, 0.0, 0.0, if visible { rest_alpha } else { 0.0 }])
     })
     .smoothstep_window(0.05, 0.55);
     Custom::new(
         (rest_pill, rest_paint),
         |recorder, _frame, (shape, paint)| {
-            recorder.fill(shape, paint);
+            recorder.group(
+                Group::new().blend_space(BlendSpace::SrgbEncoded),
+                |recorder| {
+                    recorder.fill(shape, paint);
+                },
+            );
         },
     )
 }
 
 /// Shared clear refractive glass pill recorded over the tab labels while
-/// pressed or dragged, scaled by `1 + 0.12·p` with elastic axis stretch.
+/// pressed or dragged, with uniform affine velocity stretch-squash (§1.4).
 fn lens_selection_indicator(
     glass: &Glass,
     vertical: bool,
@@ -104,38 +144,23 @@ fn lens_selection_indicator(
         Recipe::for_element(40.0, 40.0, Family::Clear, palette.appearance, translucency)
             .capture_scale,
     );
-    let lens_shape = Driven::new(move |inputs: &Inputs<'_, TabsValue>| {
-        let Some(bounds) = inputs.value.indicator_bounds() else {
-            return capsule(Rect::ZERO);
-        };
-        let rest = bounds.inset(-HIGHLIGHT_INSET);
-        let scale = LENS_GROWTH.mul_add(f64::from(u8::from(active_lens(inputs.state))), 1.0);
-        let grown = Rect::from_center_size(rest.center(), rest.size() * scale);
-        let is_sidebar = inputs
-            .value
-            .items
-            .first()
-            .map_or(vertical, |item| item.placement == NativeTabStyle::Sidebar);
-        capsule(stretch_along_axis(grown, inputs.velocity, is_sidebar))
-    });
+    let lens_shape =
+        Driven::new(move |inputs: &Inputs<'_, TabsValue>| capsule(lens_rect(inputs, vertical)));
     let lens_effect = Driven::new(move |inputs: &Inputs<'_, TabsValue>| {
+        let rect = lens_rect(inputs, vertical);
         #[expect(
             clippy::cast_possible_truncation,
             reason = "a tab pill is tens to hundreds of points across, far inside f32"
         )]
-        let (w, h) = inputs
-            .value
-            .indicator_bounds()
-            .map_or((1.0, 1.0), |bounds| {
-                let rest = bounds.inset(-HIGHLIGHT_INSET);
-                (
-                    (rest.width() as f32).max(1.0),
-                    (rest.height() as f32).max(1.0),
-                )
-            });
+        let (x, y, w, h) = (
+            rect.x0 as f32,
+            rect.y0 as f32,
+            (rect.width() as f32).max(1.0),
+            (rect.height() as f32).max(1.0),
+        );
         let recipe = Recipe::for_element(w, h, Family::Clear, palette.appearance, translucency);
         let shape = Shape::rounded_rect(
-            ElementRect::new(0.0, 0.0, w, h),
+            ElementRect::new(x, y, w, h),
             w.min(h) * 0.5,
             CornerCurve::Continuous,
         );
@@ -193,9 +218,21 @@ pub(in super::super) fn look(glass: &Glass, spec: TabsSpec, _env: &Environment) 
                 HIGHLIGHT_INSET.mul_add(-2.0, size.width).max(0.0),
                 HIGHLIGHT_INSET.mul_add(-2.0, size.height).max(0.0),
             );
-            state_chrome(
-                &items,
+            Chrome::new(
                 ChromeSurface::clear(CornerShape::full().smoothing(CONTINUOUS_SMOOTHING)),
+                StateLayer::new(Glass::color(items.palette.state_layer)).opacities(
+                    HOVER_ALPHA,
+                    HOVER_ALPHA,
+                    0.0,
+                    0.0,
+                ),
+                PressFeedback::new(),
+                FocusIndicator::Ring {
+                    width: FOCUS_RING_WIDTH,
+                    offset: FOCUS_RING_GAP,
+                    color: Glass::color(items.palette.accent),
+                },
+                control_motion(),
             )
             .centered(pill)
             .hit(hit)

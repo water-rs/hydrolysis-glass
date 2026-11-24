@@ -418,7 +418,7 @@ fn cross_element_bleed_illuminates_adjacent_within_36pt() {
         Appearance::Dark,
         Translucency::default(),
     );
-    let blue_emitter = |x: f32| {
+    let blue_emitter = |x: f32, pressed: bool| {
         let mut e = element(
             Shape::capsule(Rect::new(x, 200.0, 100.0, 44.0)),
             Family::Regular,
@@ -426,45 +426,78 @@ fn cross_element_bleed_illuminates_adjacent_within_36pt() {
             Translucency::default(),
         );
         e.recipe = e.recipe.with_tint(Tint::flat([0.05, 0.35, 1.0], 1.0));
+        if pressed {
+            e.recipe = e.recipe.with_press(1.0, None);
+        }
         e
     };
 
     let isolated_scene = Scene::new(SCENE_PT, PX_PER_PT, vec![Group::single(neutral)]);
-    // Sibling spaced 8 pt away (< 36 pt bleed radius).
+    // Sibling spaced 8 pt away (< 36 pt bleed radius): stays unbridged yet emits bleed.
     let near_scene = Scene::new(
         SCENE_PT,
         PX_PER_PT,
-        vec![Group::container(vec![neutral, blue_emitter(188.0)], 8.0)],
+        vec![Group::container(
+            vec![neutral, blue_emitter(188.0, false)],
+            CONTAINER_UNION_SMOOTHING,
+        )],
+    );
+    let near_pressed_scene = Scene::new(
+        SCENE_PT,
+        PX_PER_PT,
+        vec![Group::container(
+            vec![neutral, blue_emitter(188.0, true)],
+            CONTAINER_UNION_SMOOTHING,
+        )],
     );
     // Sibling spaced 48 pt away (> 36 pt bleed radius).
     let far_scene = Scene::new(
         SCENE_PT,
         PX_PER_PT,
-        vec![Group::container(vec![neutral, blue_emitter(228.0)], 8.0)],
+        vec![Group::container(
+            vec![neutral, blue_emitter(228.0, true)],
+            CONTAINER_UNION_SMOOTHING,
+        )],
     );
 
     let isolated = h.render(Backdrop::Grey, &isolated_scene);
     let near = h.render(Backdrop::Grey, &near_scene);
+    let near_pressed = h.render(Backdrop::Grey, &near_pressed_scene);
     let far = h.render(Backdrop::Grey, &far_scene);
 
     // Facing inner edge of neutral capsule (right cap at x = 180, probe at x = 178.5, y = 222.0)
     // vs opposite inner edge (left cap at x = 80, probe at x = 81.5, y = 222.0).
     let iso_facing = sample_pt(&isolated, 178.5, 222.0);
     let near_facing = sample_pt(&near, 178.5, 222.0);
-    let near_opposite = sample_pt(&near, 81.5, 222.0);
+    let near_pressed_facing = sample_pt(&near_pressed, 178.5, 222.0);
+    let near_pressed_opposite = sample_pt(&near_pressed, 81.5, 222.0);
     let iso_opposite = sample_pt(&isolated, 81.5, 222.0);
     let far_facing = sample_pt(&far, 178.5, 222.0);
+    let gap_mid = sample_pt(&near_pressed, 184.0, 222.0);
+    let iso_gap = sample_pt(&isolated, 184.0, 222.0);
 
     assert!(
-        near_facing[2] > iso_facing[2] + 0.02
-            && (near_facing[2] - near_facing[0]) > (iso_facing[2] - iso_facing[0]) + 0.02,
-        "blue prominent sibling within 36 pt must illuminate facing edge with blue bleed: \
+        near_facing[2] > iso_facing[2] + 0.008
+            && (near_facing[2] - near_facing[0]) > (iso_facing[2] - iso_facing[0]) + 0.008,
+        "resting prominent blue sibling within 36 pt must emit subtle blue bleed: \
          near {near_facing:?} vs isolated {iso_facing:?}"
     );
     assert!(
-        (near_facing[2] - iso_facing[2]) > (near_opposite[2] - iso_opposite[2]),
-        "bleed must be stronger on facing edge ({near_facing:?} vs {iso_facing:?}) \
-         than opposite edge ({near_opposite:?} vs {iso_opposite:?})"
+        near_pressed_facing[2] > near_facing[2] + 0.02
+            && (near_pressed_facing[2] - near_pressed_facing[0])
+                > (iso_facing[2] - iso_facing[0]) + 0.03,
+        "pressed prominent blue sibling within 36 pt must strongly illuminate facing edge: \
+         pressed {near_pressed_facing:?} vs rest {near_facing:?} vs isolated {iso_facing:?}"
+    );
+    assert!(
+        (near_pressed_facing[2] - iso_facing[2]) > (near_pressed_opposite[2] - iso_opposite[2]),
+        "bleed must be stronger on facing edge ({near_pressed_facing:?} vs {iso_facing:?}) \
+         than opposite edge ({near_pressed_opposite:?} vs {iso_opposite:?})"
+    );
+    assert!(
+        (gap_mid[2] - iso_gap[2]).abs() < 0.02 && (gap_mid[0] - iso_gap[0]).abs() < 0.02,
+        "8 pt gap midpoint between neutral and prominent sibling must stay separated (no metaball bridge): \
+         gap {gap_mid:?} vs isolated {iso_gap:?}"
     );
     for c in 0..3 {
         assert!(

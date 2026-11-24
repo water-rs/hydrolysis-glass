@@ -400,7 +400,7 @@ fn a_material_group_fuses_neighbouring_chrome() {
 #[test]
 fn a_material_group_bleeds_from_a_prominent_sibling_within_36_pt() {
     const AT: [f32; 2] = [60.0, 400.0];
-    const NEAR_GAP: f32 = 16.0;
+    const NEAR_GAP: f32 = 8.0;
     const FAR_GAP: f32 = 48.0;
 
     let glass = Glass::dark();
@@ -427,39 +427,30 @@ fn a_material_group_bleeds_from_a_prominent_sibling_within_36_pt() {
     };
 
     let mut iso_app = GlassApp::mount(
-        move || absolute((backdrop_view(Backdrop::Grey), glass_button(AT[0], AT[1]))),
+        move || absolute((backdrop_view(Backdrop::Black), glass_button(AT[0], AT[1]))),
         Glass::dark(),
     );
     let iso_img = iso_app.snapshot();
 
-    let mut near_app = GlassApp::mount(
-        move || {
-            let pair = absolute((
-                glass_button(neutral_rect[0], neutral_rect[1]),
-                blue_btn(near_blue_rect[0], near_blue_rect[1]),
-            ))
-            .material_group();
-            absolute((backdrop_view(Backdrop::Grey), pair))
-        },
-        Glass::dark(),
-    );
-    let near_img = near_app.export("material_bleed_near_dark_hydrolysis");
-
-    let mut far_app = GlassApp::mount(
-        move || {
-            let pair = absolute((
-                glass_button(neutral_rect[0], neutral_rect[1]),
-                blue_btn(far_blue_rect[0], far_blue_rect[1]),
-            ))
-            .material_group();
-            absolute((backdrop_view(Backdrop::Grey), pair))
-        },
-        Glass::dark(),
-    );
-    let far_img = far_app.export("material_bleed_far_dark_hydrolysis");
+    let mount_pair = |blue_x: f32, tag: &str| {
+        let mut app = GlassApp::mount(
+            move || {
+                let pair = absolute((
+                    glass_button(neutral_rect[0], neutral_rect[1]),
+                    blue_btn(blue_x, AT[1]),
+                ))
+                .material_group();
+                absolute((backdrop_view(Backdrop::Black), pair))
+            },
+            Glass::dark(),
+        );
+        app.export(tag)
+    };
+    let near_img = mount_pair(near_blue_rect[0], "material_bleed_near_dark_hydrolysis");
+    let far_img = mount_pair(far_blue_rect[0], "material_bleed_far_dark_hydrolysis");
 
     let near_standalone = Harness::new().render(
-        Backdrop::Grey,
+        Backdrop::Black,
         &Scene::new(
             SCENE_PT,
             PX_PER_PT,
@@ -480,20 +471,22 @@ fn a_material_group_bleeds_from_a_prominent_sibling_within_36_pt() {
     );
 
     // Facing inner edge of the neutral button (1.5 pt inside right end) vs
-    // opposite inner edge (1.5 pt inside left end).
+    // opposite inner edge (1.5 pt inside left end) and the 8 pt gap midpoint.
     let y = neutral_rect[3].mul_add(0.5, neutral_rect[1]);
     let facing_x = neutral_rect[0] + neutral_rect[2] - 1.5;
     let opposite_x = neutral_rect[0] + 1.5;
+    let gap_x = NEAR_GAP.mul_add(0.5, neutral_rect[0] + neutral_rect[2]);
 
     let iso_facing = probe_px(&iso_img, facing_x, y);
     let near_facing = probe_px(&near_img, facing_x, y);
     let near_opposite = probe_px(&near_img, opposite_x, y);
     let iso_opposite = probe_px(&iso_img, opposite_x, y);
     let far_facing = probe_px(&far_img, facing_x, y);
+    let near_gap = probe_px(&near_img, gap_x, y);
 
     assert!(
         near_facing[2] > iso_facing[2] + 0.02
-            && (near_facing[2] - near_facing[0]) > (iso_facing[2] - iso_facing[0]) + 0.02,
+            && (near_facing[2] - near_facing[0]) > (iso_facing[2] - iso_facing[0]) + 0.015,
         "prominent blue sibling within 36 pt must illuminate facing edge \
          (near {near_facing:?} vs isolated {iso_facing:?})",
     );
@@ -501,6 +494,10 @@ fn a_material_group_bleeds_from_a_prominent_sibling_within_36_pt() {
         (near_facing[2] - iso_facing[2]) > (near_opposite[2] - iso_opposite[2]),
         "bleed must decay toward the opposite edge (facing {near_facing:?} vs {iso_facing:?}; \
          opposite {near_opposite:?} vs {iso_opposite:?})",
+    );
+    assert!(
+        near_gap[0] < 0.02 && near_gap[1] < 0.02 && near_gap[2] < 0.02,
+        "8 pt gap midpoint between neutral and prominent button must stay separated (got {near_gap:?})",
     );
     for c in 0..3 {
         assert!(

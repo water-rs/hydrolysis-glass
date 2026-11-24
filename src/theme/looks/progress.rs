@@ -21,12 +21,22 @@ use hydrolysis_style::theme::{
 use waterui::animation::Animation;
 use waterui_core::Environment;
 
+use crate::material::recipe::Appearance;
+
 use super::super::palette::Rgba;
-use super::super::slider;
 use super::super::{
     CIRCULAR_INDETERMINATE_CYCLE, Glass, LINEAR_INDETERMINATE_CYCLE, LOADING_CYCLE,
 };
 use super::paint;
+
+/// Unfilled bar track over `#FFFFFF` (Light `(232, 232, 233)`) and `#000000`
+/// (Dark `(41, 41, 43)`), composited in encoded space (§5).
+const fn unfilled_track(appearance: Appearance) -> Rgba {
+    match appearance {
+        Appearance::Dark => [120.0 / 255.0, 120.0 / 255.0, 128.0 / 255.0, 0.34],
+        Appearance::Light => [120.0 / 255.0, 120.0 / 255.0, 128.0 / 255.0, 0.17],
+    }
+}
 
 /// The bar's length and thickness, pt.
 const BAR: Size = Size::new(120.0, 4.0);
@@ -160,7 +170,7 @@ fn linear_determinate(
     Custom::new(
         (
             track,
-            solid(slider::unfilled_track(glass.palette.appearance)),
+            solid(unfilled_track(glass.palette.appearance)),
             fill,
             tint(spec, env),
         ),
@@ -204,7 +214,7 @@ fn linear_indeterminate(
 ) -> Custom<f64, impl DrivenSet<f64> + use<>> {
     Custom::new(
         (
-            solid(slider::unfilled_track(glass.palette.appearance)),
+            solid(unfilled_track(glass.palette.appearance)),
             Driven::repeating(
                 |frame| sweep(frame, LINEAR_INDETERMINATE_CYCLE),
                 Repeat::Forever,
@@ -259,7 +269,7 @@ fn circular_determinate(
     let start = -core::f64::consts::FRAC_PI_2;
     Custom::new(
         (
-            solid(slider::unfilled_track(glass.palette.appearance)),
+            solid(unfilled_track(glass.palette.appearance)),
             Driven::new(move |inputs: &Inputs<'_, f64>| {
                 arc_stroke(ring(inputs.frame, start).1, *inputs.value)
             }),

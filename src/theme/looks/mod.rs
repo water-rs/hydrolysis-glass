@@ -43,11 +43,10 @@ pub(super) use toggle::{checkbox, switch};
 use cherenkov_record::kurbo::{Line, Point, Rect, Size, Vec2};
 use cherenkov_record::{Draw as _, Live, Paint, ShapeData, Stroke, WorkingColor};
 use hydrolysis_style::theme::{
-    BadgeLook, BadgeMetrics, Chrome, CornerShape, Custom, DragDeformation, Driven, FocusIndicator,
-    HitRegion, Inputs, ListControls, ListDividerMetrics, ListGestures, ListLook, ListMetrics,
-    ListRowMetrics, ListSectionMetrics, ListTrailingControlMetrics, Motion, PressFeedback,
-    ScrollIndicatorLook, StateLayer, Surface as ChromeSurface, TableLook, TableMetrics, Transition,
-    ValueMotion,
+    BadgeLook, BadgeMetrics, Chrome, CornerShape, Custom, Driven, FocusIndicator, HitRegion,
+    Inputs, ListControls, ListDividerMetrics, ListGestures, ListLook, ListMetrics, ListRowMetrics,
+    ListSectionMetrics, ListTrailingControlMetrics, Motion, PressFeedback, ScrollIndicatorLook,
+    StateLayer, Surface as ChromeSurface, TableLook, TableMetrics, Transition, ValueMotion,
 };
 use waterui::animation::Animation;
 use waterui::interaction::InteractionState;
@@ -288,21 +287,28 @@ pub(super) fn spring_animation(spring: crate::dynamics::Spring) -> Animation {
     Animation::spring(spring.stiffness(), spring.damping())
 }
 
-/// Applies horizontal or vertical area-preserving velocity stretch
-/// (`λ_parallel ∈ [0.88, 1.16]`, `λ_perp = 1 / λ_parallel`) to `rect`.
+/// Applies horizontal or vertical affine stretch-squash
+/// (`eps = 0.12 * tanh(|v_axis| / 600.0)`, `w_eff = w * (1 + eps)`,
+/// `h_eff = h / (1 + 0.65 * eps)`) to `rect`, keeping box convexity at all
+/// velocities without pinching the silhouette.
 pub(super) fn stretch_along_axis(rect: Rect, velocity: Option<Vec2>, vertical: bool) -> Rect {
     let Some(v) = velocity else {
         return rect;
     };
-    let axis_v = if vertical {
-        Vec2::new(0.0, v.y)
+    let v_axis = if vertical { v.y.abs() } else { v.x.abs() };
+    let eps = 0.12 * (v_axis / 600.0).tanh();
+    if eps <= 1e-6 {
+        return rect;
+    }
+    let parallel = 1.0 + eps;
+    let perp = 1.0 / 0.65f64.mul_add(eps, 1.0);
+    let size = rect.size();
+    let stretched = if vertical {
+        Size::new(size.width * perp, size.height * parallel)
     } else {
-        Vec2::new(v.x, 0.0)
+        Size::new(size.width * parallel, size.height * perp)
     };
-    DragDeformation::new()
-        .velocity_stretch(0.16, 600.0)
-        .stretch_bounds(0.88, 1.16)
-        .deformed_rect(rect, Vec2::ZERO, axis_v)
+    Rect::from_center_size(rect.center(), stretched)
 }
 
 /// The look of a backend-rendered table.

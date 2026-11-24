@@ -10,9 +10,21 @@ use hydrolysis_style::theme::{
 };
 use waterui_core::Environment;
 
+use crate::material::recipe::Appearance;
+
 use super::super::Glass;
 use super::super::button::{CANCEL_DISTANCE, MIN_HIT_SIDE};
+use super::super::palette::Rgba;
 use super::{faded, is_disabled, paint, state_chrome};
+
+/// Track fill yielding Light `(238, 238, 239)` over `#FFFFFF` and Dark
+/// `(18, 18, 19)` over `#000000` in the linear compositing canvas.
+const fn end_fill(appearance: Appearance) -> Rgba {
+    match appearance {
+        Appearance::Dark => [118.0 / 255.0, 118.0 / 255.0, 128.0 / 255.0, 0.0338],
+        Appearance::Light => [118.0 / 255.0, 118.0 / 255.0, 128.0 / 255.0, 0.1771],
+    }
+}
 
 /// The side of a stepper's button, pt (§8.5, Geometry).
 const BUTTON: f64 = 32.0;
@@ -63,9 +75,10 @@ fn end(glass: &Glass, end: End, rtl: bool) -> Chrome {
             RoundedRectRadii::new(0.0, r, r, 0.0)
         })
     });
+    let base_fill = end_fill(palette.appearance);
     let fill = Driven::new(move |inputs: &Inputs<'_, ()>| {
         paint(faded(
-            palette.track,
+            base_fill,
             if is_disabled(inputs.state) {
                 DISABLED_OPACITY
             } else {
