@@ -1789,17 +1789,28 @@ every value is [chosen].
 
 One pop-up menu look serves menu button pop-ups, menu picker pop-ups and
 context menus (including text-field context menus). For anchored overlay
-presentations, the panel morphs as a single continuous-corner regular-family
-glass surface (`r_1 = 26` pt) from the triggering anchor (`T_r = 0.360` s,
-`ζ = 0.82` on present; `T_r = 0.280` s, `ζ = 0.90` on dismiss) while fading
-the trigger (`[0.0, 0.25]`) and revealing content (`[0.25, 0.75]` opacity,
-`0.92 -> 1.0` scale across `[0.15, 0.85]`). Standalone borderless popup
-windows that lack a scene backdrop retain the fallback opaque elevated
-surface (`water-rs/waterui#2003`). The trigger of a menu picker wears the
-§8.6 field container with a trailing dropdown indicator.
+presentations, the panel covers the triggering anchor (`cover_trigger`,
+top-aligned and horizontally centred on the trigger) [measured] and morphs
+as a single continuous-corner regular-family glass surface (`r_1 = 26` pt,
+updating its size law `m(t) = min(w(t), h(t))` each frame) [measured]
+driven by anisotropic springs: horizontal `T_r = 0.286` s, `ζ = 0.760` and
+vertical `T_r = 0.311` s, `ζ = 0.333` (~34% vertical overshoot) on present;
+horizontal `T_r = 0.624` s, `ζ = 0.619` (~14% pinch) and vertical
+`T_r = 0.807` s, `ζ = 0.756` (~45 ms vertical lag) on dismiss [fitted].
+The trigger's own chrome hands off immediately (`[0.0, 0.0]`) [measured],
+its label fades across `[0.55, 0.96]` on present and re-emerges across
+`[0.90, 1.0]` on dismiss [fitted], and menu content reveals clipped to the
+interpolated rounded surface with opacity across `[0.40, 0.96]` on present
+(`[0.55, 1.0]` on dismiss), scale `0.92 -> 1.0` across `[0.15, 0.85]`, and
+Gaussian blur `8.0 -> 0.0` pt across `[0.30, 0.96]` on present
+(`[0.65, 1.0]` on dismiss) [fitted]. Standalone borderless popup windows
+that lack a scene backdrop retain the fallback opaque elevated surface
+(`water-rs/waterui#2003`). The trigger of a menu picker wears the §8.6
+field container with a trailing dropdown indicator.
 
-**Reference.** Nothing in this section was measured against a capture;
-every value is [chosen].
+**Reference.** Presentation geometry and motion above are calibrated
+against 60 fps menu open/dismiss captures; fallback opaque popup geometry
+and colours below are [chosen].
 
 #### Geometry
 
@@ -1807,15 +1818,15 @@ every value is [chosen].
   outline border and a cast shadow of blur `24` pt offset `(0, 8)` pt; a
   pop-up window reserves the elevation extent `3 × 24 + 8 = 80` pt on
   every side [chosen].
-- **Width and padding.** Width is clamped to `[120, 280]` pt, estimated at
+- **Width and padding.** Width is clamped to `[250, 280]` pt, estimated at
   `8` pt per character before text layout and widened by `12` pt plus the
   widest shortcut hint when commands carry hints; the panel insets rows by
-  `6` pt vertically [chosen].
-- **Rows and dividers.** Each single-line row is `40` pt tall (grown by
+  `8` pt vertically [measured].
+- **Rows and dividers.** Each single-line row is `45` pt tall (grown by
   the supporting line's intrinsic height when a command carries a subtitle)
-  with `16` pt horizontal text inset; each divider row is
-  `2 × 6 + 0.5 = 12.5` pt tall with a `0.5` pt hairline centred
-  vertically and `0` pt horizontal inset [chosen].
+  with `20` pt horizontal text inset; each divider row is
+  `2 × 8 + 0.5 = 16.5` pt tall with a `0.5` pt hairline centred vertically
+  and `20` pt horizontal inset [measured].
 - **Selected picker row.** Draws a `4` pt inset highlight rounded
   rectangle of corner radius `8` pt behind the selected item's label
   [chosen].

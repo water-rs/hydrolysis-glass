@@ -2922,8 +2922,8 @@ fn menu_picker_selection_disabled_and_rtl() {
     app.touch_down(200.0, 55.0);
     app.touch_up(200.0, 55.0);
     app.settle();
-    app.touch_down(200.0, 207.0);
-    app.touch_up(200.0, 207.0);
+    app.touch_down(200.0, 225.0);
+    app.touch_up(200.0, 225.0);
     app.settle();
     assert_eq!(selection.snapshot(), 2);
 
@@ -2980,6 +2980,93 @@ fn menu_popup_scene() {
         app.touch_up(85.0, 55.0);
         app.export(&format!("menu_popup_{name}"));
     }
+}
+
+#[test]
+fn menu_morph_timeline_scene() {
+    use std::cell::Cell;
+    use std::rc::Rc;
+    use waterui::layout::spacer::spacer;
+    use waterui::layout::stack::{vstack, zstack};
+    use waterui_controls::menu::{Command, Menu, MenuItem};
+
+    let fired = Rc::new(Cell::new(false));
+    let fired_for_view = Rc::clone(&fired);
+    let mut app = GlassApp::sized(
+        move || {
+            let fired_inner = Rc::clone(&fired_for_view);
+            zstack((
+                backdrop_view(Backdrop::Black),
+                vstack((
+                    ().size(0.0, 12.0),
+                    Menu::new(
+                        "Actions",
+                        (
+                            Command::builder("Rename").action(|| {}),
+                            MenuItem::Divider,
+                            Command::builder("Duplicate").action(move || {
+                                fired_inner.set(true);
+                            }),
+                            Command::builder("Archive").action(|| {}),
+                        ),
+                    )
+                    .style(ButtonStyle::Glass),
+                    spacer(),
+                )),
+            ))
+        },
+        theme(Appearance::Dark),
+        [320.0, 280.0],
+    );
+    app.settle();
+    let f0 = app.capture_now();
+    f0.save("menu_morph_0000ms");
+
+    app.advance(Duration::from_millis(120));
+    app.touch_down(160.0, 30.0);
+    app.advance(Duration::from_millis(60));
+    app.touch_up(160.0, 30.0);
+
+    app.advance(Duration::from_millis(40));
+    let f220 = app.capture_now();
+    f220.save("menu_morph_0220ms");
+
+    app.advance(Duration::from_millis(40));
+    let f260 = app.capture_now();
+    f260.save("menu_morph_0260ms");
+
+    app.advance(Duration::from_millis(300));
+    let f560 = app.capture_now();
+    f560.save("menu_morph_0560ms");
+
+    app.advance(Duration::from_millis(440));
+    app.touch_down(90.0, 105.0);
+    app.advance(Duration::from_millis(60));
+    app.touch_up(90.0, 105.0);
+    app.advance(Duration::from_millis(20));
+    assert!(fired.get(), "tapping Duplicate must invoke its command");
+
+    app.advance(Duration::from_millis(120));
+    let f1200 = app.capture_now();
+    f1200.save("menu_morph_1200ms");
+
+    app.advance(Duration::from_millis(300));
+    let f1500 = app.capture_now();
+    f1500.save("menu_morph_1500ms");
+
+    assert_ne!(f260.pixels, f0.pixels, "mid-open must differ from rest");
+    assert_ne!(
+        f260.pixels, f560.pixels,
+        "mid-open must differ from settled"
+    );
+    assert_ne!(
+        f1200.pixels, f560.pixels,
+        "mid-dismiss must differ from settled"
+    );
+    assert_ne!(
+        f1200.pixels, f1500.pixels,
+        "mid-dismiss must differ from rebounded rest"
+    );
 }
 
 #[test]
