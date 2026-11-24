@@ -2925,8 +2925,8 @@ fn menu_picker_selection_disabled_and_rtl() {
     app.touch_down(200.0, 55.0);
     app.touch_up(200.0, 55.0);
     app.settle();
-    app.touch_down(200.0, 207.0);
-    app.touch_up(200.0, 207.0);
+    app.touch_down(200.0, 225.0);
+    app.touch_up(200.0, 225.0);
     app.settle();
     assert_eq!(selection.snapshot(), 2);
 
