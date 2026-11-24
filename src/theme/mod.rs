@@ -937,12 +937,12 @@ mod tests {
             .expect("popover presentation motion");
         assert!(motion.present_vertical.is_some());
         assert!(motion.dismiss_vertical.is_some());
-        assert!((motion.content_scale_from - 0.92).abs() < 1e-9);
-        assert!((motion.content_blur_from - 8.0).abs() < 1e-9);
-        assert_eq!(motion.content_opacity_window, (0.40, 0.96));
+        assert!((motion.content_scale_from - 0.75).abs() < 1e-9);
+        assert!((motion.content_blur_from - 15.0).abs() < 1e-9);
+        assert_eq!(motion.content_opacity_window, (0.62, 0.98));
         assert_eq!(motion.dismiss_content_opacity_window, Some((0.55, 1.0)));
-        assert_eq!(motion.content_scale_window, (0.15, 0.85));
-        assert_eq!(motion.content_blur_window, (0.30, 0.96));
+        assert_eq!(motion.content_scale_window, (0.15, 0.92));
+        assert_eq!(motion.content_blur_window, (0.55, 0.98));
         assert_eq!(motion.dismiss_content_blur_window, Some((0.65, 1.0)));
         assert_eq!(motion.trigger_opacity_window, Some((0.55, 0.96)));
         assert_eq!(motion.dismiss_trigger_opacity_window, Some((0.90, 1.0)));

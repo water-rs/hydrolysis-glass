@@ -97,7 +97,8 @@ const fn is_disabled(state: InteractionState) -> bool {
 
 /// Whether a touch holds a control's knob or thumb: the lens's `p` at 1.
 const fn held(state: InteractionState) -> bool {
-    state.contains(InteractionState::PRESSED) && !is_disabled(state)
+    state.intersects(InteractionState::PRESSED.union(InteractionState::DRAGGED))
+        && !is_disabled(state)
 }
 
 /// The paint of a focus ring in `accent`: opaque while the control has

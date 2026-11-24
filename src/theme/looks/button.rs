@@ -16,10 +16,11 @@ use waterui_controls::button::ButtonStyle;
 use waterui_core::Environment;
 
 use crate::dynamics::{self, PRESS_MAX_HALF_AXIS_GROWTH};
-use crate::material::recipe::{Family, Recipe};
+use crate::material::recipe::{Appearance, Family, Recipe};
 
 use super::super::Glass;
 use super::super::button::{GROWTH_PER_PRESS, Kind, SizeGroup};
+use super::super::chrome::{FOCUS_RING_GAP, FOCUS_RING_WIDTH, HOVER_ALPHA, PRESSED_ALPHA};
 use super::super::materials::{self, CONTINUOUS_SMOOTHING, GLASS_CONTENT_SHADER, GLASS_SHADER};
 use super::super::palette::{alpha, over};
 use super::super::surfaces::{self, Press};
@@ -46,6 +47,8 @@ pub(in super::super) fn look(glass: &Glass, spec: &ButtonSpec, env: &Environment
     let tint = spec.tint().resolve(env);
     let chrome = if bordered {
         bordered_chrome(glass)
+    } else if spec.style() == ButtonStyle::Borderless {
+        borderless_chrome(glass)
     } else {
         kind.map_or_else(
             || plain_chrome(glass),
@@ -118,10 +121,37 @@ fn plain_chrome(glass: &Glass) -> Chrome {
     state_chrome(glass, ChromeSurface::clear(CornerShape::full())).hit(hit_region())
 }
 
+/// The chrome of a borderless button (including menu rows): preserves focus
+/// and press state layers without applying a pointer hover bar after touch
+/// activation.
+fn borderless_chrome(glass: &Glass) -> Chrome {
+    let palette = glass.palette;
+    Chrome::new(
+        ChromeSurface::clear(CornerShape::full()),
+        StateLayer::new(Glass::color(palette.state_layer)).opacities(
+            0.0,
+            HOVER_ALPHA,
+            PRESSED_ALPHA,
+            PRESSED_ALPHA,
+        ),
+        PressFeedback::new().tint(),
+        FocusIndicator::Ring {
+            width: FOCUS_RING_WIDTH,
+            offset: FOCUS_RING_GAP,
+            color: Glass::color(palette.accent),
+        },
+        control_motion(),
+    )
+    .hit(hit_region())
+}
+
 /// The chrome of a bordered capsule button: a track-filled continuous capsule
 /// under the theme's state layer and focus ring.
 fn bordered_chrome(glass: &Glass) -> Chrome {
-    let base = glass.palette.track;
+    let base = match glass.palette.appearance {
+        Appearance::Dark => alpha(glass.palette.track, 0.105),
+        Appearance::Light => glass.palette.track,
+    };
     let fill = Driven::new(move |inputs: &Inputs<'_, ()>| {
         paint(faded(
             base,

@@ -110,7 +110,7 @@ pub(in super::super) fn switch(glass: &Glass, spec: &ToggleSpec, env: &Environme
         })
     };
     let lens = Driven::new(move |inputs: &Inputs<'_, ()>| -> MaterialEffect {
-        switch::lens_effect(appearance, translucency, held(inputs.state))
+        switch::toggle_lens_effect(appearance, translucency, held(inputs.state))
     });
     let backdrop = Backdrop::new(
         GLASS_SHADER,

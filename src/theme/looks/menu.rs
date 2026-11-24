@@ -39,7 +39,16 @@ const LAYOUT: MenuLayout = MenuLayout {
 };
 
 /// Initial Gaussian blur radius for menu content reveal, pt.
-const CONTENT_BLUR_FROM: f64 = 8.0;
+const CONTENT_BLUR_FROM: f64 = 15.0;
+
+/// Cubic Hermite smoothstep on `[edge0, edge1]`.
+fn smoothstep(edge0: f64, edge1: f64, x: f64) -> f64 {
+    if edge1 <= edge0 {
+        return if x >= edge1 { 1.0 } else { 0.0 };
+    }
+    let t = ((x - edge0) / (edge1 - edge0)).clamp(0.0, 1.0);
+    t * t * 2.0_f64.mul_add(-t, 3.0)
+}
 
 /// The look of a menu in `spec`: a fallback opaque surface when no scene
 /// backdrop is present, paired with animated popover presentation morphing
@@ -69,12 +78,12 @@ pub(in super::super) fn look(glass: &Glass, _spec: MenuSpec, _env: &Environment)
     .trigger_chrome_opacity_window(0.0, 0.0)
     .trigger_opacity_window(0.55, 0.96)
     .dismiss_trigger_opacity_window(0.90, 1.0)
-    .content_opacity_window(0.40, 0.96)
+    .content_opacity_window(0.62, 0.98)
     .dismiss_content_opacity_window(0.55, 1.0)
-    .content_scale_from(0.92)
-    .content_scale_window(0.15, 0.85)
+    .content_scale_from(0.75)
+    .content_scale_window(0.15, 0.92)
     .content_blur_from(CONTENT_BLUR_FROM)
-    .content_blur_window(0.30, 0.96)
+    .content_blur_window(0.55, 0.98)
     .dismiss_content_blur_window(0.65, 1.0)
     .surface_corner_radius(f64::from(POPOVER_TARGET_RADIUS))
     .cover_trigger(true);
@@ -100,8 +109,16 @@ pub(in super::super) fn look(glass: &Glass, _spec: MenuSpec, _env: &Environment)
         } else {
             f64::from(POPOVER_TARGET_RADIUS)
         };
+        let q = sample
+            .progress
+            .clamp(0.0, 1.0)
+            .min(sample.vertical_progress.clamp(0.0, 1.0));
+        // Hold the soft capsule silhouette while expanding and ease down to the
+        // target panel radius as the menu settles.
+        let settle = smoothstep(0.35, 1.0, q);
+        let morphed_radius = (target_radius - max_r).mul_add(settle, max_r);
         #[expect(clippy::cast_possible_truncation, reason = "corner radius fits in f32")]
-        let radius = target_radius.clamp(0.0, max_r) as f32;
+        let radius = morphed_radius.clamp(0.0, max_r) as f32;
         let element = Element {
             shape: Shape::rounded_rect(rect, radius, CornerCurve::Continuous),
             recipe: Recipe::for_size(rect.m(), Family::Regular, appearance, translucency),
