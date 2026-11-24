@@ -878,10 +878,12 @@ element's content (§2, item 5). A button is of one of two **kinds**:
   label.
 - **Bordered**: a non-glass button drawn as a continuous capsule filled with
   the theme's `track` colour (`(120, 120, 128)` at alpha `0.16` in light
-  appearance and `0.32` in dark, halved while disabled) under the theme's
+  appearance and `0.105` in dark, halved while disabled) under the theme's
   state layer and focus ring, with an accent label (or the tint when tinted),
   using the same size-group typography and insets as the glass buttons
-  [measured].
+  [measured]. `Borderless` keeps `0.0` pointer hover while preserving `0.06`
+  focus and `0.12` press/drag layers so touch-opened menu rows carry no hover
+  bar.
 
 The tint defaults to the accent colour, (63, 143, 247) in dark appearance and
 (59, 134, 247) in light [measured].
@@ -1206,10 +1208,13 @@ is held, which is the part of the switch that shows the material.
   release or cancellation drives it toward 0 by a spring of
   ω0 = 15.8 rad/s and ζ = 0.385 [chosen: the button's press and release
   springs, §8.1, so that the controls respond alike].
-- **Lens.** While pressed, the knob scales about its centre by
+- **Lens.** While pressed or dragged, the knob scales about its centre by
   `1 + 0.60·p`, to `59.2 × 38.4` pt held (`+5.2` pt overhang above and below the
-  `28` pt track), and becomes a clear-family glass lens (§5.2) with rim
-  reflection, spectral edge dispersion, and anti-pinch affine velocity stretch
+  `28` pt track), and becomes a clear-family glass lens (§5.2) tuned for the
+  `28` pt track (`primary_shift = +16.0` pt, `primary_depth = 9.0` pt,
+  `rim_shift = -26.0` pt, `rim_depth = 3.0` pt, `rim_ramp = [-2.0, 0.0]` pt,
+  `rim_mix = 0.85`) with track rim reflection, dark exterior meniscus bands,
+  spectral edge dispersion, and anti-pinch affine velocity stretch
   (`ε_v = 0.12 · tanh(|v_x| / 600.0)`), fading out its opaque white fill over
   `smoothstep(0.05, 0.55, p)` [measured].
 - **Tap.** A touch that ends in the hit region without having moved more
@@ -1708,14 +1713,15 @@ every value is [chosen].
   pill beneath the tab labels at rest, composited in encoded space so Dark
   appearance sits as a recessed `(10, 10, 10)` well inside the `(32, 32, 32)`
   bar and glides across items on selection changes and drags [measured].
-- **Hover, focus and press.** Each item wears a hover/focus state layer
-  (`0.06` hover/focus, `0.0` press so adjacent items never split the backdrop)
-  and a `2` pt accent focus ring `2` pt outside its `4` pt inset capsule;
-  while pressed or dragged, the shared pill grows by `+14%` width and `+24%`
-  height (`~64.5` pt overhanging top and bottom of the `60` pt bar) with
-  uniform affine velocity stretch-squash (`ε_v = 0.12 · tanh(|v_x| / 600.0)`)
-  and activates a clear-family refractive lens over the tab labels via
-  `smoothstep(0.05, 0.55)` [measured].
+- **Hover, focus and press.** Each item wears a focus/hover state layer
+  (`0.0` pointer hover, `0.06` focus, `0.0` press/drag so settled selection pills
+  keep their resting dark well after touch or drag release and adjacent items
+  never split the backdrop) and a `2` pt accent focus ring `2` pt outside its `4`
+  pt inset capsule; while pressed or dragged, the shared pill grows by `+36%`
+  width and `+28%` height (`~66.6` pt overhanging top and bottom of the `60` pt
+  bar) with uniform affine velocity stretch-squash
+  (`ε_v = 0.12 · tanh(|v_x| / 600.0)`) and activates a clear-family refractive
+  lens over the tab labels via `smoothstep(0.05, 0.55)` [measured].
 - **Disabled item.** Draws no pointer target [chosen].
 
 #### Motion
@@ -1791,19 +1797,19 @@ One pop-up menu look serves menu button pop-ups, menu picker pop-ups and
 context menus (including text-field context menus). For anchored overlay
 presentations, the panel covers the triggering anchor (`cover_trigger`,
 top-aligned and horizontally centred on the trigger) [measured] and morphs
-as a single continuous-corner regular-family glass surface (`r_1 = 26` pt,
-updating its size law `m(t) = min(w(t), h(t))` each frame) [measured]
-driven by anisotropic springs: horizontal `T_r = 0.286` s, `ζ = 0.760` and
-vertical `T_r = 0.311` s, `ζ = 0.333` (~34% vertical overshoot) on present;
-horizontal `T_r = 0.624` s, `ζ = 0.619` (~14% pinch) and vertical
-`T_r = 0.807` s, `ζ = 0.756` (~45 ms vertical lag) on dismiss [fitted].
-The trigger's own chrome hands off immediately (`[0.0, 0.0]`) [measured],
-its label fades across `[0.55, 0.96]` on present and re-emerges across
-`[0.90, 1.0]` on dismiss [fitted], and menu content reveals clipped to the
-interpolated rounded surface with opacity across `[0.40, 0.96]` on present
-(`[0.55, 1.0]` on dismiss), scale `0.92 -> 1.0` across `[0.15, 0.85]`, and
-Gaussian blur `8.0 -> 0.0` pt across `[0.30, 0.96]` on present
-(`[0.65, 1.0]` on dismiss) [fitted]. Standalone borderless popup windows
+as a single continuous-corner regular-family glass surface (easing its corner
+radius from the pill capsule `max_r = 0.5 · min(w, h)` down to `r_1 = 26.0` pt
+across `smoothstep(0.35, 1.0, q)` and updating its size law `m(t) = min(w(t), h(t))`
+each frame) [measured] driven by anisotropic springs: horizontal `T_r = 0.286` s,
+`ζ = 0.760` and vertical `T_r = 0.311` s, `ζ = 0.333` (~34% vertical overshoot)
+on present; horizontal `T_r = 0.624` s, `ζ = 0.619` (~14% pinch) and vertical
+`T_r = 0.807` s, `ζ = 0.756` (~45 ms vertical lag) on dismiss [fitted]. The
+trigger's own chrome hands off immediately (`[0.0, 0.0]`) [measured], its label
+fades across `[0.55, 0.96]` on present and re-emerges across `[0.90, 1.0]` on
+dismiss [fitted], and menu content reveals clipped to the interpolated rounded
+surface with opacity across `[0.62, 0.98]` on present (`[0.55, 1.0]` on dismiss),
+scale `0.75 -> 1.0` across `[0.15, 0.92]`, and Gaussian blur `15.0 -> 0.0` pt
+across `[0.55, 0.98]` on present (`[0.65, 1.0]` on dismiss) [fitted]. Standalone borderless popup windows
 that lack a scene backdrop retain the fallback opaque elevated surface
 (`water-rs/waterui#2003`). The trigger of a menu picker wears the §8.6
 field container with a trailing dropdown indicator.

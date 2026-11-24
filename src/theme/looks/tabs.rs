@@ -50,10 +50,11 @@ const HIGHLIGHT_INSET: f64 = 4.0;
 /// Dark `(32, 32, 32)`.
 const REST_PILL_ALPHA_LIGHT: f32 = 0.055;
 const REST_PILL_ALPHA_DARK: f32 = 0.6875;
-/// Active glass lens expansion over the resting pill (§1.4): `+14%` width and
-/// `+24%` height (`h ≈ 64.5 pt` overhanging top and bottom of the `60 pt` bar).
-const LENS_GROWTH_X: f64 = 0.14;
-const LENS_GROWTH_Y: f64 = 0.24;
+/// Active glass lens expansion over the resting pill (§1.4): `+36%` width and
+/// `+28%` height so the lifted lens spans full item width while overhanging
+/// the top and bottom of the `60 pt` bar.
+const LENS_GROWTH_X: f64 = 0.36;
+const LENS_GROWTH_Y: f64 = 0.28;
 
 /// Whether the bar-level tab pill should show the active refractive lens.
 const fn active_lens(state: InteractionState) -> bool {
@@ -221,7 +222,7 @@ pub(in super::super) fn look(glass: &Glass, spec: TabsSpec, _env: &Environment) 
             Chrome::new(
                 ChromeSurface::clear(CornerShape::full().smoothing(CONTINUOUS_SMOOTHING)),
                 StateLayer::new(Glass::color(items.palette.state_layer)).opacities(
-                    HOVER_ALPHA,
+                    0.0,
                     HOVER_ALPHA,
                     0.0,
                     0.0,

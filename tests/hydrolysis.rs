@@ -2978,6 +2978,7 @@ fn menu_popup_scene() {
         app.settle();
         app.touch_down(85.0, 55.0);
         app.touch_up(85.0, 55.0);
+        app.fast_forward(Duration::from_secs(3));
         app.export(&format!("menu_popup_{name}"));
     }
 }

@@ -106,6 +106,22 @@ pub const FADE_ON_OMEGA: f32 = 11.199_97;
 /// ω0 of the track fade turning off (`T_r = 0.311 s, ζ = 1.000`), rad/s.
 pub const FADE_OFF_OMEGA: f32 = 20.203_17;
 
+fn build_lens_effect(w: f32, h: f32, recipe: &Recipe) -> MaterialEffect {
+    assert!(
+        recipe.ellipse_bend == 0.0,
+        "the lens effect carries no position, so its recipe cannot bend toward the knob's ellipse"
+    );
+    let shape = Shape::rounded_rect(
+        ElementRect::new(0.0, 0.0, w, h),
+        h * 0.5,
+        CornerCurve::Continuous,
+    );
+    materials::effect(&Element {
+        shape,
+        recipe: *recipe,
+    })
+}
+
 /// The material the held knob is: the clear family's recipe at the lens's
 /// size, `pressed` or not. The knob is opaque white while at rest, so the
 /// lens only shows once a touch holds it.
@@ -122,16 +138,33 @@ pub fn lens_effect(
 ) -> MaterialEffect {
     let (w, h) = lens_size(pressed);
     let recipe = Recipe::for_element(w, h, Family::Clear, appearance, translucency);
-    assert!(
-        recipe.ellipse_bend == 0.0,
-        "the lens effect carries no position, so its recipe cannot bend toward the knob's ellipse"
-    );
-    let shape = Shape::rounded_rect(
-        ElementRect::new(0.0, 0.0, w, h),
-        h * 0.5,
-        CornerCurve::Continuous,
-    );
-    materials::effect(&Element { shape, recipe })
+    build_lens_effect(w, h, &recipe)
+}
+
+/// Clear refractive lens tuned for the switch knob over its 28 pt track.
+///
+/// While pressed, the outer lip reflects the track beneath it and the bevel
+/// refracts outward past the 28 pt track into dark exterior meniscus bands.
+///
+/// # Panics
+/// If the clear recipe bends its normal toward the knob's ellipse.
+#[must_use]
+pub fn toggle_lens_effect(
+    appearance: Appearance,
+    translucency: Translucency,
+    pressed: bool,
+) -> MaterialEffect {
+    let (w, h) = lens_size(pressed);
+    let mut recipe = Recipe::for_element(w, h, Family::Clear, appearance, translucency);
+    if pressed {
+        recipe.primary_shift = 16.0;
+        recipe.primary_depth = 9.0;
+        recipe.rim_shift = -26.0;
+        recipe.rim_depth = 3.0;
+        recipe.rim_ramp = [-2.0, 0.0];
+        recipe.rim_mix = 0.85;
+    }
+    build_lens_effect(w, h, &recipe)
 }
 
 /// The recipe's capture scale of the lens, which is the same held or not.
