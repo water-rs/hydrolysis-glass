@@ -51,8 +51,8 @@ pub const SHADOW_SIGMA: f64 = 5.2;
 pub const SHADOW_OFFSET: f64 = 1.2;
 /// Opacity of a disabled slider **[fitted: simulator]**.
 pub const DISABLED_OPACITY: f32 = 0.5;
-/// Growth of the knob's lens at full press: `1 + 0.35·p` **[chosen]**.
-pub const LENS_GROWTH: f64 = 0.35;
+/// Growth of the knob's lens at full press: `1 + 0.60·p` (§1.4: `59.2 × 38.4 pt`).
+pub const LENS_GROWTH: f64 = 0.60;
 
 /// The default tint (the accent colour) **[measured: simulator]**.
 #[must_use]
@@ -191,8 +191,8 @@ mod tests {
     fn a_press_grows_the_knob_about_its_centre_to_the_lens() {
         let rest = knob_rect(travel(), 0.5, 0.0);
         let held = knob_rect(travel(), 0.5, 1.0);
-        near(held.width(), 49.95, 1e-9);
-        near(held.height(), 32.4, 1e-9);
+        near(held.width(), 59.2, 1e-9);
+        near(held.height(), 38.4, 1e-9);
         assert_eq!(held.center(), rest.center());
     }
 

@@ -134,7 +134,7 @@ pub(in super::super) fn switch(glass: &Glass, spec: &ToggleSpec, env: &Environme
     );
 
     let control = ToggleControl::new(Size::new(FRAME[0], FRAME[1]), motion())
-        .reach(3.0)
+        .reach(6.0)
         .hit(switch_hit())
         // A disabled switch is the enabled one composited at opacity 0.5 in
         // encoded space (§8.2, States).

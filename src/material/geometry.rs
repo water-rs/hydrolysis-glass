@@ -301,23 +301,37 @@ impl<'a> UnionField<'a> {
 
     fn distance_and_owner(&self, p: [f32; 2]) -> (f32, usize) {
         let k = self.blend();
-        // Every member, however many, folded in ascending distance order
-        // with exact ties in member order, as `field.wgsl` does: the
-        // quadratic smooth minimum is not associative, so the order is
-        // part of the field.
-        let mut order: Vec<(f32, usize)> = self
-            .members
-            .iter()
-            .enumerate()
-            .map(|(j, member)| (member.shape.distance(p), j))
-            .collect();
-        order.sort_by(|a, b| a.0.total_cmp(&b.0));
-        let (first, owner) = order[0];
-        let fused = order[1..].iter().fold(first, |m, &(d, _)| {
-            let h = (k - (m - d).abs()).max(0.0) / k;
-            (h * h * k).mul_add(-0.25, m.min(d))
-        });
-        (fused.max(NEGATIVE_SENTINEL), owner)
+        // Fold fusing (translucent) members in ascending distance order with
+        // the quadratic smooth minimum (`field.wgsl` mirrors this); prominent
+        // flat-tinted siblings (`Tint::flag >= 1.5`) stay geometrically
+        // separate via hard min while ownership stays the overall minimum (§3.1).
+        let mut fusing: Vec<(f32, usize)> = Vec::new();
+        let mut min_prominent = f32::INFINITY;
+        let mut owner = 0usize;
+        let mut min_d = f32::INFINITY;
+        for (j, member) in self.members.iter().enumerate() {
+            let d = member.shape.distance(p);
+            if d.total_cmp(&min_d).is_lt() {
+                min_d = d;
+                owner = j;
+            }
+            if super::recipe::Tint::flag(member.recipe.tint) > 1.5 {
+                min_prominent = min_prominent.min(d);
+            } else {
+                fusing.push((d, j));
+            }
+        }
+        let d_out = if fusing.is_empty() {
+            min_prominent
+        } else {
+            fusing.sort_by(|a, b| a.0.total_cmp(&b.0));
+            let fused = fusing[1..].iter().fold(fusing[0].0, |m, &(d, _)| {
+                let h = (k - (m - d).abs()).max(0.0) / k;
+                (h * h * k).mul_add(-0.25, m.min(d))
+            });
+            fused.min(min_prominent)
+        };
+        (d_out.max(NEGATIVE_SENTINEL), owner)
     }
 
     /// Distance, normal and owner at `p`.

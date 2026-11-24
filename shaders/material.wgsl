@@ -249,19 +249,43 @@ fn ease_cubic(t: f32) -> f32 {
 // the silhouette.
 fn glass_body(
     r: Recipe,
+    elem_size: vec2<f32>,
     p: vec2<f32>,
     d: f32,
     n: vec2<f32>,
     cov: f32,
     px_per_pt: f32,
 ) -> vec3<f32> {
-    // §4.2: the primary sample, refracted by the primary lobe and blurred at
-    // its refracted depth.
+    // §1.2 / §4.2: the primary sample, refracted by the primary lobe and
+    // blurred at its refracted depth; Clear lenses integrate 7 spectral
+    // taps across grazing lips (`x < min(0.18 m, 8.0)`).
     let o1 = lobe_at(d, r.shifts.y, r.shifts.x);
-    var C = unpremultiply(sample_blurred(
-        p + n * o1,
-        BLUR_SIGMA_PT_PER_RADIUS * blur_radius_at(r, d + o1),
-    ));
+    let p1 = p + n * o1;
+    let sigma1 = BLUR_SIGMA_PT_PER_RADIUS * blur_radius_at(r, d + o1);
+    var C: vec3<f32>;
+    let m_elem = min(elem_size.x, elem_size.y);
+    let is_clear = r.cast_b.x < 0.2;
+    let h_disp = min(0.18 * m_elem, 8.0);
+    let mu_disp = meniscus(-d, h_disp);
+    if is_clear && mu_disp > 1e-4 {
+        let v_disp = n * (2.5 * mu_disp);
+        var acc = vec3<f32>(0.0);
+        for (var step = 1; step <= 3; step += 1) {
+            let k = f32(step) / 3.0;
+            let enc = unpremultiply(sample_blurred(p1 + v_disp * k, sigma1));
+            acc.r += k * enc.r;
+            acc.g += (1.0 - k) * enc.g;
+        }
+        for (var step = 0; step <= 3; step += 1) {
+            let k = f32(step) / 3.0;
+            let enc = unpremultiply(sample_blurred(p1 - v_disp * k, sigma1));
+            acc.g += (1.0 - k) * enc.g;
+            acc.b += k * enc.b;
+        }
+        C = vec3<f32>(0.5 * acc.r, (1.0 / 3.0) * acc.g, 0.5 * acc.b);
+    } else {
+        C = unpremultiply(sample_blurred(p1, sigma1));
+    }
 
     // §4.4: the haze — the capture at the pixel blurred by a Gaussian of
     // the haze radius's deviation, unpremultiplied; runs before the
@@ -491,15 +515,15 @@ fn cross_element_bleed(
             continue;
         }
         let n_j = bleed_shape_gradient(elem_j, p);
-        let t_rad = 1.0 - sat(d_j / BLEED_RADIUS);
-        let w_rad = t_rad * t_rad;
+        let w_bleed = exp(-d_j / 12.0) * (1.0 - sat(d_j / BLEED_RADIUS));
         let w_face = 0.35 + 0.65 * edge_decay * max(0.0, -dot(n_i, n_j));
         let is_j_prom = r_j.hl_bb.w > 1.5;
         let is_j_light = r_j.ambient_misc.z > 0.5;
-        let e_prom = select(0.35, 0.20, is_j_light) * r_j.tint.a;
+        let e_prom = (select(0.10, 0.06, is_j_light)
+            + select(0.25, 0.14, is_j_light) * sat(r_j.hl_b.w)) * r_j.tint.a;
         let e_reg = select(0.22, 0.12, is_j_light) * (r_j.tint.a / 0.4);
         let e_j = select(e_reg, e_prom, is_j_prom);
-        bleed += e_j * w_rad * w_face * (r_j.tint.rgb * headroom);
+        bleed += e_j * w_bleed * w_face * (r_j.tint.rgb * headroom);
     }
     return bleed;
 }
@@ -548,7 +572,8 @@ fn material_fragment(v: FullscreenOut) -> @location(0) vec4<f32> {
     var outc = backdrop_hair;
     if cov > 0.0 {
         let n = f.n / max(length(f.n), 1e-4);
-        var C = glass_body(r, p, f.d, n, cov, uni.scene.z);
+        let own_elem = elements[min(owner, arrayLength(&elements) - 1u)];
+        var C = glass_body(r, own_elem.rect.zw, p, f.d, n, cov, uni.scene.z);
         // §4.11: the per-channel ceiling, then the display peak.
         C = clamp(C, vec3<f32>(0.0), vec3<f32>(min(r.cast_b.z, uni.misc.x)));
         // §4.12: the highlight sibling.
@@ -560,14 +585,12 @@ fn material_fragment(v: FullscreenOut) -> @location(0) vec4<f32> {
         let k_mul = select(select(0.110, 0.085, is_light), 0.105, is_prominent);
         let k_add = select(select(0.045, 0.025, is_light), 0.038, is_prominent);
         let raw_light = highlight_light(r, f.d, n, cov);
-        let own_elem = elements[min(owner, arrayLength(&elements) - 1u)];
         let own_center = own_elem.rect.xy + own_elem.rect.zw * 0.5;
         let touch_pt = select(own_center, r.contour_misc.yz, r.contour_misc.w > 0.5);
-        let touch_delta = p - touch_pt;
-        let press_sigma = max(0.35 * own_elem.rect.z, 1e-3);
-        let press_boost = 1.0 + 0.35 * max(r.hl_b.w, 0.0) * (
-            0.4 + 0.6 * exp(-dot(touch_delta, touch_delta) / (2.0 * press_sigma * press_sigma))
-        );
+        let touch_radius = max(0.5 * own_elem.rect.z, 40.0);
+        let u_t = min(length(p - touch_pt) / touch_radius, 1.0);
+        let phi = sat(max(r.hl_b.w, 0.0)) * (1.0 - 0.37 * u_t * u_t);
+        let press_boost = 1.0 + 0.35 * phi;
         let light = vec4<f32>(raw_light.rgb * press_boost, raw_light.w);
         let tint = tint_alphas(r, f.d, cov);
         let fill = select(
@@ -578,6 +601,11 @@ fn material_fragment(v: FullscreenOut) -> @location(0) vec4<f32> {
         let pre = mix(C, fill, select(0.0, tint.x, is_prominent));
         let lit = add_highlight(pre, light, k_mul, k_add);
         C = add_tint(lit, r.tint.rgb, select(tint, vec2<f32>(0.0), is_prominent));
+        if phi > 0.0 {
+            let c_sat = clamp(C, vec3<f32>(0.0), vec3<f32>(1.0));
+            let lift_room = max(vec3<f32>(1.0) - C, vec3<f32>(0.0));
+            C = C + phi * 0.22 * lift_room * (0.65 + 0.35 * c_sat);
+        }
         C = C + cross_element_bleed(owner, p, f.d, n, C);
         let interior = vec4<f32>(C, 1.0);
         let shadow = vec4<f32>(0.0, 0.0, 0.0, cast_alpha);
