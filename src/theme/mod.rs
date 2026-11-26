@@ -544,7 +544,7 @@ mod tests {
         let extent = look.panel_extent(Rect::new(0.0, 0.0, 140.0, 120.0));
         let expected = chrome::POPUP_SHADOW_BLUR.mul_add(3.0, chrome::POPUP_SHADOW_OFFSET);
         assert!(
-            (extent - expected).abs() < 1e-6,
+            (f64::from(extent) - expected).abs() < 1e-6,
             "expected popup elevation extent {expected}, got {extent}"
         );
     }
@@ -572,9 +572,8 @@ mod tests {
             cherenkov_record::kurbo::Size::new(0.0, f64::from(button::MIN_HIT_SIDE)),
         );
         assert!(
-            (ltr.decrement().get_hit().get_cancel_distance() - f64::from(button::CANCEL_DISTANCE))
-                .abs()
-                < 1e-9
+            (ltr.decrement().get_hit().get_cancel_distance() - button::CANCEL_DISTANCE).abs()
+                < 1e-6
         );
 
         let radii_of = |chrome: &hydrolysis_style::theme::Chrome| {
@@ -923,10 +922,7 @@ mod tests {
                 f64::from(button::MIN_HIT_SIDE)
             )
         );
-        assert!(
-            (back.get_hit().get_cancel_distance() - f64::from(button::CANCEL_DISTANCE)).abs()
-                < 1e-9
-        );
+        assert!((back.get_hit().get_cancel_distance() - button::CANCEL_DISTANCE).abs() < 1e-6);
 
         let bounds = Rect::new(0.0, 0.0, 44.0, 44.0);
         let record_chevron = |rtl: bool| {
@@ -1227,8 +1223,8 @@ mod tests {
             elevation.key.sigma > 0.0,
             "floating glass surface carries a drop shadow"
         );
-        assert_eq!(look.minimum_width(), f64::from(button::MIN_HIT_SIDE));
-        assert_eq!(look.minimum_height(), f64::from(button::MIN_HIT_SIDE));
+        assert_eq!(look.minimum_width(), button::MIN_HIT_SIDE);
+        assert_eq!(look.minimum_height(), button::MIN_HIT_SIDE);
 
         let corners = look.surface().shape().corners();
         assert_eq!(

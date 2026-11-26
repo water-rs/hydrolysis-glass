@@ -20,9 +20,9 @@ use super::super::palette::working;
 use super::super::surfaces::{self, CONTAINER_CORNER_RADIUS};
 
 /// Inner padding around card title, subtitle, and body content, pt.
-const CARD_PADDING: f64 = 16.0;
+const CARD_PADDING: f32 = 16.0;
 /// Vertical gap between title, subtitle, and body content, pt.
-const CARD_CONTENT_SPACING: f64 = 6.0;
+const CARD_CONTENT_SPACING: f32 = 6.0;
 
 /// The glass theme's look for a card of `style`.
 ///
@@ -33,8 +33,7 @@ const CARD_CONTENT_SPACING: f64 = 6.0;
 /// - `Outlined` uses the palette's opaque `surface` fill with a hairline border.
 pub(in super::super) fn look(glass: &Glass, style: CardStyle, _env: &Environment) -> CardLook {
     let (palette, translucency) = (glass.palette, glass.translucency);
-    let shape =
-        CornerShape::radius(f64::from(CONTAINER_CORNER_RADIUS)).smoothing(CONTINUOUS_SMOOTHING);
+    let shape = CornerShape::radius(CONTAINER_CORNER_RADIUS).smoothing(CONTINUOUS_SMOOTHING);
 
     let glass_surface = || {
         let effect = Driven::new(move |inputs: &Inputs<'_, ()>| {

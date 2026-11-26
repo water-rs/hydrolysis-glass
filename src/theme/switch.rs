@@ -21,11 +21,11 @@ pub const FRAME: [f64; 2] = [61.0, 28.0];
 /// edge, and taking no layout space **[measured]**.
 pub const TRACK: [f64; 2] = [63.0, 28.0];
 /// The knob at rest, pt **[measured]**.
-pub const KNOB: [f64; 2] = [37.0, 24.0];
+pub const KNOB: [f32; 2] = [37.0, 24.0];
 /// Gap between the knob and the track's edges, pt **[measured]**.
 pub const KNOB_INSET: f64 = 2.0;
 /// How far the knob travels from off to on, pt **[measured]**.
-pub const TRAVEL: f64 = 22.0;
+pub const TRAVEL: f32 = 22.0;
 
 /// The track's rectangle for a switch laid out at `frame` in `direction`:
 /// its leading edge on the frame's leading edge, overhanging the trailing
@@ -43,15 +43,18 @@ pub fn track_rect(frame: Rect, direction: LayoutDirection) -> Rect {
 /// grown about its centre by [`LENS_GROWTH`] times the press progress `p`.
 #[must_use]
 pub fn knob_rect(track: Rect, direction: LayoutDirection, q: f64, p: f64) -> Rect {
+    let travel = f64::from(TRAVEL);
+    let knob_w = f64::from(KNOB[0]);
+    let knob_h = f64::from(KNOB[1]);
     let x0 = match direction {
-        LayoutDirection::LeftToRight => TRAVEL.mul_add(q, track.x0 + KNOB_INSET),
-        LayoutDirection::RightToLeft => (-q).mul_add(TRAVEL, track.x1 - KNOB_INSET - KNOB[0]),
+        LayoutDirection::LeftToRight => travel.mul_add(q, track.x0 + KNOB_INSET),
+        LayoutDirection::RightToLeft => (-q).mul_add(travel, track.x1 - KNOB_INSET - knob_w),
     };
     let rest = Rect::new(
         x0,
         track.y0 + KNOB_INSET,
-        x0 + KNOB[0],
-        track.y0 + KNOB_INSET + KNOB[1],
+        x0 + knob_w,
+        track.y0 + KNOB_INSET + knob_h,
     );
     Rect::from_center_size(rest.center(), rest.size() * LENS_GROWTH.mul_add(p, 1.0))
 }
@@ -180,7 +183,10 @@ pub fn lens_capture_scale(appearance: Appearance, translucency: Translucency) ->
 )]
 fn lens_size(pressed: bool) -> (f32, f32) {
     let growth = LENS_GROWTH.mul_add(f64::from(u8::from(pressed)), 1.0);
-    ((KNOB[0] * growth) as f32, (KNOB[1] * growth) as f32)
+    (
+        (f64::from(KNOB[0]) * growth) as f32,
+        (f64::from(KNOB[1]) * growth) as f32,
+    )
 }
 
 #[cfg(test)]

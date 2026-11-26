@@ -14,20 +14,20 @@ use super::button::{self, Spring};
 use super::palette::Rgba;
 
 /// Height of the slider's layout frame, pt **[measured: simulator]**.
-pub const HEIGHT: f64 = 31.0;
+pub const HEIGHT: f32 = 31.0;
 /// Height of the track, pt **[measured: simulator]**.
 pub const TRACK_HEIGHT: f64 = 6.0;
 /// Width of the knob at rest, pt **[measured: simulator]**.
-pub const KNOB_WIDTH: f64 = 37.0;
+pub const KNOB_WIDTH: f32 = 37.0;
 /// Height of the knob at rest, pt **[measured: simulator]**.
-pub const KNOB_HEIGHT: f64 = 24.0;
+pub const KNOB_HEIGHT: f32 = 24.0;
 /// Space between an end symbol's layout box and the track, pt
 /// **[chosen]**.
-pub const SYMBOL_GAP: f64 = 12.0;
+pub const SYMBOL_GAP: f32 = 12.0;
 /// Smallest width of the knob's travel the layout asks for, pt.
-pub const MIN_TRAVEL: f64 = 120.0;
+pub const MIN_TRAVEL: f32 = 120.0;
 /// Space between the slider's own label and its row, pt (§8.3).
-pub const LABEL_SPACING: f64 = 4.0;
+pub const LABEL_SPACING: f32 = 4.0;
 
 /// How far the track runs past each end of the knob's travel, pt: half the
 /// knob, whose centre travels the track inset by it.
@@ -35,10 +35,10 @@ pub const LABEL_SPACING: f64 = 4.0;
 /// The renderer lays the knob's *centre* along the row it hands the look as
 /// the frame, so that row is the knob's travel and the full track is the
 /// travel grown by this at each end.
-pub const TRAVEL_INSET: f64 = KNOB_WIDTH * 0.5;
+pub const TRAVEL_INSET: f32 = KNOB_WIDTH * 0.5;
 /// Space between an end symbol's layout box and the knob's travel, pt: the
 /// spec's [`SYMBOL_GAP`] to the full track, beyond [`TRAVEL_INSET`].
-pub const LABEL_GAP: f64 = SYMBOL_GAP + TRAVEL_INSET;
+pub const LABEL_GAP: f32 = SYMBOL_GAP + TRAVEL_INSET;
 
 /// Alpha of the unfilled track's white (dark) or black (light) fill
 /// **[chosen]**.
@@ -97,7 +97,7 @@ pub const VALUE_SPRING: Spring = Spring {
 /// `v` mapped to [0, 1] on a slider `width` pt wide: `v · (W − 37)`.
 #[must_use]
 pub fn knob_leading(v: f64, width: f64) -> f64 {
-    v * (width - KNOB_WIDTH)
+    v * (width - f64::from(KNOB_WIDTH))
 }
 
 /// The full track of a slider whose knob's centre travels `travel`: the
@@ -106,10 +106,11 @@ pub fn knob_leading(v: f64, width: f64) -> f64 {
 #[must_use]
 pub fn track_rect(travel: Rect) -> Rect {
     let y = travel.center().y;
+    let inset = f64::from(TRAVEL_INSET);
     Rect::new(
-        travel.x0 - TRAVEL_INSET,
+        travel.x0 - inset,
         TRACK_HEIGHT.mul_add(-0.5, y),
-        travel.x1 + TRAVEL_INSET,
+        travel.x1 + inset,
         TRACK_HEIGHT.mul_add(0.5, y),
     )
 }
@@ -128,7 +129,10 @@ pub fn knob_rect(travel: Rect, v: f64, p: f64) -> Rect {
     let growth = LENS_GROWTH.mul_add(p, 1.0);
     Rect::from_center_size(
         knob_center(travel, v),
-        (KNOB_WIDTH * growth, KNOB_HEIGHT * growth),
+        (
+            f64::from(KNOB_WIDTH) * growth,
+            f64::from(KNOB_HEIGHT) * growth,
+        ),
     )
 }
 
@@ -157,7 +161,8 @@ mod tests {
     /// The knob's travel on a 300 pt slider whose frame starts at x = 0:
     /// the track inset by half the knob at each end.
     fn travel() -> Rect {
-        Rect::new(TRAVEL_INSET, 12.5, 300.0 - TRAVEL_INSET, 18.5)
+        let inset = f64::from(TRAVEL_INSET);
+        Rect::new(inset, 12.5, 300.0 - inset, 18.5)
     }
 
     #[test]

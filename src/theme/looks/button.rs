@@ -69,8 +69,7 @@ pub(in super::super) fn look(glass: &Glass, spec: &ButtonSpec, env: &Environment
     // The frame is the label plus the size group's insets and nothing more
     // (§8.1), so the look carries no minimum size. A symbol takes the same
     // insets as a title.
-    let mut look = ButtonLook::new(chrome, label)
-        .padding(f64::from(metrics.inset_x), f64::from(metrics.inset_y));
+    let mut look = ButtonLook::new(chrome, label).padding(metrics.inset_x, metrics.inset_y);
     if bordered {
         look = look.group_blend_space(BlendSpace::SrgbEncoded);
     }
@@ -247,7 +246,7 @@ fn glass_chrome(
         StateLayer::new(Glass::color(palette.state_layer)),
         PressFeedback::new()
             .scale(f64::from(GROWTH_PER_PRESS))
-            .max_growth(f64::from(PRESS_MAX_HALF_AXIS_GROWTH))
+            .max_growth(PRESS_MAX_HALF_AXIS_GROWTH)
             .drag_deformation(jelly_drag()),
         FocusIndicator::Tint,
         motion,

@@ -2158,7 +2158,7 @@ fn a_right_to_left_slider_is_the_mirror_of_a_left_to_right_one() {
         clippy::cast_possible_truncation,
         reason = "a distance of at most 300 pt, far inside f32"
     )]
-    let along = VALUE.mul_add(300.0 - KNOB_WIDTH, TRAVEL_INSET) as f32;
+    let along = VALUE.mul_add(300.0 - f64::from(KNOB_WIDTH), f64::from(TRAVEL_INSET)) as f32;
     let knob_x = 51.0 + along;
     let window_width = SCENE_PT[0];
 

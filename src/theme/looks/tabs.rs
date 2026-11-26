@@ -30,16 +30,16 @@ use super::{control_motion, is_disabled, paint, spring_animation, stretch_along_
 const VERTICAL_METRICS: TabsMetrics = TabsMetrics::new(62.0, 64.0, 12.0, 6.0);
 /// Width threshold where bottom bar items switch to horizontal layout, pt
 /// (§8.7, Geometry).
-const HORIZONTAL_BREAKPOINT: f64 = 600.0;
+const HORIZONTAL_BREAKPOINT: f32 = 600.0;
 /// The measures of wide horizontal items: a 48 pt bar, items at least
 /// 64 pt wide with their labels inset 16 pt, and 8 pt between an icon and
 /// its label (§8.7, Geometry).
 const HORIZONTAL_METRICS: TabsMetrics = TabsMetrics::new(48.0, 64.0, 16.0, 8.0);
 /// Minimum slot width per item in a compact floating bottom tab pill, pt
 /// (§8.7, Geometry).
-const COMPACT_ITEM_MIN_WIDTH: f64 = 94.0;
+const COMPACT_ITEM_MIN_WIDTH: f32 = 94.0;
 /// Outer floating clearance from the bottom viewport edge, pt (§8.7, Geometry).
-const FLOATING_MARGIN: f64 = 21.0;
+const FLOATING_MARGIN: f32 = 21.0;
 /// Inset of the selected highlight capsule inside the item's bounds, pt
 /// (§8.7, Geometry).
 const HIGHLIGHT_INSET: f64 = 4.0;
@@ -204,7 +204,7 @@ pub(in super::super) fn look(glass: &Glass, spec: TabsSpec, _env: &Environment) 
     motion.value = ValueMotion::Always(spring_animation(dynamics::Spring::SEGMENTED_PILL));
     let hit = HitRegion::NONE
         .minimum(Size::new(0.0, f64::from(MIN_HIT_SIDE)))
-        .cancel_distance(f64::from(CANCEL_DISTANCE));
+        .cancel_distance(CANCEL_DISTANCE);
     let items = glass.clone();
 
     TabsLook::new(

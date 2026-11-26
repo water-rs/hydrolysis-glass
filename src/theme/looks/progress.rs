@@ -49,11 +49,11 @@ const fn circular_unfilled_track(appearance: Appearance) -> Rgba {
 /// The bar's length and thickness, pt (§8.12).
 const BAR: Size = Size::new(120.0, 4.0);
 /// The height of the label above a bar, pt (§8.12).
-const LABEL_HEIGHT: f64 = 18.0;
+const LABEL_HEIGHT: f32 = 18.0;
 /// The gap between an indicator and its label above, pt (§8.12).
-const LABEL_SPACING: f64 = 7.0;
+const LABEL_SPACING: f32 = 7.0;
 /// The gap between an indicator and its value label below, pt (§8.12).
-const VALUE_LABEL_SPACING: f64 = 8.0;
+const VALUE_LABEL_SPACING: f32 = 8.0;
 /// The ring's diameter and the stroke's width, pt.
 const RING: f64 = 20.0;
 const RING_STROKE: f64 = 2.5;

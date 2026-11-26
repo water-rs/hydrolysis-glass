@@ -20,7 +20,7 @@ use super::{DISABLED_CONTENT_ALPHA, control_motion};
 
 /// Maximum corner radius of a floating glass surface, pt (chosen to yield a
 /// pill on standard 44 pt controls and a softly rounded card on larger panels).
-const FLOATING_MAX_CORNER_RADIUS: f64 = 22.0;
+const FLOATING_MAX_CORNER_RADIUS: f32 = 22.0;
 /// Drop-shadow blur sigma of a floating glass surface, pt.
 const FLOATING_SHADOW_BLUR: f64 = 12.0;
 /// Vertical offset of a floating glass surface's drop shadow, pt.
@@ -78,6 +78,6 @@ pub(in super::super) fn look(glass: &Glass, _env: &Environment) -> FloatingLook 
         Glass::color(palette.foreground),
         Glass::color(palette.state_layer),
     )
-    .minimum_size(f64::from(MIN_HIT_SIDE), f64::from(MIN_HIT_SIDE))
+    .minimum_size(MIN_HIT_SIDE, MIN_HIT_SIDE)
     .disabled_content_opacity(DISABLED_CONTENT_ALPHA)
 }

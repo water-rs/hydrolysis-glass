@@ -155,7 +155,7 @@ pub(in super::super) fn switch(glass: &Glass, spec: &ToggleSpec, env: &Environme
 /// The checkbox's side, pt (§8.2, Checkbox).
 const CHECKBOX_SIDE: f64 = 16.0;
 /// The gap between a checkbox and its label, pt (§8.2, Checkbox).
-const CHECKBOX_LABEL_SPACING: f64 = 10.0;
+const CHECKBOX_LABEL_SPACING: f32 = 10.0;
 /// A checkbox's corner radius, in shares of its side (`3.5 / 16.0`, §8.2).
 const CHECKBOX_RADIUS: f64 = 3.5 / CHECKBOX_SIDE;
 /// The check mark's stroke width, in shares of the checkbox's side (`2.0 / 16.0`, §8.2).
@@ -239,10 +239,10 @@ pub(in super::super) fn checkbox(
                 check,
             );
             recorder.fill(rounded(frame, 0.0), layer);
-            let ring_inset = FOCUS_RING_WIDTH.mul_add(0.5, FOCUS_RING_GAP);
+            let ring_inset = f64::from(FOCUS_RING_WIDTH).mul_add(0.5, f64::from(FOCUS_RING_GAP));
             recorder.stroke(
                 rounded(frame.inset(-ring_inset), ring_inset),
-                Stroke::new(FOCUS_RING_WIDTH),
+                Stroke::new(f64::from(FOCUS_RING_WIDTH)),
                 ring,
             );
         },

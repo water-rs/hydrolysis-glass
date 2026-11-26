@@ -76,7 +76,7 @@ pub(in super::super) fn look(glass: &Glass, spec: &SliderSpec, env: &Environment
     // never cancels: it follows the touch wherever it goes (§8.3).
     let hit = HitRegion::NONE.minimum(Size::new(f64::from(MIN_HIT_SIDE), f64::from(MIN_HIT_SIDE)));
     let knob = Knob {
-        size: Size::new(KNOB_WIDTH, KNOB_HEIGHT),
+        size: Size::new(f64::from(KNOB_WIDTH), f64::from(KNOB_HEIGHT)),
         hit,
     };
     // A touch drags only from the knob and moves the value by its offset
@@ -204,7 +204,7 @@ fn knob_fill() -> Custom<f64, impl DrivenSet<f64> + use<>> {
 /// is the theme's, as every control's.
 fn focus_ring(glass: &Glass) -> Custom<f64, impl DrivenSet<f64> + use<>> {
     let accent = glass.palette.accent;
-    let reach = FOCUS_RING_WIDTH.mul_add(0.5, FOCUS_RING_GAP);
+    let reach = f64::from(FOCUS_RING_WIDTH).mul_add(0.5, f64::from(FOCUS_RING_GAP));
     let ring = Driven::new(move |inputs: &Inputs<'_, f64>| {
         let knob = stretch_along_axis(
             slider::knob_rect(
@@ -220,7 +220,7 @@ fn focus_ring(glass: &Glass) -> Custom<f64, impl DrivenSet<f64> + use<>> {
     Custom::new(
         (ring, focus_ring_paint(accent)),
         |recorder, _frame, (ring, ring_paint)| {
-            recorder.stroke(ring, Stroke::new(FOCUS_RING_WIDTH), ring_paint);
+            recorder.stroke(ring, Stroke::new(f64::from(FOCUS_RING_WIDTH)), ring_paint);
         },
     )
 }
@@ -244,12 +244,12 @@ fn value_indicator(glass: &Glass) -> ValueIndicator {
         Custom::<f64, _>::new(
             (shadow, fill, outline),
             |recorder, frame, (shadow, fill, outline)| {
-                let radii = RoundedRectRadii::from_single_radius(MENU_CORNER_RADIUS);
+                let radii = RoundedRectRadii::from_single_radius(f64::from(MENU_CORNER_RADIUS));
                 recorder.shadow(RoundedRect::from_rect(frame, radii), shadow);
                 recorder.fill(RoundedRect::from_rect(frame, radii), fill);
                 recorder.stroke(
                     RoundedRect::from_rect(frame.inset(-0.25), radii),
-                    Stroke::new(HAIRLINE),
+                    Stroke::new(f64::from(HAIRLINE)),
                     outline,
                 );
             },

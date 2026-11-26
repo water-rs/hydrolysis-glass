@@ -17,18 +17,18 @@ use super::super::{Glass, PRESS_DURATION};
 use super::{control_motion, focus_ring_paint, hit_region, paint, state_layer_opacity};
 
 /// The indicator's side, pt.
-const INDICATOR: f64 = 22.0;
+const INDICATOR: f32 = 22.0;
 /// The gap between an indicator and its row's label, pt.
-const LABEL_SPACING: f64 = 10.0;
+const LABEL_SPACING: f32 = 10.0;
 /// The ring's stroke width, pt; the ring lies inside the indicator.
 const RING_WIDTH: f64 = 2.0;
 /// The selected dot's radius, in shares of the indicator's side.
 const DOT: f64 = 0.25;
 /// The state layer's radius, in multiples of the indicator's radius.
-const STATE_LAYER_SCALE: f64 = 1.6;
+const STATE_LAYER_SCALE: f32 = 1.6;
 /// How far the state layer and the focus ring around it reach past the
 /// indicator, pt.
-const REACH: f64 =
+const REACH: f32 =
     (INDICATOR * 0.5).mul_add(STATE_LAYER_SCALE - 1.0, FOCUS_RING_GAP) + FOCUS_RING_WIDTH;
 
 /// The measures of the group: at least 120 × 36 pt, its rows inset 12 by 8
@@ -103,14 +103,15 @@ pub(in super::super) fn look(
                 ring,
             );
             recorder.fill(dot, dot_paint);
-            let layer_radius = radius * STATE_LAYER_SCALE;
+            let layer_radius = radius * f64::from(STATE_LAYER_SCALE);
             recorder.fill(Circle::new(center, layer_radius), layer);
             recorder.stroke(
                 Circle::new(
                     center,
-                    FOCUS_RING_WIDTH.mul_add(0.5, layer_radius + FOCUS_RING_GAP),
+                    f64::from(FOCUS_RING_WIDTH)
+                        .mul_add(0.5, layer_radius + f64::from(FOCUS_RING_GAP)),
                 ),
-                Stroke::new(FOCUS_RING_WIDTH),
+                Stroke::new(f64::from(FOCUS_RING_WIDTH)),
                 focus,
             );
         },
@@ -120,11 +121,14 @@ pub(in super::super) fn look(
         ..control_motion()
     };
     RadioGroupLook::new(
-        ToggleControl::new(Size::new(INDICATOR, INDICATOR), motion)
-            .label_spacing(LABEL_SPACING)
-            .reach(REACH)
-            .hit(hit_region())
-            .part(indicator),
+        ToggleControl::new(
+            Size::new(f64::from(INDICATOR), f64::from(INDICATOR)),
+            motion,
+        )
+        .label_spacing(LABEL_SPACING)
+        .reach(REACH)
+        .hit(hit_region())
+        .part(indicator),
         LAYOUT,
     )
 }
