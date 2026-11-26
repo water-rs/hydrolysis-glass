@@ -35,8 +35,8 @@ use hydrolysis_style::theme::{
     BadgeLook, ButtonLook, ButtonSpec, CheckboxLook, GlassLook, IndicatorLook, LinearProgressLook,
     ListLook, ListSpec, MenuLook, MenuPickerLook, MenuSpec, NavigationBarLook, NavigationSpec,
     PickerSpec, ProgressSpec, RadioGroupLook, ScrollIndicatorLook, SegmentedLook, SegmentedSpec,
-    SliderLook, SliderSpec, StepperLook, StepperSpec, SwitchLook, TableLook, TabsLook, TabsSpec,
-    TextFieldLook, TextFieldSpec, ToggleSpec, WidgetTheme,
+    SliderLook, SliderSpec, SnackbarLook, StepperLook, StepperSpec, SwitchLook, TableLook,
+    TabsLook, TabsSpec, TextFieldLook, TextFieldSpec, ToggleSpec, WidgetTheme,
 };
 use waterui::Plugin as _;
 use waterui::color::{Color, ColorScheme};
@@ -328,6 +328,10 @@ impl WidgetTheme for Glass {
 
     fn table(&self, _env: &Environment) -> TableLook {
         looks::table(self)
+    }
+
+    fn snackbar(&self, _env: &Environment) -> SnackbarLook {
+        looks::snackbar()
     }
 }
 
@@ -745,11 +749,11 @@ mod tests {
         use hydrolysis_style::theme::{
             TabBarWidth, TabItemGeometry, TabItemLayout, TabsValue, ValueMotion,
         };
-        use waterui::navigation::tab::NativeTabStyle;
+        use waterui::navigation::tab::TabStyle;
 
         let g = Glass::dark();
         let env = environment(&g);
-        let look = g.tabs(&TabsSpec::new(NativeTabStyle::TabBar), &env);
+        let look = g.tabs(&TabsSpec::new(TabStyle::TabBar), &env);
         assert_eq!(look.item_layout(402.0), TabItemLayout::Vertical);
         assert_eq!(look.item_layout(600.0), TabItemLayout::Horizontal);
         assert!(look.get_drag().is_some());
@@ -795,14 +799,14 @@ mod tests {
                 icon: None,
                 title: Rect::new(16.0, 20.0, 84.0, 40.0),
                 layout: TabItemLayout::Vertical,
-                placement: NativeTabStyle::TabBar,
+                placement: TabStyle::TabBar,
             },
             TabItemGeometry {
                 bounds: Rect::new(100.0, 0.0, 200.0, 60.0),
                 icon: None,
                 title: Rect::new(116.0, 20.0, 184.0, 40.0),
                 layout: TabItemLayout::Vertical,
-                placement: NativeTabStyle::TabBar,
+                placement: TabStyle::TabBar,
             },
         ]
         .into();

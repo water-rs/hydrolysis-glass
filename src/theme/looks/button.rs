@@ -58,7 +58,7 @@ pub(in super::super) fn look(glass: &Glass, spec: &ButtonSpec, env: &Environment
     let mut label = Label::new()
         .font(
             Font::from(Body)
-                .size(metrics.text_size)
+                .font_size(metrics.text_size)
                 .weight(FontWeight::Normal)
                 .line_height(metrics.line_height),
         )

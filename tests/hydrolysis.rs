@@ -52,7 +52,7 @@ use waterui::interaction::InteractionState;
 use waterui::layout::stack::hstack;
 use waterui::layout::{PositionExt as _, absolute};
 use waterui::navigation::{NavigationView, Tab, Tabs};
-use waterui::shape::{Circle, FixedRoundedRectangle};
+use waterui::shape::{Circle, RoundedRectangle};
 use waterui::text::text;
 use waterui::{AnyView, Binding, Color, View, ViewExt as _};
 use waterui_controls::label::LabelKind;
@@ -77,7 +77,9 @@ fn glass_button(x: f32, y: f32) -> impl View {
     button("")
         .style(ButtonStyle::Glass)
         .size(SIZE)
-        .position_anchor(waterui::layout::UnitPoint::TOP_LEADING, x, y)
+        .action(|| {})
+        .position(x, y)
+        .anchor(waterui::layout::UnitPoint::TOP_LEADING)
 }
 
 /// The frame [`glass_button`] lays out at `(x, y)`: the metrics' insets on
@@ -412,7 +414,9 @@ fn a_material_group_bleeds_from_a_prominent_sibling_within_36_pt() {
         button("")
             .style(ButtonStyle::GlassProminent)
             .size(SIZE)
-            .position_anchor(waterui::layout::UnitPoint::TOP_LEADING, x, y)
+            .action(|| {})
+            .position(x, y)
+            .anchor(waterui::layout::UnitPoint::TOP_LEADING)
     };
     let prominent_element = |rect: [f32; 4]| {
         theme(Appearance::Dark)
@@ -519,7 +523,9 @@ fn blank_button(size: ControlSize, label: [f32; 2], x: f32, y: f32) -> impl View
     }))
     .style(ButtonStyle::Glass)
     .size(size)
-    .position_anchor(waterui::layout::UnitPoint::TOP_LEADING, x, y)
+    .action(|| {})
+    .position(x, y)
+    .anchor(waterui::layout::UnitPoint::TOP_LEADING)
 }
 
 /// The surface the theme places for a glass button of `size` laid out at
@@ -604,7 +610,8 @@ fn glass_behind_blank(glass: WaterGlass, [x, y, w, h]: [f32; 4]) -> impl View {
         .width(w)
         .height(h)
         .background(glass)
-        .position_anchor(waterui::layout::UnitPoint::TOP_LEADING, x, y)
+        .position(x, y)
+        .anchor(waterui::layout::UnitPoint::TOP_LEADING)
 }
 
 /// A `.background(Glass::regular())` behind content agrees with the
@@ -652,7 +659,7 @@ fn a_glass_background_container_matches_the_standalone_scene() {
                 backdrop_view(Backdrop::Edge),
                 absolute((
                     glass_behind_blank(
-                        WaterGlass::regular().shape(FixedRoundedRectangle::new(40.0)),
+                        WaterGlass::regular().shape(RoundedRectangle::new(40.0)),
                         CARD,
                     ),
                     glass_behind_blank(WaterGlass::regular().shape(Circle), CIRCLE),
@@ -760,7 +767,7 @@ fn app_chrome_over_the_backdrops() {
 /// container, so the frame carries the theme's bars as well as its
 /// buttons.
 fn app_chrome(backdrop: Backdrop) -> impl View {
-    let selection = Binding::container(0usize);
+    let selection = Binding::new(0usize);
     let page = move || {
         NavigationView::new(
             "Glass",
@@ -798,11 +805,12 @@ fn text_button(
     x: f32,
     y: f32,
 ) -> impl View {
-    button(label).style(style).size(size).position_anchor(
-        waterui::layout::UnitPoint::TOP_LEADING,
-        x,
-        y,
-    )
+    button(label)
+        .style(style)
+        .size(size)
+        .action(|| {})
+        .position(x, y)
+        .anchor(waterui::layout::UnitPoint::TOP_LEADING)
 }
 
 /// §7 scene 5, the part a view tree can express through the theme's
@@ -927,11 +935,12 @@ fn switch_scene() {
     for backdrop in [Backdrop::Black, Backdrop::Grey, Backdrop::White] {
         for (appearance, name) in [(Appearance::Dark, "dark"), (Appearance::Light, "light")] {
             let tinted = |on: bool, tint: [f32; 4], x: f32| {
-                toggle("", &Binding::bool(on))
+                toggle("", &Binding::new(on))
                     .switch()
                     .hide_label()
                     .tint(p3(tint))
-                    .position_anchor(waterui::layout::UnitPoint::TOP_LEADING, x, 400.0)
+                    .position(x, 400.0)
+                    .anchor(waterui::layout::UnitPoint::TOP_LEADING)
             };
             let mut app = GlassApp::mount(
                 move || {
@@ -948,28 +957,33 @@ fn switch_scene() {
                             140.0,
                         ),
                         tinted(true, blue_tint(appearance), 220.0),
-                        toggle("", &Binding::bool(false))
+                        toggle("", &Binding::new(false))
                             .switch()
                             .hide_label()
-                            .position_anchor(waterui::layout::UnitPoint::TOP_LEADING, 60.0, 100.0),
-                        toggle("", &Binding::bool(true))
+                            .position(60.0, 100.0)
+                            .anchor(waterui::layout::UnitPoint::TOP_LEADING),
+                        toggle("", &Binding::new(true))
                             .switch()
                             .hide_label()
-                            .position_anchor(waterui::layout::UnitPoint::TOP_LEADING, 200.0, 100.0),
-                        toggle("", &Binding::bool(false))
-                            .switch()
-                            .hide_label()
-                            .disabled(true)
-                            .position_anchor(waterui::layout::UnitPoint::TOP_LEADING, 60.0, 200.0),
-                        toggle("", &Binding::bool(true))
+                            .position(200.0, 100.0)
+                            .anchor(waterui::layout::UnitPoint::TOP_LEADING),
+                        toggle("", &Binding::new(false))
                             .switch()
                             .hide_label()
                             .disabled(true)
-                            .position_anchor(waterui::layout::UnitPoint::TOP_LEADING, 200.0, 200.0),
-                        toggle("Label", &Binding::bool(true))
+                            .position(60.0, 200.0)
+                            .anchor(waterui::layout::UnitPoint::TOP_LEADING),
+                        toggle("", &Binding::new(true))
+                            .switch()
+                            .hide_label()
+                            .disabled(true)
+                            .position(200.0, 200.0)
+                            .anchor(waterui::layout::UnitPoint::TOP_LEADING),
+                        toggle("Label", &Binding::new(true))
                             .switch()
                             .width(300.0)
-                            .position_anchor(waterui::layout::UnitPoint::TOP_LEADING, 51.0, 300.0),
+                            .position(51.0, 300.0)
+                            .anchor(waterui::layout::UnitPoint::TOP_LEADING),
                     ))
                 },
                 theme(appearance),
@@ -985,18 +999,18 @@ fn switch_scene() {
 #[test]
 fn toggle_sequence() {
     const AT: [f32; 2] = [170.0, 400.0];
-    let value = Binding::bool(false);
+    let value = Binding::new(false);
     let mut app = GlassApp::mount(
         {
             let value = value.clone();
             move || {
                 absolute((
                     backdrop_view(Backdrop::Black),
-                    toggle("", &value).switch().hide_label().position_anchor(
-                        waterui::layout::UnitPoint::TOP_LEADING,
-                        AT[0],
-                        AT[1],
-                    ),
+                    toggle("", &value)
+                        .switch()
+                        .hide_label()
+                        .position(AT[0], AT[1])
+                        .anchor(waterui::layout::UnitPoint::TOP_LEADING),
                 ))
             }
         },
@@ -1057,11 +1071,9 @@ fn switch_app(
             };
             absolute((
                 backdrop(),
-                switch.position_anchor(
-                    waterui::layout::UnitPoint::TOP_LEADING,
-                    SWITCH_AT[0],
-                    SWITCH_AT[1],
-                ),
+                switch
+                    .position(SWITCH_AT[0], SWITCH_AT[1])
+                    .anchor(waterui::layout::UnitPoint::TOP_LEADING),
             ))
         },
         theme(appearance),
@@ -1074,7 +1086,7 @@ fn switch_at_rest(appearance: Appearance, on: bool, tint: Option<Color>) -> Imag
     switch_app(
         appearance,
         || backdrop_view(Backdrop::Black),
-        &Binding::bool(on),
+        &Binding::new(on),
         waterui::layout::LayoutDirection::LeftToRight,
         tint,
     )
@@ -1159,7 +1171,7 @@ fn switched_on(
     bind: impl FnOnce(Binding<bool>) -> Binding<bool>,
     times: &[u64],
 ) -> Vec<Image> {
-    let value = Binding::bool(false);
+    let value = Binding::new(false);
     let mut app = switch_app(
         Appearance::Dark,
         || backdrop_view(Backdrop::Black),
@@ -1254,7 +1266,7 @@ fn a_toggle_passes_through_distinct_mid_transition_frames() {
     let mut settled = switch_app(
         Appearance::Dark,
         || backdrop_view(Backdrop::Black),
-        &Binding::bool(true),
+        &Binding::new(true),
         waterui::layout::LayoutDirection::LeftToRight,
         None,
     );
@@ -1296,7 +1308,7 @@ fn a_right_to_left_switch_is_the_mirror_of_a_left_to_right_one() {
             let mut app = switch_app(
                 Appearance::Dark,
                 backdrop,
-                &Binding::bool(on),
+                &Binding::new(on),
                 direction,
                 None,
             );
@@ -1329,7 +1341,7 @@ fn a_right_to_left_switch_is_the_mirror_of_a_left_to_right_one() {
     // the leading end it leaves it off.
     for (direction, toward_on) in [(LeftToRight, 14.0), (RightToLeft, -14.0)] {
         for (sign, expect_on) in [(1.0, true), (-1.0, false)] {
-            let value = Binding::bool(false);
+            let value = Binding::new(false);
             let mut app = switch_app(
                 Appearance::Dark,
                 || backdrop_view(Backdrop::Black),
@@ -1384,7 +1396,8 @@ fn segmented_picker(
         .width(300.0)
         .disabled(disabled)
         .with(direction)
-        .position_anchor(waterui::layout::UnitPoint::TOP_LEADING, 51.0, y)
+        .position(51.0, y)
+        .anchor(waterui::layout::UnitPoint::TOP_LEADING)
 }
 
 /// A regular, left-to-right [`segmented_picker`].
@@ -1456,7 +1469,7 @@ fn plain_segmented_app(appearance: Appearance, selection: &Binding<i32>) -> Glas
 
 /// A [`plain_segmented_app`] at rest with `selected` selected.
 fn segmented_at_rest(appearance: Appearance, selected: i32) -> Image {
-    plain_segmented_app(appearance, &Binding::container(selected)).snapshot()
+    plain_segmented_app(appearance, &Binding::new(selected)).snapshot()
 }
 
 /// §7, scene 12 (§8.4): the segmented controls over black, grey 0.5 and
@@ -1473,9 +1486,9 @@ fn segmented_scene() {
         for (appearance, name) in [(Appearance::Dark, "dark"), (Appearance::Light, "light")] {
             let mut app = GlassApp::mount(
                 move || {
-                    let first = Binding::container(0i32);
-                    let second = Binding::container(1i32);
-                    let third = Binding::container(2i32);
+                    let first = Binding::new(0i32);
+                    let second = Binding::new(1i32);
+                    let third = Binding::new(2i32);
                     absolute((
                         backdrop_view(backdrop),
                         segmented(THREE, &first, false, 60.0),
@@ -1510,7 +1523,7 @@ fn selection_moved(
     bind: impl FnOnce(Binding<i32>) -> Binding<i32>,
     times: &[u64],
 ) -> Vec<Image> {
-    let selection = Binding::container(0i32);
+    let selection = Binding::new(0i32);
     let mut app = plain_segmented_app(appearance, &bind(selection.clone()));
     app.settle();
     selection.set(2);
@@ -1612,7 +1625,7 @@ fn every_selection_change_moves_the_thumb_by_the_selection_spring() {
         );
     }
 
-    let selection = Binding::container(0i32);
+    let selection = Binding::new(0i32);
     let mut app = plain_segmented_app(Appearance::Light, &selection);
     app.settle();
     selection.set(2);
@@ -1623,7 +1636,7 @@ fn every_selection_change_moves_the_thumb_by_the_selection_spring() {
 /// segment presses its thumb into the glass lens (§8.4, Touch).
 #[test]
 fn a_tap_selects_and_a_press_lenses_the_thumb() {
-    let selection = Binding::container(0i32);
+    let selection = Binding::new(0i32);
     let mut app = plain_segmented_app(Appearance::Dark, &selection);
     app.settle();
     app.touch_down(segment_x(1), ROW_MID);
@@ -1653,7 +1666,7 @@ fn the_press_lens_reaches_over_the_neighbouring_segments() {
     for (appearance, name) in [(Appearance::Dark, "dark"), (Appearance::Light, "light")] {
         let rest = segmented_at_rest(appearance, 1);
         rest.save(&format!("segmented_lens_{name}_rest"));
-        let mut app = plain_segmented_app(appearance, &Binding::container(1));
+        let mut app = plain_segmented_app(appearance, &Binding::new(1));
         app.settle();
         app.touch_down(segment_x(1), ROW_MID);
         let mut clock = Duration::ZERO;
@@ -1683,7 +1696,7 @@ fn the_press_lens_reaches_over_the_neighbouring_segments() {
 /// makes the fade plain; both frames exported for review.
 #[test]
 fn the_lens_fades_out_through_the_release() {
-    let mut app = plain_segmented_app(Appearance::Light, &Binding::container(1));
+    let mut app = plain_segmented_app(Appearance::Light, &Binding::new(1));
     app.settle();
     app.touch_down(segment_x(1), ROW_MID);
     let mut clock = Duration::ZERO;
@@ -1721,7 +1734,7 @@ fn the_lens_fades_out_through_the_release() {
 /// segment, and a drag from an unselected segment moves nothing.
 #[test]
 fn a_drag_moves_the_thumb_and_the_release_settles_on_the_nearest_segment() {
-    let selection = Binding::container(0i32);
+    let selection = Binding::new(0i32);
     let mut app = plain_segmented_app(Appearance::Light, &selection);
     app.settle();
 
@@ -1793,7 +1806,7 @@ fn a_right_to_left_control_is_the_mirror_of_a_left_to_right_one() {
     let width = SEGMENTED_WINDOW[0];
     for held in [false, true] {
         let render = |direction, backdrop: fn() -> AnyView, touch_x: f32| {
-            let selection = Binding::container(0i32);
+            let selection = Binding::new(0i32);
             let mut app = GlassApp::sized(
                 move || {
                     absolute((
@@ -1836,7 +1849,7 @@ fn a_right_to_left_control_is_the_mirror_of_a_left_to_right_one() {
         );
     }
 
-    let selection = Binding::container(0i32);
+    let selection = Binding::new(0i32);
     let mut app = segmented_app(
         Appearance::Dark,
         || backdrop_view(Backdrop::Black),
@@ -1886,7 +1899,7 @@ fn a_disabled_control_is_the_enabled_one_at_half_opacity() {
         (Appearance::Dark, "dark", black, 0.0),
         (Appearance::Light, "light", white, 1.0),
     ] {
-        let selection = Binding::container(0i32);
+        let selection = Binding::new(0i32);
         let mut disabled = segmented_app(
             appearance,
             backdrop,
@@ -1907,7 +1920,7 @@ fn a_disabled_control_is_the_enabled_one_at_half_opacity() {
         let enabled = segmented_app(
             appearance,
             backdrop,
-            &Binding::container(0i32),
+            &Binding::new(0i32),
             ControlSize::Medium,
             waterui::layout::LayoutDirection::LeftToRight,
             false,
@@ -1937,7 +1950,7 @@ fn the_large_size_is_the_48_point_group() {
             segmented_app(
                 appearance,
                 || backdrop_view(Backdrop::Black),
-                &Binding::container(1i32),
+                &Binding::new(1i32),
                 size,
                 waterui::layout::LayoutDirection::LeftToRight,
                 false,
@@ -1967,11 +1980,9 @@ fn placed<L: LabelKind, Min: View, Max: View>(
     y: f32,
 ) -> impl View {
     // `Slider::size` is the control size; the frame's is the view's.
-    waterui::ViewExt::size(control.hide_label(), width, 31.0).position_anchor(
-        waterui::layout::UnitPoint::TOP_LEADING,
-        x,
-        y,
-    )
+    waterui::ViewExt::size(control.hide_label(), width, 31.0)
+        .position(x, y)
+        .anchor(waterui::layout::UnitPoint::TOP_LEADING)
 }
 
 /// A slider 300 pt wide bound to `value`.
@@ -1990,7 +2001,7 @@ fn slider_scene() {
             let red = hydrolysis_glass::theme::slider::red_tint(appearance);
             let mut app = GlassApp::mount(
                 move || {
-                    let at = |v: f64| Binding::container(v);
+                    let at = |v: f64| Binding::new(v);
                     absolute((
                         backdrop_view(backdrop),
                         slider_at(&at(0.0), 120.0),
@@ -2022,7 +2033,7 @@ fn slider_scene() {
 /// 0.05, 0.1, 0.2, 0.33 and 0.6 s.
 #[test]
 fn slider_sequence() {
-    let value = Binding::container(0.2f64);
+    let value = Binding::new(0.2f64);
     let shown = value.clone();
     let mut app = GlassApp::mount(
         move || absolute((backdrop_view(Backdrop::Black), slider_at(&shown, 400.0))),
@@ -2031,7 +2042,7 @@ fn slider_sequence() {
     // The slider at rest at `v`: where the knob and the fill belong once the
     // value has arrived there.
     let at_rest = |v: f64| {
-        let shown = Binding::container(v);
+        let shown = Binding::new(v);
         GlassApp::mount(
             move || absolute((backdrop_view(Backdrop::Black), slider_at(&shown, 400.0))),
             theme(Appearance::Dark),
@@ -2086,7 +2097,7 @@ fn slider_sequence() {
 /// until the press has settled, exported for review.
 #[test]
 fn slider_lens_while_pressed() {
-    let value = Binding::container(0.5f64);
+    let value = Binding::new(0.5f64);
     let mut app = GlassApp::mount(
         move || absolute((backdrop_view(Backdrop::Split), slider_at(&value, 400.0))),
         theme(Appearance::Dark),
@@ -2138,7 +2149,7 @@ fn a_right_to_left_slider_is_the_mirror_of_a_left_to_right_one() {
     let window_width = SCENE_PT[0];
 
     let held = |direction: LayoutDirection, backdrop: fn() -> AnyView, touch_x: f32| {
-        let value = Binding::container(VALUE);
+        let value = Binding::new(VALUE);
         let mut app = GlassApp::mount(
             move || {
                 absolute((
@@ -2148,11 +2159,8 @@ fn a_right_to_left_slider_is_the_mirror_of_a_left_to_right_one() {
                         300.0,
                         31.0,
                     )
-                    .position_anchor(
-                        waterui::layout::UnitPoint::TOP_LEADING,
-                        51.0,
-                        400.0,
-                    ),
+                    .position(51.0, 400.0)
+                    .anchor(waterui::layout::UnitPoint::TOP_LEADING),
                 ))
             },
             theme(Appearance::Dark),
@@ -2185,7 +2193,7 @@ fn a_right_to_left_slider_is_the_mirror_of_a_left_to_right_one() {
 /// touch elsewhere on the track does nothing (§8.3, Touch).
 #[test]
 fn a_drag_from_the_knob_moves_the_value() {
-    let value = Binding::container(0.5f64);
+    let value = Binding::new(0.5f64);
     let shown = value.clone();
     let mut app = GlassApp::mount(
         move || absolute((backdrop_view(Backdrop::Split), slider_at(&shown, 400.0))),
@@ -2249,16 +2257,14 @@ const WIDGET_SCENE_HEIGHT: f32 = 360.0;
 /// `view` 300 pt wide with its top-left corner at `(51, y)`.
 fn row(view: impl View, y: f32) -> impl View {
     view.width(300.0)
-        .position_anchor(waterui::layout::UnitPoint::TOP_LEADING, 51.0, y)
+        .position(51.0, y)
+        .anchor(waterui::layout::UnitPoint::TOP_LEADING)
 }
 
 /// A text field labelled "Name" bound to `value`, prompting "Your name".
 fn name_field(value: &str) -> impl View {
-    waterui_controls::field(
-        "Name",
-        &Binding::container(waterui::Str::from(value.to_owned())),
-    )
-    .prompt("Your name")
+    waterui_controls::field("Name", &Binding::new(waterui::Str::from(value.to_owned())))
+        .prompt("Your name")
 }
 
 /// The text field in both appearances: empty with its prompt, holding a
@@ -2324,7 +2330,7 @@ fn menu_picker_scene() {
         for open in [false, true] {
             let mut app = GlassApp::sized(
                 move || {
-                    let selection = Binding::container(1i32);
+                    let selection = Binding::new(1i32);
                     absolute((
                         backdrop_view(backdrop),
                         row(fruit_picker(PickerStyle::Menu, &selection), 40.0),
@@ -2353,7 +2359,7 @@ fn radio_group_scene() {
     for (appearance, backdrop, name) in APPEARANCES {
         let mut app = GlassApp::sized(
             move || {
-                let selection = Binding::container(1i32);
+                let selection = Binding::new(1i32);
                 absolute((
                     backdrop_view(backdrop),
                     row(fruit_picker(PickerStyle::Radio, &selection), 40.0),
@@ -2397,7 +2403,7 @@ fn tabs_scene() {
     for (appearance, backdrop, name) in APPEARANCES {
         let mut app = GlassApp::sized(
             move || {
-                let selection = Binding::container(0usize);
+                let selection = Binding::new(0usize);
                 Tabs::new(
                     &selection,
                     (
@@ -2423,7 +2429,7 @@ fn tabs_scene() {
 fn tabs_icons_badges_selection_and_wide_layout() {
     use waterui_controls::label::label;
 
-    let selection = Binding::container(0usize);
+    let selection = Binding::new(0usize);
     let shown = selection.clone();
     let mut app = GlassApp::sized(
         move || {
@@ -2436,7 +2442,7 @@ fn tabs_icons_badges_selection_and_wide_layout() {
                     Tab::new(label("Alerts").icon(text("+")), move || {
                         NavigationView::new("Alerts", backdrop_view(Backdrop::Black))
                     })
-                    .badge(3),
+                    .badge(3_u32),
                     Tab::new(label("Locked").icon(text("-")), move || {
                         NavigationView::new("Locked", backdrop_view(Backdrop::Black))
                     })
@@ -2464,7 +2470,7 @@ fn tabs_icons_badges_selection_and_wide_layout() {
     assert!(app.snapshot().save("tabs_icons_selected_second").is_file());
 
     // Wide bar (>= 600 pt) uses the 48 pt horizontal item layout.
-    let wide_sel = Binding::container(0usize);
+    let wide_sel = Binding::new(0usize);
     let mut wide_app = GlassApp::sized(
         move || {
             Tabs::new(
@@ -2494,10 +2500,10 @@ fn stepper_scene() {
     for (appearance, backdrop, name) in APPEARANCES {
         let mut app = GlassApp::sized(
             move || {
-                let mid = Binding::container(5i32);
-                let min = Binding::container(0i32);
-                let max = Binding::container(10i32);
-                let off = Binding::container(5i32);
+                let mid = Binding::new(5i32);
+                let min = Binding::new(0i32);
+                let max = Binding::new(10i32);
+                let off = Binding::new(5i32);
                 absolute((
                     backdrop_view(backdrop),
                     row(stepper("Copies", &mid).range(0..=10), 40.0),
@@ -2519,9 +2525,9 @@ fn stepper_scene() {
 #[test]
 fn stepper_taps_step_and_respect_bounds_and_disabled() {
     use waterui_controls::stepper::stepper;
-    let value = Binding::container(0i32);
+    let value = Binding::new(0i32);
     let shown = value.clone();
-    let disabled_value = Binding::container(1i32);
+    let disabled_value = Binding::new(1i32);
     let disabled_shown = disabled_value.clone();
     let mut app = GlassApp::sized(
         move || {
@@ -2583,7 +2589,7 @@ fn a_right_to_left_stepper_is_the_mirror_of_a_left_to_right_one() {
     use waterui_controls::stepper::stepper;
 
     let render = |direction: LayoutDirection| {
-        let value = Binding::container(5i32);
+        let value = Binding::new(5i32);
         let mut app = GlassApp::sized(
             move || {
                 absolute((
@@ -2604,7 +2610,7 @@ fn a_right_to_left_stepper_is_the_mirror_of_a_left_to_right_one() {
 
     // Also verify the ends swap actions in RTL: left end increments, right end
     // decrements.
-    let value = Binding::container(5i32);
+    let value = Binding::new(5i32);
     let shown = value.clone();
     let mut rtl_app = GlassApp::sized(
         move || {
@@ -2643,9 +2649,9 @@ fn secure_and_search_field_scene() {
     for (appearance, backdrop, name) in APPEARANCES {
         let mut app = GlassApp::sized(
             move || {
-                let enabled_pw = Binding::container(Secure::new("hunter2".to_owned()));
-                let disabled_pw = Binding::container(Secure::new("secret".to_owned()));
-                let query = Binding::container(Str::from("Glass"));
+                let enabled_pw = Binding::new(Secure::new("hunter2".to_owned()));
+                let disabled_pw = Binding::new(Secure::new("secret".to_owned()));
+                let query = Binding::new(Str::from("Glass"));
                 NavigationView::new(
                     "Library",
                     absolute((
@@ -2654,7 +2660,8 @@ fn secure_and_search_field_scene() {
                         row(secure("Disabled", &disabled_pw), 140.0).disabled(true),
                     )),
                 )
-                .searchable(&query, "Search")
+                .searchable(&query)
+                .search_prompt("Search")
             },
             theme(appearance),
             [SCENE_PT[0], WIDGET_SCENE_HEIGHT],
@@ -2670,9 +2677,9 @@ fn secure_and_search_field_scene() {
 #[test]
 fn text_field_focus_typing_selection_and_disabled() {
     use waterui::Str;
-    let enabled = Binding::container(Str::from("Hello"));
+    let enabled = Binding::new(Str::from("Hello"));
     let enabled_view = enabled.clone();
-    let disabled = Binding::container(Str::from("Locked"));
+    let disabled = Binding::new(Str::from("Locked"));
     let disabled_view = disabled.clone();
 
     let mut app = GlassApp::sized(
@@ -2720,7 +2727,7 @@ fn text_field_focus_typing_selection_and_disabled() {
     assert!(dark.is_file(), "focused selected dark PNG written");
 
     // Render focused state in light appearance as well.
-    let light_val = Binding::container(Str::from("Hello!"));
+    let light_val = Binding::new(Str::from("Hello!"));
     let mut light_app = GlassApp::sized(
         move || {
             absolute((
@@ -2763,18 +2770,21 @@ fn navigation_bar_items_scene() {
                     NavigationView::new("Root", backdrop_view(backdrop)),
                 )
                 .destination(move |_: i32| {
+                    const fn noop() {}
                     let toolbar = NavigationToolbar::new(vec![
                         NavigationToolbarItem::new(
                             NavigationToolbarPlacement::TopBarTrailing,
                             button("Save")
                                 .style(ButtonStyle::Glass)
-                                .size(ControlSize::Small),
+                                .size(ControlSize::Small)
+                                .action(noop),
                         ),
                         NavigationToolbarItem::new(
                             NavigationToolbarPlacement::BottomBar,
                             button("Done")
                                 .style(ButtonStyle::BorderedProminent)
-                                .size(ControlSize::Small),
+                                .size(ControlSize::Small)
+                                .action(noop),
                         ),
                     ]);
                     NavigationView::new("Detail", backdrop_view(backdrop))
@@ -2893,9 +2903,9 @@ fn menu_picker_selection_disabled_and_rtl() {
     use waterui::form::picker::PickerStyle;
     use waterui_core::layout::LayoutDirection;
 
-    let selection = Binding::container(1i32);
+    let selection = Binding::new(1i32);
     let view_selection = selection.clone();
-    let disabled_selection = Binding::container(1i32);
+    let disabled_selection = Binding::new(1i32);
     let view_disabled = disabled_selection.clone();
 
     let mut app = GlassApp::sized(
@@ -2931,7 +2941,7 @@ fn menu_picker_selection_disabled_and_rtl() {
     // indicator band cleanly.
     let mut rtl_app = GlassApp::sized(
         move || {
-            let rtl_selection = Binding::container(1i32);
+            let rtl_selection = Binding::new(1i32);
             absolute((
                 backdrop_view(Backdrop::Black),
                 row(fruit_picker(PickerStyle::Menu, &rtl_selection), 40.0)
@@ -2965,11 +2975,8 @@ fn menu_popup_scene() {
                         ),
                     )
                     .style(ButtonStyle::Glass)
-                    .position_anchor(
-                        waterui::layout::UnitPoint::TOP_LEADING,
-                        51.0,
-                        40.0,
-                    ),
+                    .position(51.0, 40.0)
+                    .anchor(waterui::layout::UnitPoint::TOP_LEADING),
                 ))
             },
             theme(appearance),
@@ -3085,16 +3092,23 @@ fn content_dispersion_refracts_and_fringes_glass_content() {
             };
             let card = absolute((
                 clear(240.0, 120.0),
-                white(80.0, 10.0).position_anchor(UnitPoint::TOP_LEADING, 80.0, 0.0),
-                white(80.0, 40.0).position_anchor(UnitPoint::TOP_LEADING, 80.0, 62.0),
+                white(80.0, 10.0)
+                    .position(80.0, 0.0)
+                    .anchor(UnitPoint::TOP_LEADING),
+                white(80.0, 40.0)
+                    .position(80.0, 62.0)
+                    .anchor(UnitPoint::TOP_LEADING),
             ))
             .width(240.0)
             .height(120.0)
             .background(WaterGlass::regular())
-            .position_anchor(UnitPoint::TOP_LEADING, 40.0, 40.0);
+            .position(40.0, 40.0)
+            .anchor(UnitPoint::TOP_LEADING);
             let glass_btn = button(Label::new("Glass", move || white(120.0, 60.0)))
                 .style(ButtonStyle::Glass)
-                .position_anchor(UnitPoint::TOP_LEADING, 40.0, 176.0);
+                .action(|| {})
+                .position(40.0, 176.0)
+                .anchor(UnitPoint::TOP_LEADING);
             absolute((backdrop_view(Backdrop::Black), card, glass_btn))
         },
         theme(Appearance::Dark),

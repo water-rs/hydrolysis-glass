@@ -130,6 +130,9 @@ waterui-svg = { git = "https://github.com/water-rs/svg", branch = "main" }
 # 0.5 requires. Mirrors the framework's own patch; the commit is recorded
 # by `Cargo.lock`.
 suiteki = { git = "https://github.com/water-rs/suiteki", branch = "main" }
+nami = { git = "https://github.com/water-rs/nami", branch = "main" }
+nami-core = { git = "https://github.com/water-rs/nami", branch = "main" }
+nami-derive = { git = "https://github.com/water-rs/nami", branch = "main" }
 
 # Every waterkit crate the codec/clipboard graph shares types across rides
 # the same source — a registry `waterkit-core` beside the patched

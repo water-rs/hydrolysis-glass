@@ -73,7 +73,7 @@ pub(in super::super) fn look(
         .custom(chevron);
     NavigationBarLook::new(METRICS, motion(), back, bar).title_font(
         Font::from(Body)
-            .size(INLINE_TITLE_SIZE)
+            .font_size(INLINE_TITLE_SIZE)
             .weight(FontWeight::SemiBold),
     )
 }
