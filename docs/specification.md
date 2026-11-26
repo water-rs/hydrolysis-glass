@@ -11,7 +11,11 @@ uses, and the scenes that verify an implementation.
 - The blur and haze radii (§3, §4.4) set Gaussian deviations in points,
   whatever the element's capture scale. The ambient blur radius (§4.7) is
   in texels of the element's backdrop capture.
-- Colours are 8-bit or unit-range encoded sRGB unless a section says linear.
+- Colours are 8-bit or unit-range encoded **Display P3** (gamut primaries
+  `(0.680, 0.320)_R`, `(0.265, 0.690)_G`, `(0.150, 0.060)_B`, D65 white
+  point, sRGB transfer curve) unless a section says linear. Encoded-space
+  luma weights in the Display P3 working space are
+  `Y = 0.22897·R + 0.69174·G + 0.07929·B` [fitted].
 - `sat(x)` clamps to [0, 1]. `mix(a, b, t) = a + (b − a)·t`.
 - The field `d` is the signed distance to the element's silhouette, negative
   inside. `n` is its unit outward normal.
@@ -394,7 +398,7 @@ setting.
 | grade and wash | §5.3 | measured |
 | grade mix | 1 | measured |
 | luminance limit, dark | 0.6 at m ≤ 60, 0.5 at m = 80, 0.35 at m = 200.33. Between them open. | measured |
-| luminance limit, light | 1 | measured |
+| luminance limit, light | 0.825 at m ≤ 60 (controls over chromatic backdrops); 1.0 on large cards (`m = 200.33`). Between them open. | fitted |
 | ambient shift, ambient depth | 0.35·m | fitted |
 | ambient blur | 0 at m ≤ 60; 0.35·m at m = 80 and m = 200.33. Between 60 and 80 open. | measured / fitted |
 | ambient strength | 0 at m ≤ 60; dark 0.133 at m = 80 and 0.8 at m = 200.33; light 0.083 and 0.5. These are `0.8·sat((m − 56)/144)` and `0.5·sat((m − 56)/144)` at those points, with the same caveat as blur gain 0. | measured |
@@ -454,15 +458,28 @@ switches none [measured]:
 
 | Parameter | Dark | Light |
 |---|---|---|
-| grade floor, ceiling, chroma | 0.125, 1.125, 1.3 | 0.4, 1.03, 1.2 |
-| wash | black at alpha 0 | white at alpha 0.2 |
-| luminance limit | by size (§5.1) | 1 |
+| grade floor, ceiling, chroma (`m ≤ 60` controls, `s = 0.5`) | 0.125, 1.160, 1.25 [fitted] | 0.350, 1.100, 1.45 [fitted] |
+| grade floor, ceiling, chroma (`m = 200.33` large card) | 0.125, 1.125, 1.3 | 0.4, 1.03, 1.2 |
+| wash (`s = 0.5`) | black at alpha 0.02 (`m ≤ 60`) / 0 (`m = 200.33`) | white at alpha 0.25 (`m ≤ 60`) / 0.20 (`m = 200.33`) |
+| luminance limit | by size (§5.1) | 0.825 (`m ≤ 60`) / 1 (`m = 200.33`) |
 | ambient grade floor, ceiling, chroma | 0.125, 0.5, 1 | 0.9, 1, 1.2 |
 | ambient gate | `1 − Yg` | `Yg` (favours light) |
-| haze min weight, max weight | 0.9, 0 | 0, 0.9 |
+| haze min weight, max weight (`s = 0.5`) | 0.58 (`m ≤ 60`) / 0.9 (`m = 200.33`), 0 | 0, 0.66 (`m ≤ 60`) / 0.9 (`m = 200.33`) |
+| haze mix (`s = 0.5`) | 0.08 (`m ≤ 60`) / 0.5 (`m = 200.33`) | 0.19 (`m ≤ 60`) / 0.5 (`m = 200.33`) |
 | channel ceiling | 1.308 | 1.070 |
 | border aperture | 75° | 96° (106° on SDR output) |
 | ambient strength, cast density, exterior span | by size (§5.1) | by size (§5.1) |
+
+The `m ≤ 60` control rows reproduce all measured interiors over black, white,
+saturated green `(81, 166, 104)` and saturated blue `(55, 109, 234)` within
+`3.9` levels in light appearance (`131`, `249`, `(141, 227, 165)`,
+`(133, 189, 255)` against measured `132`, `249`, `(136, 223, 174)`,
+`(130, 189, 255)`) and within `1.7` levels in dark appearance (`31`, `186`,
+`(81, 168, 105)`, `(66, 124, 255)` against measured `31`, `184`,
+`(81, 168, 108)`, `(64, 126, 253)`) [fitted]. Over black in dark appearance,
+the top and bottom rim highlight of a `34.5` pt regular control lifts the
+`1` pt rim band to `(62, 62, 62)` (`+31` levels over the `(31, 31, 31)` body)
+[measured].
 
 Highlight bearings and colours do not switch.
 
@@ -862,28 +879,69 @@ vertical black | white edge at the scene's centre. The split uses red
 
 A control is drawn from the glass elements of §2 to §5 and the chrome its
 section specifies: geometry, states and motion. Lengths are layout points at
-the default text size. Colours are encoded 8-bit sRGB as rendered on the
+the default text size. Colours are encoded 8-bit Display P3 as rendered on the
 observed display, and "over black" or "over white" names the backdrop behind
 the control. Unless a row says otherwise, observations are at translucency
 0.5.
+
+### 8.0 Theme tokens and type scale
+
+Every control label and non-glass chrome element reads the theme's installed
+colour roles and type scale.
+
+#### Type scale
+
+| Slot | Size (pt) | Weight | Cap height (pt) | Tag |
+|---|---|---|---|---|
+| `Title` | 28.0 | Regular | — | chosen |
+| `Headline` | 17.0 | SemiBold | 13.0 | measured |
+| `Body` | 17.0 | Regular | 13.0 | measured |
+| `Subheadline` | 15.0 | Regular | 11.3 | measured |
+| `Footnote` | 13.0 | Regular | 10.0 | chosen |
+| `Caption` | 12.0 | Regular | — | chosen |
+
+Every default control label (switch, checkbox, slider, stepper, text field,
+linear and circular progress indicators, tab and navigation body content) uses
+the `Body` slot (`17.0` pt regular, `13.0` pt ink cap height, `"Wi-Fi"` inks
+`39.5 × 13.0` pt, `"Volume"` `56.0 × 13.0` pt, `"Please wait..."` `97.0 × 13.5`
+pt, `"65%"` `34.0 × 13.0` pt) [measured]. Installing a `16.0` pt `Body` slot
+shrinks every control label by `1` pt (`11.5–12.0` pt cap height) and causes
+localized perceptual failure over text blocks.
+
+#### Colour roles (Display P3, 8-bit)
+
+| Role | Light appearance | Dark appearance | Tag |
+|---|---|---|---|
+| `Background` | `(255, 255, 255)` | `(0, 0, 0)` | measured |
+| `Surface` | `(242, 242, 247)` | `(28, 28, 30)` | chosen |
+| `SurfaceVariant` | `(242, 242, 247)` | `(44, 44, 46)` | chosen |
+| `Border` | `(60, 60, 67)` @ `0.29` | `(84, 84, 88)` @ `0.60` | chosen |
+| `Foreground` | `(0, 0, 0)` | `(255, 255, 255)` | measured |
+| `MutedForeground` | `(60, 60, 67)` @ `0.60` | `(235, 235, 245)` @ `0.60` | measured |
+| `Accent` | `(59, 134, 247)` | `(63, 143, 247)` | measured |
+| `AccentForeground` | `(255, 255, 255)` | `(255, 255, 255)` | measured |
+| `Error` | `(255, 59, 48)` | `(255, 69, 58)` | chosen |
+| `Scrim` | `(0, 0, 0)` @ `0.32` | `(0, 0, 0)` @ `0.50` | chosen |
 
 ### 8.1 Button
 
 A button is one standalone, interactive glass element of the regular family
 (§5.1): its shape is the button's border shape, and its label is the
-element's content (§2, item 5). A button is of one of two **kinds**:
+element's content (§2, item 5). A button is of one of three **kinds**:
 
 - **Glass**: the glass body with the label drawn on it.
 - **Prominent**: the glass body filled with the button's tint, with a white
   label.
-- **Bordered**: a non-glass button drawn as a continuous capsule filled with
-  the theme's `track` colour (`(120, 120, 128)` at alpha `0.16` in light
-  appearance and `0.105` in dark, halved while disabled) under the theme's
-  state layer and focus ring, with an accent label (or the tint when tinted),
-  using the same size-group typography and insets as the glass buttons
-  [measured]. `Borderless` keeps `0.0` pointer hover while preserving `0.06`
-  focus and `0.12` press/drag layers so touch-opened menu rows carry no hover
-  bar.
+- **Bordered**: a non-glass button drawn as a continuous capsule whose
+  composited fill over the page background renders as `(233, 233, 234)` over
+  white in light appearance (`(120, 120, 128)` at encoded-space alpha `0.16`)
+  and `(38, 38, 41)` over black in dark appearance (`(120, 120, 128)` at
+  encoded-space alpha `0.32`, or linear-space alpha `0.105` when compositing
+  in linear Display P3; halved while disabled) under the theme's state layer
+  and focus ring, with an accent label (or the tint when tinted), using the
+  same size-group typography and insets as the glass buttons [measured].
+  `Borderless` keeps `0.0` pointer hover while preserving `0.06` focus and
+  `0.12` press/drag layers so touch-opened menu rows carry no hover bar.
 
 The tint defaults to the accent colour, (63, 143, 247) in dark appearance and
 (59, 134, 247) in light [measured].
@@ -902,20 +960,22 @@ group.
 | Size group | Label text | Line height | Horizontal inset | Vertical inset | Height, one text line |
 |---|---|---|---|---|---|
 | compact (mini) | 15 pt, regular weight | 18 | 10 | 5 | 28 |
-| regular (small, medium) | 17 pt, regular weight | 20.33 | 14 | 7 | 34.33 |
+| regular (small, medium) | 17 pt, regular weight | 20.33 | 12.5 | 7 | 34.33 |
 | large, extra large | 17 pt, regular weight | 20.33 | 20 | 15 | 50.33 |
 
 All values are measured. Mini maps to compact, small and medium map to
 regular, and large and extra large share the large group. The label text is
 identified by its ink: "Glass" inks 36 × 11.33 pt in the 28 pt button and
-40.33 × 13 pt in the others, as plain 15 pt and 17 pt text do.
+40.33 × 13 pt in the others, and "Continue" inks 67.0 × 13.5 pt centred
+vertically inside its `93.0 × 34.5` pt regular capsule (ink top `10.0` pt
+below the button's top edge, `0.0 ± 0.5` pt vertical centre offset) [measured].
 
 Observed frames (width × height) [measured]:
 
 | Content | compact | regular | large, extra large |
 |---|---|---|---|
 | "Glass" | 57.67 × 28 | 70 × 34.33 | 82 × 50.33 |
-| "Continue" | 82 × 28 | 96.67 × 34.33 | 108.67 × 50.33 |
+| "Continue" | 82 × 28 | 93 × 34.5 | 108.67 × 50.33 |
 | a filled star symbol | 39.33 × 28.33 | 50 × 34.67 | 62 × 50.67 |
 | the symbol, then "Glass" | 85 × 28.62 | 100 × 35 | 112 × 51 |
 
@@ -993,17 +1053,18 @@ observed and is chosen to move as the glass kind does.
   | encoded grey 0.5 (128) | 97 | 144 | 128 | 165 |
   | black | 0 | 0 | 0 | 15 |
 
-  The fill follows the backdrop: the accent, red, green and grey tints
-  render their own colour over black in dark appearance and over white in
-  light, and shift toward the backdrop otherwise; the plain grey 0.5 shifts
-  by about 0.3 of the distance to the glass body in every case. This
-  specification draws the fill as the tint layer of §4.13 over the glass
-  body at full strength [chosen: it reproduces the two matching cases and
-  is within 50 levels of the others; the law of the shift is the open
-  strength of §4.13], without the §4.13 edge gradient: no darkening toward
-  the fill's edge was observed [measured], so the fill is flat out to the
-  silhouette. The §4.12 rim highlight remains faintly visible at the top
-  and bottom edges of the fill, about 8 levels above it [measured].
+  The fill follows the backdrop: over saturated colour stripes (`(81, 166, 104)`
+  green and `(55, 109, 234)` blue), a prominent accent button renders
+  `(52, 120, 224)` and `(50, 116, 218)` in light appearance (against
+  `(58, 132, 244)` over white, top rim `(83, 180, 249)`) and `(70, 150, 244)`
+  and `(69, 149, 244)` in dark appearance (against `(63, 142, 247)` over black,
+  top rim `(77, 169, 248)`) [measured]. Modulating the tint `T` by the glass
+  body luma `Y_b = Y(C_body)` reproduces both regimes:
+  `C_prom,light = T · (0.60 + 0.40·Y_b)` and
+  `C_prom,dark = sat(T + 0.12·max(Y_b − 0.16, 0)·(1 − T))` [fitted]. The
+  fill carries no §4.13 edge gradient (flat out to the silhouette) [measured],
+  while the §4.12 rim highlight remains visible at the top and bottom edges
+  (`+14` to `+25` levels in the accent channels over the interior) [measured].
 - **Tinted glass label.** The label takes the tint colour [measured:
   rendered red labels 238, 94, 99 and 252, 195, 197 over black and white in
   dark appearance, 174, 30, 37 and 222, 69, 76 in light]. Like the fill it
@@ -1230,6 +1291,26 @@ is held, which is the part of the switch that shows the material.
   within 70 pt of the hit region; farther out it cancels, `p` returns to
   0 and the value does not change [chosen: the button's distance, §8.1].
 
+#### Checkbox
+
+A checkbox toggle pairs a rounded square indicator box at the leading edge
+with a `Body` (`17.0` pt, §8.0) label at the trailing edge.
+
+- **Geometry.** A `16.0 × 16.0` pt (`15.5–16.0` pt) rounded square with
+  corner radius `3.5` pt (`0.22 · side`), separated from its label by a
+  `10.0` pt horizontal layout gap (`10.5` pt ink gap), vertically centred
+  on the label [measured]. Hit region extends to at least `44 × 44` pt with
+  the `70` pt cancel distance of §8.1 [chosen].
+- **Colours.** Unchecked: transparent interior with a `1.5` pt `Border`
+  outline [chosen]. Checked: filled opaque accent (`(59, 134, 247)` light,
+  `(63, 143, 247)` dark) with a check mark drawn in **white `(255, 255, 255)`
+  in light appearance** and **black `(0, 0, 0)` (canvas background cutout)
+  in dark appearance** [measured]. Disabled dims fill and outline to opacity
+  `0.5` [chosen].
+- **Check mark.** Stroked with round caps and joins at width `2.0` pt
+  (`0.125 · side`) inside `[0.22, 0.70] × [0.25, 0.72]` of the `16 × 16` pt
+  box (`7.5 × 7.5` pt ink span) [measured].
+
 ### 8.3 Slider
 
 A slider shows a value in a closed range as a position along a **track**:
@@ -1262,6 +1343,11 @@ the knob]. The slider takes the width it is given and has no intrinsic
 width; the height and the parts are the same at every control size,
 mini through extra large [measured: simulator].
 
+- **Label spacing.** A labelled slider places its `Body` (`17.0` pt, §8.0)
+  label above the `31` pt slider row with `4.0` pt vertical spacing between
+  the label band and the slider row (in an `80` pt viewport with `12` pt
+  padding, `"Volume"` ink sits at `y = 16.0..29.0` pt, the `24` pt knob at
+  `y = 41.0..65.0` pt, and the `6` pt track at `y = 49.5..55.5` pt) [measured].
 - **Corners.** The track and the knob are capsules, radius 3 and 12, with
   continuous corners [chosen: the 1/3 pt sampling does not separate
   circular from continuous corners].
@@ -1419,13 +1505,14 @@ regular are identical, and so are large and extra large.
 - **Thumb.** A capsule inset 2 pt on every side from the selected
   segment: `W / n − 4` wide and the container's height minus 4 [measured:
   simulator, within 0.05 pt horizontally].
-- **Labels.** Each label is centred in its segment on both axes, in 13 pt
-  text: regular weight when its segment is not selected and medium weight
-  when it is [measured: simulator, ink widths within 1/3 pt of the system
-  font's: "Two" 23.33 pt unselected and 24.33 pt selected]. The text size
-  is the same at the large size [measured: simulator]. A symbol label is
-  drawn at the size of 17 pt text, centred [measured: simulator, a filled
-  star inks 18.7 × 17.3 pt; chosen: the 17 pt size, matching that ink].
+- **Labels.** Each label is centred in its segment on both axes, in `17.0` pt
+  text (`13.0` pt cap height): regular weight when its segment is not selected
+  and medium weight when it is [measured: `"Day"` `28.0 × 15.5` pt, `"Week"`
+  `42.0 × 13.0` pt, `"Month"` `46.5 × 13.0` pt in a `296 × 31` pt control at
+  `2 px/pt`]. The text size is the same at the large size [measured: simulator].
+  A symbol label is drawn at the size of 17 pt text, centred [measured:
+  simulator, a filled star inks 18.7 × 17.3 pt; chosen: the 17 pt size,
+  matching that ink].
 - **Corners.** The container and the thumb are capsules with continuous
   corners [chosen: the 1/3 pt sampling does not separate circular from
   continuous corners].
@@ -1538,30 +1625,37 @@ is dragged, which is the part of the control that shows the material.
 
 A stepper adjusts an integer value by discrete steps through a pair of
 adjacent buttons — a decrement end (`−`) and an increment end (`+`) —
-joined into one capsule at the trailing edge of an optional label. At
-rest no part is glass: each button carries a flat fill and a flat icon.
+joined into one continuous capsule at the trailing edge of an optional label,
+separated internally by a centred vertical hairline divider. At rest no part
+is glass: the pill carries a flat fill, a centred divider, and flat icons.
 
-**Reference.** Nothing in this section was measured against a capture;
-every value is [chosen].
+**Reference.** Geometry, divider dimensions, icon span and colours were
+measured from `2 px/pt` reference captures (`260 × 80` pt) in light and dark
+appearances; states and press motion are [chosen].
 
 #### Geometry
 
-- **Buttons.** Two `32 × 32` pt ends separated by a `1` pt seam
-  (`65 × 32` pt in all), centred vertically in the row [chosen]. A row
-  shorter than `32` pt caps each button's height without changing its
-  width.
-- **Label spacing.** `12` pt between the label and the button pair
-  [chosen].
+- **Buttons.** Two `46.0 × 32.0` pt ends joined across a `1.0` pt centred
+  vertical divider seam (`93.0 × 32.0` pt capsule in all), centred vertically
+  in the row [measured]. A row shorter than `32` pt caps each button's height
+  without changing its width [chosen].
+- **Central divider.** A `1.0` pt wide, `24.0` pt tall vertical rule centred
+  horizontally on the seam and inset `4.0` pt from the top and bottom of the
+  `32` pt pill (`y = 28.0..52.0` pt inside a pill at `y = 24.0..56.0` pt)
+  [measured]. The seam never opens as a background-coloured gap [measured].
+- **Label spacing.** `12` pt minimum spacing between the `Body` (`17.0` pt,
+  §8.0) label at the leading edge and the pill at the trailing edge [chosen].
 - **Corners.** Each end rounds its outer two corners to half its height
-  (`h / 2`, circular) and leaves its inner two corners at `0` pt along
-  the `1` pt seam [chosen].
-- **Icons.** Centred `−` and `+` strokes of width `2` pt and half-length
-  `0.22 · min(width, height)` (`7.04` pt at `32 × 32` pt) [chosen].
+  (`16.0` pt continuous capsule radius) and leaves its inner two corners at
+  `0` pt along the central divider [measured].
+- **Icons.** Centred `−` and `+` strokes of width `2.0` pt and total span
+  `13.0` pt (half-length `6.5` pt, `0.203 · height`), centred in each
+  `46 × 32` pt half [measured].
 - **Direction.** The decrement end leads the pair: left of increment in
   a left-to-right layout, and right of increment in a right-to-left
   layout, with the rounded outer corners mirrored accordingly [chosen].
-- **Hit region.** Each button keeps its `32` pt horizontal bounds so the
-  `1` pt seam never overlaps targets, and extends vertically to at least
+- **Hit region.** Each button keeps its `46` pt horizontal bounds so the
+  central divider never overlaps targets, and extends vertically to at least
   `44` pt centred on the button, with the `70` pt release cancel
   distance of §8.1 [chosen].
 
@@ -1569,8 +1663,9 @@ every value is [chosen].
 
 | Part | Dark appearance | Light appearance |
 |---|---|---|
-| button fill | Dark `(18, 18, 19)` over `#000000` (`(118, 118, 128)` @ `0.0338` linear) | Light `(238, 238, 239)` over `#FFFFFF` (`(118, 118, 128)` @ `0.1771` linear) |
-| icons (`−`, `+`) | `#FFFFFF` `(255, 255, 255)` | `#000000` `(0, 0, 0)` |
+| button fill | `(18, 18, 19)` over `#000000` (`(118, 118, 128)` @ `0.15` encoded / `0.0338` linear) [measured] | `(238, 238, 239)` over `#FFFFFF` (`(118, 118, 128)` @ `0.12` encoded / `0.1771` linear) [measured] |
+| central divider | `(83, 83, 86)` [measured] | `(185, 185, 187)` [measured] |
+| icons (`−`, `+`) | `#FFFFFF` `(255, 255, 255)` [measured] | `#000000` `(0, 0, 0)` [measured] |
 
 #### States
 
@@ -1617,12 +1712,17 @@ highlight. At rest no part is glass.
 - **Typography.** Resting placeholder, value, and floating label text use
   `17` pt regular body text with a `20.33` pt line height [measured].
 - **Insets.** Content is flush horizontally (`0` pt inset) and inset `6` pt
-  vertically, with a `21` pt band reserved above the text when an inside
-  label or floating prompt is present; a single-line field with neither
-  centres its text vertically inside the container [chosen].
+  vertically, with a `25.0` pt top-to-top pitch between the floating label
+  and value text (`21.0` pt label band plus `4.0` pt clearance; in an `80` pt
+  viewport with `12` pt padding, `"Name"` ink sits at `y = 21.0..33.5` pt and
+  `"Ada Lovelace"` ink at `y = 46.0..59.0` pt, `38.0` pt combined ink height
+  vertically centred in the container) [measured]; a single-line field with
+  neither inside label nor floating prompt centres its text vertically inside
+  the container [chosen].
 - **Floating label.** Rests vertically centred in the container; while
   the field holds focus or content, it keeps its full `1.0` scale (`17` pt)
-  and moves `2` pt below the container's top edge [chosen].
+  and moves `6.0` pt below the container's top edge (matching the vertical
+  inset so both lines sit centred at `y = 21.0` and `y = 46.0` pt) [measured].
 - **Focus outlines.** While focused and enabled, an accent outline of
   width `1.5` pt sits flush inside the container's edge (`0.75` pt inset,
   corner radius `9.25` pt), and the theme's `2` pt accent focus ring sits
@@ -1675,25 +1775,35 @@ the glass element's rim highlight and cast shadow. The selected item carries an
 inset translucent capsule highlight under its icon and title and tints its icon
 and title with the accent colour.
 
-**Reference.** Nothing in this section was measured against a capture;
-every value is [chosen].
+**Reference.** Compact bottom pill geometry, bottom clearance, label
+typography, resting pill colours, and active lens optics were measured from
+`2 px/pt` reference captures (`400 × 260` pt) and `60` fps glide captures;
+wide horizontal bar metrics and focus rings are [chosen].
 
 #### Geometry
 
 - **Compact / vertical bar** (`width < 600` pt, or sidebar strip): bar
-  thickness `60` pt, item minimum extent `64` pt, compact floating bottom-pill
-  item minimum width `94` pt with `12` pt outer floating margin and `0` pt extra
-  horizontal pill padding, horizontal label inset `12` pt, icon-to-label
-  spacing `6` pt [chosen].
+  thickness `62.0` pt (capsule radius `31.0` pt), item minimum extent `64` pt,
+  compact floating bottom-pill item minimum width `94.0` pt (`188.0 × 62.0` pt
+  for two tabs) with `21.0` pt bottom floating clearance (`y = 177.0..239.0` pt
+  in a `260` pt viewport) and `0` pt extra horizontal pill padding, horizontal
+  label inset `12` pt, icon-to-label spacing `6` pt [measured].
+- **Compact vertical item typography and placement.** Tab item labels use
+  `10.0` pt medium text (`7.0–7.5` pt cap height: `"Home"` inks `28.0 × 7.0` pt,
+  `"Search"` `33.0 × 8.0` pt), horizontally centred in the item slot and
+  bottom-aligned inside the upper-icon/lower-label slot (`y = 218.5..225.5` pt
+  within a bar at `y = 177.0..239.0` pt, `13.5` pt above the bar's bottom
+  edge) [measured].
 - **Wide / horizontal bar** (`width >= 600` pt): bar height `48` pt,
   item minimum width `64` pt, horizontal label inset `16` pt,
   icon-to-label spacing `8` pt [chosen].
 - **Surface.** A standalone regular-family glass capsule spanning the
   floating pill bounds (`tab_bar_surface`), or the docked band extended through
-  adjacent safe-area edges for a sidebar strip [chosen].
-- **Selection highlight and item chrome.** Both use a capsule inset
-  `4` pt inside the item's bounds so hover/press state layers and focus
-  rings share the highlight silhouette [chosen].
+  adjacent safe-area edges for a sidebar strip [measured].
+- **Selection highlight and item chrome.** Both use a continuous capsule
+  inset `4` pt inside the item's bounds (`93.0 × 54.0` pt on a two-tab
+  `188 × 62` pt bar) so hover/press state layers and focus rings share the
+  highlight silhouette [measured].
 - **Hit region.** Each item extends vertically to at least `44` pt with
   the `70` pt release cancel distance of §8.1 [chosen].
 
@@ -1701,11 +1811,11 @@ every value is [chosen].
 
 | Part | Dark appearance | Light appearance |
 |---|---|---|
-| bar surface | regular glass capsule (§5) | regular glass capsule (§5) |
+| bar surface | regular glass capsule (§5; `(32, 32, 32)` over black) [measured] | regular glass capsule (§5; `(249–252, 249–252, 249–252)` over white) [measured] |
 | divider | none (glass rim and shadow) | none (glass rim and shadow) |
-| selected highlight | black at alpha `0.6875` in encoded space (recessed `(10, 10, 10)` inside `(32, 32, 32)`) | black at alpha `0.055` in encoded space (`(235, 235, 235)` over `(248, 248, 248)`) |
-| selected foreground | accent `(63, 143, 247)` | accent `(59, 134, 247)` |
-| unselected foreground | foreground `(255, 255, 255)` | foreground `(0, 0, 0)` |
+| selected highlight | black at alpha `0.6875` in encoded space (recessed `(10, 10, 10)` inside `(32, 32, 32)`) [measured] | black at alpha `0.068` in encoded space (`(234, 233, 234)` inside `(252, 252, 252)`) [measured] |
+| selected foreground | accent `(63, 143, 247)` [measured] | accent `(59, 134, 247)` [measured] |
+| unselected foreground | foreground `(255, 255, 255)` [measured] | foreground `(0, 0, 0)` [measured] |
 
 #### States
 
@@ -1741,17 +1851,22 @@ standalone regular-family glass capsule surface primitive when an explicit bar
 surface is requested). Bar items sit horizontally inside the bar, and a pushed
 destination presents an interactive back button at the leading edge.
 
-**Reference.** Nothing in this section was measured against a capture;
-every value is [chosen].
+**Reference.** Inline navigation bar title typography and vertical placement
+were measured from `400 × 260` pt `2 px/pt` captures; medium/large heights,
+back chevron geometry, and page transition motion are [chosen].
 
 #### Geometry
 
-- **Bar heights.** `44` pt for automatic and inline top bars (and bottom
-  bars), and `96` pt for medium and large bars (`44` pt inline title
-  slot, `52` pt medium/large title slot with `8` pt bottom inset)
-  [chosen].
-- **Inline title.** `17` pt `SemiBold` on the inline navigation bar title
-  [chosen].
+- **Bar heights.** `44.0` pt for inline top bars inside a tab container
+  (inline title `"Home"` centred at `y = 16.0..28.5` pt, optical centre
+  `22.25` pt) and bottom bars, `64.0` pt for standalone top-level automatic
+  navigation bars carrying top-bar breathing inset (inline title `"Root"` at
+  `y = 26.0..38.5` pt, optical centre `32.25` pt, body content centred below
+  at `y = 155.5..168.5` pt in a `260` pt viewport) [measured], and `96` pt
+  for medium and large bars (`44` pt inline title slot, `52` pt medium/large
+  title slot with `8` pt bottom inset) [chosen].
+- **Inline title.** `17.0` pt `SemiBold` (`12.5–13.0` pt cap height) on the
+  inline navigation bar title [measured].
 - **Insets and spacing.** Leading and trailing bar groups inset `16` pt
   from the bar edges, with `8` pt spacing between adjacent items and
   between titles and adjacent items (`16` pt title leading/trailing
@@ -1880,43 +1995,225 @@ and colours below are [chosen].
 
 ### 8.10 Sheets
 
-A sheet rises from the viewport's bottom edge as a standalone regular-family
-glass element (§5.1) covering the lower region of the screen, with rounded
-continuous upper corners and square bottom corners where it meets the
-bottom edge (`surfaces::sheet` / `Glass::sheet_surface`). Window-modal sheet
-presentation through `WidgetTheme` awaits `water-rs/waterui#659`.
+A sheet rises from the viewport's bottom edge as a modal presentation surface
+covering the lower region of the viewport over a dimming modal scrim. The
+theme realizes both the standalone regular-family glass sheet surface
+(`surfaces::sheet` / `Glass::sheet_surface`, §5.1) and the `WidgetTheme::sheet`
+(`SheetLook`) modal sheet chrome (container surface, maximum width, corner
+radius, grabber pill, and modal `Scrim` token).
 
-**Reference.** Nothing in this section was measured against a capture;
-every value is [chosen].
+**Reference.** Sheet surface geometry, detent proportions, grabber pill
+dimensions, modal scrim opacities, and presentation/dismissal springs are
+[chosen] (no dedicated sheet motion capture has been recorded yet).
 
 #### Geometry
 
-- **Upper corners.** Continuous corners (`CornerCurve::Continuous`, exponent
-  `2.02`) of radius `min(38, m / 2)` pt (`SHEET_CORNER_RADIUS = 38.0`),
-  where `m = min(width, height)` is the sheet surface's shorter side
-  [chosen].
+- **Container width and placement.** A non-fullscreen sheet docks flush at
+  the viewport's bottom edge, centred horizontally, with width
+  `min(viewport_width, 640.0)` pt (`SHEET_MAX_WIDTH = 640.0` pt) [chosen].
+  A `FullScreen` detent fills the entire viewport width and height with no
+  scrim gap and no grabber pill [chosen].
+- **Detent heights.** Height resolves against `available_height`:
+  - `Medium`: `0.50 · available_height` [chosen].
+  - `Large`: `0.90 · available_height` [chosen].
+  - `Fraction(f)`: `clamp(f, 0.0, 1.0) · available_height` [chosen].
+  - `Height(h)`: `clamp(h, 0.0, available_height)` [chosen].
+  - `FullScreen`: `available_height` [chosen].
+- **Upper corners.** Continuous superellipse corners (`CornerCurve::Continuous`,
+  exponent `2.02`) of radius `min(38.0, m / 2)` pt (`SHEET_CORNER_RADIUS = 38.0`
+  pt) on non-fullscreen sheets, where `m = min(width, height)` is the sheet
+  surface's shorter side; `0` pt on `FullScreen` sheets [chosen].
 - **Bottom corners.** Square (`0` pt radius) at both bottom-left and
-  bottom-right corners so the sheet meets the viewport's bottom edge with
-  no bottom corner cutout [chosen].
-- **Composition.** Uses the §5.1 regular-family recipe keyed to `m` (at
-  large sheet sizes, `0.25` capture scale with the §4.10 cast shadow and rim
-  highlight along the rounded upper edge). When grouped via
-  `surfaces::group` with a `Role::Container` surface, the group takes
-  container union smoothing (`30` pt); standing alone or with controls, it
-  takes standalone smoothing (`8` pt) [chosen].
+  bottom-right corners so the sheet meets the viewport's bottom edge with no
+  bottom corner cutout [chosen].
+- **Grabber pill (drag handle).** Shown horizontally centred at the top of
+  every dismissible non-fullscreen sheet (omitted on non-dismissible and
+  `FullScreen` sheets): a capsule `36.0` pt wide × `5.0` pt tall (corner
+  radius `2.5` pt), with `8.0` pt vertical padding above and `8.0` pt below
+  (`21.0` pt total grabber band height) [chosen].
+- **Composition.** The glass surface (`surfaces::sheet`) uses the §5.1
+  regular-family recipe keyed to `m` (at large sheet sizes, `0.25` capture
+  scale with the §4.10 cast shadow and rim highlight along the rounded upper
+  edge). When grouped via `surfaces::group` with a `Role::Container` surface,
+  the group takes container union smoothing (`30` pt); standing alone or with
+  controls, it takes standalone smoothing (`8` pt) [chosen].
 
-#### Colours
+#### Colours (Display P3, 8-bit)
 
-| Part | Dark appearance | Light appearance |
-|---|---|---|
-| sheet surface | regular glass element (§5.1) | regular glass element (§5.1) |
-| border and fill | none beyond glass rim and §5.1–§5.4 recipe | none beyond glass rim and §5.1–§5.4 recipe |
+| Part | Dark appearance | Light appearance | Tag |
+|---|---|---|---|
+| glass sheet surface | regular glass element (§5.1) | regular glass element (§5.1) | chosen |
+| modal `SheetLook` surface (`Surface`) | `(28, 28, 30)` opaque | `(242, 242, 247)` opaque | chosen |
+| grabber pill (`MutedForeground` @ `0.40`) | `(235, 235, 245)` @ `0.24` effective alpha (`0.60 × 0.40`) | `(60, 60, 67)` @ `0.24` effective alpha (`0.60 × 0.40`) | chosen |
+| modal scrim (`Scrim` token) | `(0, 0, 0)` @ `0.50` | `(0, 0, 0)` @ `0.32` | chosen |
+| border and fill (glass mode) | none beyond glass rim and §5.1–§5.4 recipe | none beyond glass rim and §5.1–§5.4 recipe | chosen |
 
 #### States and Motion
 
 - **Material stability.** At rest and under interaction inside its content,
-  the sheet surface keeps its §5.1 recipe and geometry unchanged (§5.5)
+  the sheet surface keeps its §5.1 recipe and silhouette unchanged (§5.5)
   [chosen].
-- **Presentation contract.** Modal scrim, detent drag handling and
-  presentation motion are deferred until `water-rs/waterui#659` introduces
-  the `WidgetTheme` sheet contract [chosen].
+- **Dismissal and detent drag.** When dismissible, tapping the scrim,
+  pressing Escape / platform back, or swiping downward past `50 %` of the
+  current detent height (or releasing downward faster than `600` pt/s)
+  dismisses the sheet; non-dismissible sheets suppress grabber, scrim tap,
+  and swipe dismissal [chosen]. Multi-detent sheets track vertical pointer
+  drag `1:1` between the smallest and largest detents, apply rubber-band
+  resistance `12 · Δ / (Δ + 24)` pt past the maximum detent, and snap to the
+  nearest detent on release [chosen].
+- **Presentation and dismissal springs** (unit mass, §9):
+  - **Present**: `T_r = 0.400` s (`ω0 = 15.71` rad/s), `ζ = 0.85` (`k = 246.7`,
+    `c = 26.7`) — smooth upward slide with `0.6 %` peak overshoot [chosen].
+  - **Dismiss**: `T_r = 0.350` s (`ω0 = 17.95` rad/s), `ζ = 1.00` (`k = 322.3`,
+    `c = 35.9`) — critically damped exit with zero overshoot [chosen].
+  - **Detent snap**: `T_r = 0.380` s (`ω0 = 16.53` rad/s), `ζ = 0.85`
+    (`k = 273.4`, `c = 28.1`) [chosen].
+  - **Scrim fade**: scrim alpha scales linearly with normalized vertical
+    presentation progress `p ∈ [0, 1]` [chosen].
+
+### 8.11 Code blocks
+
+A fenced code block displays a language header, an accessible copy action
+button, and syntax-highlighted monospace source inside a rounded container.
+
+**Reference.** Every value is [chosen].
+
+- **Container.** Continuous-corner rounded rectangle of radius `12.0` pt,
+  `0.5` pt outline in `Border`, filled with `SurfaceVariant` (`(242, 242, 247)`
+  light, `(44, 44, 46)` dark) or a regular-family glass surface when explicitly
+  mounted over a chromatic backdrop, with `14.0` pt inner padding on all sides
+  and `8.0` pt vertical spacing between the header row and the code body
+  [chosen].
+- **Typography.** Code text uses `Font::from(Body).monospaced()` (tracking the
+  installed `Body` size, `17.0` pt at default scale, §8.0); the header language
+  label uses `Caption` (`12.0` pt medium) in `MutedForeground` [chosen].
+- **Copy action.** Trailing header button styled as a compact borderless/glass
+  capsule (§8.1 compact metrics), tinted `MutedForeground` at rest and `Accent`
+  while confirming copy feedback [chosen].
+
+### 8.12 Progress indicators
+
+Linear and circular progress indicators draw an unfilled neutral track and an
+accent-filled determinate bar or arc, with optional top label and bottom value
+label in the `Body` slot (`17.0` pt, §8.0).
+
+**Reference.** Dimensions, track colours, arc cap geometry and label spacing
+were measured from `2 px/pt` reference captures (`300 × 80` pt linear,
+`160 × 80` pt circular); indeterminate cycle timings are [chosen].
+
+#### Linear indicator
+
+- **Geometry.** Capsule bar `4.0` pt tall (default width `120.0` pt, radius
+  `2.0` pt), filled from the leading edge to `v · width` (mirrored in RTL)
+  [measured]. Top label band `18.0` pt tall with `7.0` pt spacing above the
+  bar; bottom value label band with `8.0` pt spacing below the bar (`"Please
+  wait..."` at `y = 14.5..28.0` pt, bar at `y = 38.0..42.0` pt, `"65%"` at
+  `y = 51.5..64.5` pt in a `300 × 80` pt frame) [measured].
+- **Colours (encoded space).** Unfilled track `(120, 120, 128)` at alpha
+  `0.17` in light appearance (`(232, 232, 233)` over white) and alpha `0.34`
+  in dark appearance (`(41, 41, 43)` over black); filled bar in opaque accent
+  (`(59, 134, 247)` light, `(63, 143, 247)` dark) [measured].
+- **Motion.** Determinate value transitions ease in-out over `250` ms;
+  indeterminate `35 %`-width segment sweeps across the track over a `1800` ms
+  cycle [chosen].
+
+#### Circular indicator
+
+- **Geometry.** `20.0 × 20.0` pt outer diameter ring, stroke width `2.5` pt
+  (centreline radius `8.75` pt) [measured]. Determinate arc sweeps clockwise
+  from `−π/2` (`12` o'clock) across `v · 2π` with **butt (flat) stroke caps**
+  (`Cap::Butt`) so the start edge terminates cleanly at `−π/2` without
+  overhanging counter-clockwise into the fourth quadrant [measured: at
+  `v = 0.65`, blue spans `0°..234°` clockwise with zero blue at `350°`].
+  Top label spacing `7.0` pt above the ring; bottom value label spacing
+  `8.0` pt below (`"Please wait..."` at `y = 6.5..20.0` pt, ring at
+  `y = 30.0..50.0` pt, `"65%"` at `y = 59.5..72.5` pt in a `160 × 80` pt
+  frame) [measured].
+- **Colours (encoded space).** Full unfilled ring track `(232, 232, 232)` in
+  light appearance and `(42, 42, 44)` in dark appearance; active arc in opaque
+  accent [measured].
+- **Motion.** Indeterminate arc sweeps between `15 %` and `70 %` of the
+  circumference over a `1400` ms cycle while rotating two full turns; the
+  loading morph indicator rotates a `28` pt rounded square (`0.25..0.5` corner
+  share, `3` morphs per turn) inside a `48` pt frame over `6000` ms [chosen].
+
+## 9. Motion measurement and interaction dynamics
+
+This section specifies the black-box frame-capture measurement method used to
+derive control and material motion parameters, and records the analytical
+dynamics parameters (and observability status) that govern `src/dynamics.rs`
+and `src/interaction.rs`.
+
+### 9.1 Black-box measurement method
+
+Motion parameters are derived exclusively from rendered frame sequences of
+scripted interactions — never from private symbols, internal timers, or
+disassembly:
+
+1. **Scripted stimulus.** Mount a single isolated control or glass container
+   over a known high-contrast backdrop (solid black, solid white, or vertical
+   saturated colour stripes) in a fixed logical viewport at `2` or `3 px/pt`.
+   Inject deterministic input events (touch-down, hold, linear drag at known
+   velocity, release; boolean toggle; value step; selection index change;
+   popover trigger tap and dismiss tap) on a fixed timeline.
+2. **Compositor-backed frame capture.** Record the full window compositor
+   output at `60` fps (`16.67` ms/frame) or `48` fps (`20.83` ms/frame) in
+   10-bit PQ HDR (`Display P3` / `BT.2020`) or 8-bit Display P3 PNG frame
+   sequences. Raw captures remain outside the repository; only fitted numbers
+   and verification checkpoints enter this document.
+3. **Geometric and photometric extraction.** For every frame `k` at timestamp
+   `t_k`, threshold pixel delta against the bare backdrop to extract the
+   silhouette bounding box `(x(t_k), y(t_k), w(t_k), h(t_k))`, effective
+   corner radius `r(t_k)`, centre trajectory `c(t_k)`, and interior / rim
+   linear Display P3 luminance `Y_lin(t_k)`.
+4. **Latency alignment and oscillator fitting.** Identify the first frame
+   showing non-zero geometric change and subtract fixed input/compositor
+   pipeline latency (`20–50` ms, excluded from the control model). Fit each
+   axis to a unit-mass damped harmonic oscillator:
+
+   ```
+   y'' + 2·ζ·ω0·y' + ω0²·(y − y_target) = 0,   T_r = 2π / ω0,   k = ω0²,   c = 2·ζ·ω0
+   ```
+
+   via nonlinear least-squares over `(ω0, ζ)` and record the worst normalized
+   residual and peak overshoot. Parameters that cannot be separated by
+   black-box single-control captures (such as pointer-hover fades on
+   touch-only devices or multi-element container attraction) are explicitly
+   marked **not observable** and tagged **[chosen]**.
+
+### 9.2 Interaction dynamics parameters (`src/interaction.rs`, `src/dynamics.rs`)
+
+Legacy fixed-rate per-frame exponential constants (`PRESS_RATE`, `DRAG_RATE`,
+`MORPH_RATE`) are superseded by continuous-time analytical springs (`Spring`
+in `src/dynamics.rs`), with explicit observability accounting for each
+dynamic channel:
+
+| Channel (legacy constant) | Analytical law / parameters | Observability & Tag |
+|---|---|---|
+| **Press** (`PRESS_RATE`) | Press-down spring `T_r = 0.223 s, ζ = 0.650` (`ω0 = 28.2 rad/s, k = 795, c = 36.7`); release spring `T_r = 0.398 s, ζ = 0.385` (`ω0 = 15.8 rad/s, k = 250, c = 12.2`). Applied to button growth (`1 + 0.245·p`, half-axis cap `10.0 pt`), lens growth (§8.2–§8.3 `1 + 0.60·p`, §8.4 `1 + 0.15·p`, §8.7 `+36 % / +28 %`), and press illumination (§8.1). Bare interactive material growth is `1.000` (§5.5). | **fitted** (48/60 fps press captures, residual `< 1.1 %`); hover/focus fade `PRESS_DURATION = 201 ms` (`ease_out`, matching `0.22`/frame at 60 Hz) is **not observable** on touch-only captures → **chosen**. |
+| **Drag** (`DRAG_RATE`) | Active jelly drag spring `T_r = 0.340 s, ζ = 0.600` (`ω0 = 18.5 rad/s, k = 341, c = 22.2`); release snap-back spring `T_r = 0.349 s, ζ = 0.450` (`ω0 = 18.0 rad/s, k = 324, c = 16.2`, `~20 %` opposite-axis rebound). Rubber-band lag `t_target = u_hat · min(12, ||Δ||·24 / (||Δ|| + 24))` pt; target area-preserving strain `ε_target = min(0.16, 0.14·tanh(||Δ||/48) + 0.12·tanh(||v||/600))` (`λ_par ∈ [0.86, 1.16]`, `λ_perp = 1 / λ_par`); anti-pinch affine lens velocity stretch `ε_v = 0.12·tanh(|v_axis|/600)` (`w_eff = w·(1 + ε_v)`, `h_eff = h/(1 + 0.65·ε_v)`). | **fitted** (60 fps button drag, slider drag, and tab glide captures); non-spring fallback `DRAG_DURATION = 152 ms` (`0.28`/frame at 60 Hz) is **chosen**. |
+| **Shape / corner morph** (`MORPH_RATE`) | Trigger-to-popover morph (§8.9): open width `T_r = 0.286 s, ζ = 0.760`, open height `T_r = 0.311 s, ζ = 0.333` (`+34.2 %` overshoot), open corner radius `T_r = 0.311 s, ζ = 0.750` with unified smooth-min bridge `k_morph(t) = 32·sin(π·q)` pt; dismiss width `T_r = 0.624 s, ζ = 0.619` (`−14.2 %` pinch), dismiss height `T_r = 0.807 s, ζ = 0.756` (`~45 ms` lag). Standalone container member corner-radius morphing (`Member::controls.radii`) uses critically damped `T_r = 0.299 s, ζ = 1.000` (`ω0 = 21.0 rad/s`). | Popover morph **fitted** (60 fps menu open/dismiss captures); standalone non-popover corner-radius morph is **not observable** → **chosen**. |
+| **Container neighbour attraction & merge smoothing** | Neighbour lean `û · min(18·(1 − dist/140)², 0.5·max(gap − 6, 0))` pt (`ATTRACTION_RADIUS = 140 pt`, `ATTRACTION_PEAK = 18 pt`, `ATTRACTION_GAP_MARGIN = 6 pt`, `ATTRACTION_GAP_FRACTION = 0.5`); active drag smoothing gain `DRAG_SMOOTHING_GAIN = 0.2` (growing container smoothing `30 → 36 pt`). | **not observable** in single-control captures → **chosen**. |
+
+### 9.3 Control spring reference table
+
+All unit-mass analytical springs used across §8 and `src/dynamics.rs`:
+
+| Preset | `T_r` (s) | `ω0` (rad/s) | `ζ` | `k = ω0²` | `c = 2ζω0` | Tag |
+|---|---|---|---|---|---|---|
+| `BUTTON_PRESS` | `0.223` | `28.2` | `0.650` | `795` | `36.7` | fitted |
+| `BUTTON_RELEASE` | `0.398` | `15.8` | `0.385` | `250` | `12.2` | fitted |
+| `SWITCH_KNOB` | `0.299` | `21.0` | `1.000` | `441` | `42.0` | fitted |
+| `SWITCH_TRACK_ON` | `0.561` | `11.2` | `1.000` | `125` | `22.4` | fitted |
+| `SWITCH_TRACK_OFF` | `0.311` | `20.2` | `1.000` | `408` | `40.4` | fitted |
+| `SLIDER_VALUE` | `0.403` | `15.6` | `0.790` | `243` | `24.6` | fitted |
+| `SEGMENTED_PILL` / tab glide | `0.400` | `15.7` | `0.850` | `246` | `26.7` | fitted |
+| `JELLY_DRAG_ACTIVE` | `0.340` | `18.5` | `0.600` | `341` | `22.2` | fitted |
+| `JELLY_DRAG_RELEASE` | `0.349` | `18.0` | `0.450` | `324` | `16.2` | fitted |
+| `POPOVER_PRESENT` (horiz) | `0.286` | `22.0` | `0.760` | `484` | `33.4` | fitted |
+| `POPOVER_PRESENT_VERTICAL` | `0.311` | `20.2` | `0.333` | `408` | `13.5` | fitted |
+| `POPOVER_DISMISS` (horiz) | `0.624` | `10.1` | `0.619` | `101` | `12.5` | fitted |
+| `POPOVER_DISMISS_VERTICAL` | `0.807` | `7.8` | `0.756` | `61` | `11.8` | fitted |
+| `SHEET_PRESENT` | `0.400` | `15.7` | `0.850` | `247` | `26.7` | chosen |
+| `SHEET_DISMISS` | `0.350` | `18.0` | `1.000` | `322` | `35.9` | chosen |
+| `SHEET_DETENT` | `0.380` | `16.5` | `0.850` | `273` | `28.1` | chosen |
