@@ -3,8 +3,8 @@
 
 use cherenkov_record::WorkingColor;
 use hydrolysis_style::theme::{Backdrop, ContentEffect, Driven, GlassLook, Inputs};
-use waterui::background::{Glass as GlassBackground, GlassStyle};
 use waterui_core::Environment;
+use waterui_shape::background::{Glass as GlassBackground, GlassStyle};
 
 use crate::material::recipe::{Family, Recipe};
 

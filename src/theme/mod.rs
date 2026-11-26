@@ -39,15 +39,15 @@ use hydrolysis_style::theme::{
     SnackbarLook, StepperLook, StepperSpec, SwitchLook, TableLook, TabsLook, TabsSpec,
     TextFieldLook, TextFieldSpec, ToggleSpec, WidgetTheme,
 };
-use waterui::Plugin as _;
-use waterui::color::{Color, ColorScheme};
-use waterui::interaction::InteractionState;
-use waterui::reactive::Signal as _;
-use waterui::theme::{ColorSettings, FontSettings, Theme, installed_color_scheme};
-use waterui::widget::CardStyle;
+use nami::Signal as _;
 use waterui_controls::ControlSize;
 use waterui_controls::button::ButtonStyle;
+use waterui_controls::card::CardStyle;
+use waterui_controls::theme::{ColorSettings, FontSettings, Theme, installed_color_scheme};
 use waterui_core::Environment;
+use waterui_core::plugin::Plugin as _;
+use waterui_graphics::color::{Color, ColorScheme};
+use waterui_interaction::interaction::InteractionState;
 
 use crate::material::gpu::Group;
 use crate::material::recipe::Translucency;
@@ -194,7 +194,7 @@ impl Glass {
     }
 
     fn color(c: palette::Rgba) -> Color {
-        Color::from(waterui::color::Working(resolved(c)))
+        Color::from(waterui_graphics::color::Working(resolved(c)))
     }
 }
 
@@ -250,7 +250,7 @@ impl WidgetTheme for Glass {
 
     fn glass_background(
         &self,
-        glass: &waterui::background::Glass,
+        glass: &waterui_shape::background::Glass,
         env: &Environment,
     ) -> Option<GlassLook> {
         Some(looks::glass_background(self, glass, env))
@@ -688,7 +688,7 @@ mod tests {
 
     #[test]
     fn light_palette_uses_white_background_and_grouped_surface_polarity() {
-        use waterui::Resolvable as _;
+        use waterui_core::resolve::Resolvable as _;
 
         assert_eq!(Palette::LIGHT.background, [1.0, 1.0, 1.0, 1.0]);
         assert_eq!(Palette::LIGHT.surface, [0.949, 0.949, 0.969, 1.0]);
@@ -696,15 +696,19 @@ mod tests {
 
         let mut env = Environment::new();
         Glass::light().install_tokens(&mut env);
-        let bg = waterui::theme::color::Background.resolve(&env).snapshot();
-        let surf = waterui::theme::color::Surface.resolve(&env).snapshot();
+        let bg = waterui_controls::theme::color::Background
+            .resolve(&env)
+            .snapshot();
+        let surf = waterui_controls::theme::color::Surface
+            .resolve(&env)
+            .snapshot();
         assert!((bg.components[0] - 1.0).abs() < 1e-4 && (bg.components[2] - 1.0).abs() < 1e-4);
         assert!(surf.components[0] < bg.components[0] && surf.components[2] > surf.components[0]);
     }
 
     #[test]
     fn dark_palette_uses_oled_black_background_and_surface_hierarchy() {
-        use waterui::Resolvable as _;
+        use waterui_core::resolve::Resolvable as _;
 
         assert_eq!(Palette::DARK.background, [0.0, 0.0, 0.0, 1.0]);
         assert_eq!(
@@ -720,9 +724,13 @@ mod tests {
 
         let mut env = Environment::new();
         Glass::dark().install_tokens(&mut env);
-        let bg = waterui::theme::color::Background.resolve(&env).snapshot();
-        let surf = waterui::theme::color::Surface.resolve(&env).snapshot();
-        let variant = waterui::theme::color::SurfaceVariant
+        let bg = waterui_controls::theme::color::Background
+            .resolve(&env)
+            .snapshot();
+        let surf = waterui_controls::theme::color::Surface
+            .resolve(&env)
+            .snapshot();
+        let variant = waterui_controls::theme::color::SurfaceVariant
             .resolve(&env)
             .snapshot();
         assert_eq!(bg.components[0], 0.0);
@@ -732,12 +740,12 @@ mod tests {
 
     #[test]
     fn tinted_button_preserves_display_p3_gamut() {
-        use waterui::color::P3;
-        use waterui::theme::Tint;
+        use waterui_controls::theme::Tint;
+        use waterui_graphics::color::P3;
 
         let g = Glass::dark();
         let mut env = environment(&g);
-        env.insert(Tint::new(waterui::Color::new(P3::new(1.0, 0.0, 0.0))));
+        env.insert(Tint::new(Color::new(P3::new(1.0, 0.0, 0.0))));
         let spec = ButtonSpec::new(
             ButtonStyle::Glass,
             ControlSize::Medium,
@@ -767,7 +775,7 @@ mod tests {
         use hydrolysis_style::theme::{
             TabBarWidth, TabItemGeometry, TabItemLayout, TabsValue, ValueMotion,
         };
-        use waterui::navigation::tab::TabStyle;
+        use waterui_navigation::tab::TabStyle;
 
         let g = Glass::dark();
         let env = environment(&g);
@@ -868,7 +876,7 @@ mod tests {
     #[test]
     fn navigation_bar_look_enables_back_feedback_and_metrics() {
         use hydrolysis_style::theme::FocusIndicator;
-        use waterui::text::font::FontWeight;
+        use waterui_text::font::FontWeight;
 
         let g = Glass::dark();
         let env = environment(&g);

@@ -8,7 +8,7 @@ use hydrolysis_style::theme::{
     Backdrop, Border, CardLayout, CardLook, ContentEffect, CornerShape, Driven, Elevation, Inputs,
     Surface,
 };
-use waterui::widget::CardStyle;
+use waterui_controls::card::CardStyle;
 use waterui_core::Environment;
 
 use crate::material::recipe::{Family, Recipe};

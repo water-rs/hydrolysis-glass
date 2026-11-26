@@ -8,8 +8,8 @@ use hydrolysis_style::theme::{
     Custom, Driven, Inputs, Motion, PickerSpec, RadioGroupLook, RadioLayout, ToggleControl,
     ValueMotion,
 };
-use waterui::animation::Animation;
 use waterui_core::Environment;
+use waterui_core::animation::Animation;
 
 use super::super::chrome::{FOCUS_RING_GAP, FOCUS_RING_WIDTH};
 use super::super::palette::{Rgba, alpha};

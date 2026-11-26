@@ -7,13 +7,13 @@ use hydrolysis_style::theme::{
     Backdrop, ButtonLook, ButtonSpec, Chrome, ContentEffect, CornerShape, DragDeformation, Driven,
     FocusIndicator, Inputs, Label, PressFeedback, StateLayer, Surface as ChromeSurface, Transition,
 };
-use waterui::color::Color;
-use waterui::interaction::InteractionState;
-use waterui::reactive::Computed;
-use waterui::text::font::{Body, Font, FontWeight};
-use waterui::theme::Tint;
+use nami::Computed;
 use waterui_controls::button::ButtonStyle;
+use waterui_controls::theme::Tint;
 use waterui_core::Environment;
+use waterui_graphics::color::Color;
+use waterui_interaction::interaction::InteractionState;
+use waterui_text::font::{Body, Font, FontWeight};
 
 use crate::dynamics::{self, PRESS_MAX_HALF_AXIS_GROWTH};
 use crate::material::recipe::{Appearance, Family, Recipe};

@@ -5,8 +5,8 @@
 //! the widget theme ([`super::Glass`]) and the standalone verification
 //! scenes build a button from the same decisions.
 
-use waterui::animation::Animation;
 use waterui_controls::ControlSize;
+use waterui_core::animation::Animation;
 
 use crate::material::geometry::{CornerCurve, Rect, Shape};
 use crate::material::recipe::Appearance;

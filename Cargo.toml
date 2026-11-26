@@ -22,21 +22,24 @@ default = []
 verification = []
 
 [dependencies]
-bytemuck = { version = "1", features = ["derive"] }
+bytemuck = { version = "1", default-features = false, features = ["derive"] }
 # The recording contract the theme spells its chrome in — `Draw`/`Recorder`,
 # `Paint`, `Shadow`, `Group`, `kurbo` and the material contract
 # (`MaterialRegistry`, `Recorder::backdrop_material`, `MaterialEffect`,
 # `CaptureClass`) — the render-target-neutral layer, never the engine.
-cherenkov-record = "0.0.0"
-hydrolysis-style = "0.5.1"
-nami = "0.13"
-waterui = { version = "0.5.2", default-features = false }
-waterui-controls = "0.5.1"
-waterui-core = "0.5.1"
-waterui-form = "0.5.1"
-# `WorkingColor`, the theme's working-space colour term. The recording
-# layer alone is needed, so the engine features stay off.
+cherenkov-record = { version = "0.0.0", default-features = false }
+hydrolysis-style = { version = "0.5.1", default-features = false, features = ["all-controls"] }
+nami = { version = "0.13", default-features = false }
+waterui-controls = { version = "0.5.1", default-features = false }
+waterui-core = { version = "0.5.1", default-features = false, features = ["std"] }
+# `WorkingColor` and color primitives (`Color`, `ColorScheme`, `P3`, `Working`).
+# The recording layer alone is needed, so the engine features stay off.
 waterui-graphics = { version = "0.5.1", default-features = false }
+waterui-interaction = { version = "0.5.1", default-features = false }
+waterui-layout = { version = "0.5.1", default-features = false }
+waterui-navigation = { version = "0.5.1", default-features = false }
+waterui-shape = { version = "0.5.1", default-features = false }
+waterui-text = { version = "0.5.1", default-features = false }
 wgpu = { version = "30.0.1", default-features = false, features = ["wgsl"] }
 
 [dev-dependencies]
@@ -50,6 +53,7 @@ hydrolysis-glass = { path = ".", version = "0.1.0", features = ["verification"] 
 hydrolysis = { version = "0.3.1", features = ["testing"] }
 pollster = "1.0"
 tracing = "0.1"
+waterui = { version = "0.5.2", default-features = false, features = ["navigation", "picker", "secure-field", "std"] }
 # Writes the verification renders as PNG so a failing property can be looked at.
 image = { version = "0.25.10", default-features = false, features = ["png"] }
 
@@ -97,6 +101,7 @@ waterui-dylib = { git = "https://github.com/water-rs/waterui", branch = "main" }
 waterui-form = { git = "https://github.com/water-rs/waterui", branch = "main" }
 waterui-graphics = { git = "https://github.com/water-rs/waterui", branch = "main" }
 waterui-icon = { git = "https://github.com/water-rs/waterui", branch = "main" }
+waterui-interaction = { git = "https://github.com/water-rs/waterui", branch = "main" }
 waterui-internal = { git = "https://github.com/water-rs/waterui", branch = "main" }
 waterui-layout = { git = "https://github.com/water-rs/waterui", branch = "main" }
 waterui-locale = { git = "https://github.com/water-rs/waterui", branch = "main" }

@@ -6,8 +6,8 @@ use hydrolysis_style::theme::{
     BarSurface, CornerShape, Custom, NavigationBarLook, NavigationMetrics, NavigationMotion,
     NavigationSpec, Surface as ChromeSurface,
 };
-use waterui::text::font::{Body, Font, FontWeight};
 use waterui_core::{EasingCurve, Environment};
+use waterui_text::font::{Body, Font, FontWeight};
 
 use super::super::chrome;
 use super::super::{Glass, NAVIGATION_DURATION};

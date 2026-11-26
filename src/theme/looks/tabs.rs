@@ -10,9 +10,9 @@ use hydrolysis_style::theme::{
     PressFeedback, StateLayer, Surface as ChromeSurface, TabBarWidth, TabsDrag, TabsLook,
     TabsMetrics, TabsSpec, TabsValue, Transition, ValueMotion,
 };
-use waterui::interaction::InteractionState;
-use waterui::navigation::tab::TabStyle;
 use waterui_core::Environment;
+use waterui_interaction::interaction::InteractionState;
+use waterui_navigation::tab::TabStyle;
 
 use crate::dynamics;
 use crate::material::geometry::{CornerCurve, Element, Rect as ElementRect, Shape};

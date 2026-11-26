@@ -55,11 +55,11 @@ use hydrolysis_style::theme::{
     ScrollIndicatorLook, SheetLook, StateLayer, Surface as ChromeSurface, TableLook, TableMetrics,
     Transition, ValueMotion,
 };
-use waterui::animation::Animation;
-use waterui::interaction::InteractionState;
-use waterui::layout::Alignment;
-use waterui::layout::padding::EdgeInsets;
-use waterui::text::font::{Font, Footnote};
+use waterui_core::animation::Animation;
+use waterui_interaction::interaction::InteractionState;
+use waterui_layout::Alignment;
+use waterui_layout::padding::EdgeInsets;
+use waterui_text::font::{Font, Footnote};
 
 use super::Glass;
 use super::button::{CANCEL_DISTANCE, MIN_HIT_SIDE, Spring};

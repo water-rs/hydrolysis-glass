@@ -11,9 +11,9 @@
 
 use cherenkov_record::MaterialEffect;
 use cherenkov_record::kurbo::Rect;
-use waterui::text::font::FontWeight;
 use waterui_controls::ControlSize;
 use waterui_core::contract_violation;
+use waterui_text::font::FontWeight;
 
 use crate::material::geometry::{CornerCurve, Element, Rect as ElementRect, Shape};
 use crate::material::recipe::{Appearance, Family, Recipe, Translucency};
