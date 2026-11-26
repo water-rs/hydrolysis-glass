@@ -75,9 +75,9 @@ const SIZE: ControlSize = ControlSize::Medium;
 /// chrome somewhere the caller did not name.
 fn glass_button(x: f32, y: f32) -> impl View {
     button("")
+        .action(|| {})
         .style(ButtonStyle::Glass)
         .size(SIZE)
-        .action(|| {})
         .position(x, y)
         .anchor(waterui::layout::UnitPoint::TOP_LEADING)
 }
@@ -412,9 +412,9 @@ fn a_material_group_bleeds_from_a_prominent_sibling_within_36_pt() {
 
     let blue_btn = |x: f32, y: f32| {
         button("")
+            .action(|| {})
             .style(ButtonStyle::GlassProminent)
             .size(SIZE)
-            .action(|| {})
             .position(x, y)
             .anchor(waterui::layout::UnitPoint::TOP_LEADING)
     };
@@ -521,9 +521,9 @@ fn blank_button(size: ControlSize, label: [f32; 2], x: f32, y: f32) -> impl View
             .width(label[0])
             .height(label[1])
     }))
+    .action(|| {})
     .style(ButtonStyle::Glass)
     .size(size)
-    .action(|| {})
     .position(x, y)
     .anchor(waterui::layout::UnitPoint::TOP_LEADING)
 }
@@ -806,9 +806,9 @@ fn text_button(
     y: f32,
 ) -> impl View {
     button(label)
+        .action(|| {})
         .style(style)
         .size(size)
-        .action(|| {})
         .position(x, y)
         .anchor(waterui::layout::UnitPoint::TOP_LEADING)
 }
@@ -2770,21 +2770,21 @@ fn navigation_bar_items_scene() {
                     NavigationView::new("Root", backdrop_view(backdrop)),
                 )
                 .destination(move |_: i32| {
-                    const fn noop() {}
+                    let noop: fn() = || {};
                     let toolbar = NavigationToolbar::new(vec![
                         NavigationToolbarItem::new(
                             NavigationToolbarPlacement::TopBarTrailing,
                             button("Save")
+                                .action(noop)
                                 .style(ButtonStyle::Glass)
-                                .size(ControlSize::Small)
-                                .action(noop),
+                                .size(ControlSize::Small),
                         ),
                         NavigationToolbarItem::new(
                             NavigationToolbarPlacement::BottomBar,
                             button("Done")
+                                .action(noop)
                                 .style(ButtonStyle::BorderedProminent)
-                                .size(ControlSize::Small)
-                                .action(noop),
+                                .size(ControlSize::Small),
                         ),
                     ]);
                     NavigationView::new("Detail", backdrop_view(backdrop))
@@ -3105,8 +3105,8 @@ fn content_dispersion_refracts_and_fringes_glass_content() {
             .position(40.0, 40.0)
             .anchor(UnitPoint::TOP_LEADING);
             let glass_btn = button(Label::new("Glass", move || white(120.0, 60.0)))
-                .style(ButtonStyle::Glass)
                 .action(|| {})
+                .style(ButtonStyle::Glass)
                 .position(40.0, 176.0)
                 .anchor(UnitPoint::TOP_LEADING);
             absolute((backdrop_view(Backdrop::Black), card, glass_btn))

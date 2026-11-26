@@ -74,6 +74,9 @@ multiple_crate_versions = "allow"
 # not carry its own patch table, so the ones this graph resolves are repeated
 # here so it builds the same sources as water-rs/waterui at the pinned rev.
 [patch.crates-io]
+nami = { git = "https://github.com/water-rs/nami", branch = "main" }
+nami-core = { git = "https://github.com/water-rs/nami", branch = "main" }
+nami-derive = { git = "https://github.com/water-rs/nami", branch = "main" }
 
 # The framework this crate builds against: water-rs/waterui's `main`, whose
 # recording contract carries the backdrop materials this theme declares
@@ -130,9 +133,6 @@ waterui-svg = { git = "https://github.com/water-rs/svg", branch = "main" }
 # 0.5 requires. Mirrors the framework's own patch; the commit is recorded
 # by `Cargo.lock`.
 suiteki = { git = "https://github.com/water-rs/suiteki", branch = "main" }
-nami = { git = "https://github.com/water-rs/nami", branch = "main" }
-nami-core = { git = "https://github.com/water-rs/nami", branch = "main" }
-nami-derive = { git = "https://github.com/water-rs/nami", branch = "main" }
 
 # Every waterkit crate the codec/clipboard graph shares types across rides
 # the same source — a registry `waterkit-core` beside the patched
