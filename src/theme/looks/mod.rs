@@ -22,6 +22,7 @@ mod progress;
 mod radio;
 mod segmented;
 mod slider;
+mod snackbar;
 mod stepper;
 mod tabs;
 mod text_field;
@@ -37,6 +38,7 @@ pub(super) use progress::{circular as circular_progress, linear as linear_progre
 pub(super) use radio::look as radio_group;
 pub(super) use segmented::look as segmented_picker;
 pub(super) use slider::look as slider;
+pub(super) use snackbar::look as snackbar;
 pub(super) use stepper::look as stepper;
 pub(super) use tabs::look as tabs;
 pub(super) use text_field::look as text_field;

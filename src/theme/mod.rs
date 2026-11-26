@@ -35,8 +35,8 @@ use hydrolysis_style::theme::{
     BadgeLook, ButtonLook, ButtonSpec, CardLook, CheckboxLook, GlassLook, IndicatorLook,
     LinearProgressLook, ListLook, ListSpec, MenuLook, MenuPickerLook, MenuSpec, NavigationBarLook,
     NavigationSpec, PickerSpec, ProgressSpec, RadioGroupLook, ScrollIndicatorLook, SegmentedLook,
-    SegmentedSpec, SliderLook, SliderSpec, StepperLook, StepperSpec, SwitchLook, TableLook,
-    TabsLook, TabsSpec, TextFieldLook, TextFieldSpec, ToggleSpec, WidgetTheme,
+    SegmentedSpec, SliderLook, SliderSpec, SnackbarLook, StepperLook, StepperSpec, SwitchLook,
+    TableLook, TabsLook, TabsSpec, TextFieldLook, TextFieldSpec, ToggleSpec, WidgetTheme,
 };
 use waterui::Plugin as _;
 use waterui::color::{Color, ColorScheme};
@@ -333,6 +333,10 @@ impl WidgetTheme for Glass {
 
     fn table(&self, _env: &Environment) -> TableLook {
         looks::table(self)
+    }
+
+    fn snackbar(&self, _env: &Environment) -> SnackbarLook {
+        looks::snackbar()
     }
 }
 
