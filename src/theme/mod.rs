@@ -32,17 +32,18 @@ use cherenkov_record::kurbo::Rect;
 use cherenkov_record::{MaterialRegistry, Recorder};
 use hydrolysis_style::Style;
 use hydrolysis_style::theme::{
-    BadgeLook, ButtonLook, ButtonSpec, CheckboxLook, GlassLook, IndicatorLook, LinearProgressLook,
-    ListLook, ListSpec, MenuLook, MenuPickerLook, MenuSpec, NavigationBarLook, NavigationSpec,
-    PickerSpec, ProgressSpec, RadioGroupLook, ScrollIndicatorLook, SegmentedLook, SegmentedSpec,
-    SliderLook, SliderSpec, StepperLook, StepperSpec, SwitchLook, TableLook, TabsLook, TabsSpec,
-    TextFieldLook, TextFieldSpec, ToggleSpec, WidgetTheme,
+    BadgeLook, ButtonLook, ButtonSpec, CardLook, CheckboxLook, GlassLook, IndicatorLook,
+    LinearProgressLook, ListLook, ListSpec, MenuLook, MenuPickerLook, MenuSpec, NavigationBarLook,
+    NavigationSpec, PickerSpec, ProgressSpec, RadioGroupLook, ScrollIndicatorLook, SegmentedLook,
+    SegmentedSpec, SliderLook, SliderSpec, StepperLook, StepperSpec, SwitchLook, TableLook,
+    TabsLook, TabsSpec, TextFieldLook, TextFieldSpec, ToggleSpec, WidgetTheme,
 };
 use waterui::Plugin as _;
 use waterui::color::{Color, ColorScheme};
 use waterui::interaction::InteractionState;
 use waterui::reactive::Signal as _;
 use waterui::theme::{ColorSettings, FontSettings, Theme, installed_color_scheme};
+use waterui::widget::CardStyle;
 use waterui_controls::ControlSize;
 use waterui_controls::button::ButtonStyle;
 use waterui_core::Environment;
@@ -320,6 +321,10 @@ impl WidgetTheme for Glass {
 
     fn badge(&self, _env: &Environment) -> BadgeLook {
         looks::badge(self)
+    }
+
+    fn card(&self, style: CardStyle, env: &Environment) -> CardLook {
+        looks::card(self, style, env)
     }
 
     fn list(&self, _spec: &ListSpec, _env: &Environment) -> ListLook {
@@ -745,11 +750,11 @@ mod tests {
         use hydrolysis_style::theme::{
             TabBarWidth, TabItemGeometry, TabItemLayout, TabsValue, ValueMotion,
         };
-        use waterui::navigation::tab::NativeTabStyle;
+        use waterui::navigation::tab::TabStyle;
 
         let g = Glass::dark();
         let env = environment(&g);
-        let look = g.tabs(&TabsSpec::new(NativeTabStyle::TabBar), &env);
+        let look = g.tabs(&TabsSpec::new(TabStyle::TabBar), &env);
         assert_eq!(look.item_layout(402.0), TabItemLayout::Vertical);
         assert_eq!(look.item_layout(600.0), TabItemLayout::Horizontal);
         assert!(look.get_drag().is_some());
@@ -795,14 +800,14 @@ mod tests {
                 icon: None,
                 title: Rect::new(16.0, 20.0, 84.0, 40.0),
                 layout: TabItemLayout::Vertical,
-                placement: NativeTabStyle::TabBar,
+                placement: TabStyle::TabBar,
             },
             TabItemGeometry {
                 bounds: Rect::new(100.0, 0.0, 200.0, 60.0),
                 icon: None,
                 title: Rect::new(116.0, 20.0, 184.0, 40.0),
                 layout: TabItemLayout::Vertical,
-                placement: NativeTabStyle::TabBar,
+                placement: TabStyle::TabBar,
             },
         ]
         .into();
@@ -1078,6 +1083,39 @@ mod tests {
             });
             assert_eq!(layered.runs.len(), 1);
             assert_eq!(layered.runs[0].material.shader(), materials::GLASS_SHADER);
+        }
+    }
+
+    #[test]
+    fn card_look_uses_glass_container_and_style_variants() {
+        let frame = Rect::new(0.0, 0.0, 240.0, 120.0);
+        let rest = Inputs::at_rest(frame, InteractionState::empty(), &());
+
+        for g in [Glass::light(), Glass::dark()] {
+            let env = environment(&g);
+
+            let automatic = g.card(CardStyle::Automatic, &env);
+            assert!(matches!(automatic.surface().fill(), Fill::Backdrop(_)));
+            assert!(automatic.surface().get_content_effect().is_some());
+            assert!(automatic.surface().get_border().is_none());
+            assert!(automatic.surface().get_elevation().target(&rest).is_none());
+
+            let elevated = g.card(CardStyle::Elevated, &env);
+            assert!(matches!(elevated.surface().fill(), Fill::Backdrop(_)));
+            assert!(!elevated.surface().get_elevation().target(&rest).is_none());
+
+            let filled = g.card(CardStyle::Filled, &env);
+            assert!(matches!(filled.surface().fill(), Fill::Paint(_)));
+            assert!(filled.surface().get_border().is_none());
+
+            let outlined = g.card(CardStyle::Outlined, &env);
+            assert!(matches!(outlined.surface().fill(), Fill::Paint(_)));
+            let border = outlined
+                .surface()
+                .get_border()
+                .expect("outlined card carries a hairline border")
+                .target(&rest);
+            assert!((border.width - chrome::HAIRLINE).abs() < 1e-9);
         }
     }
 }
