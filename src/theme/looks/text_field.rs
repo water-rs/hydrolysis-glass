@@ -82,7 +82,7 @@ pub(in super::super) fn look(
 ) -> TextFieldLook {
     let palette = glass.palette;
     let field_font = Font::from(Body)
-        .size(FIELD_TEXT_SIZE)
+        .font_size(FIELD_TEXT_SIZE)
         .weight(FontWeight::Normal)
         .line_height(FIELD_LINE_HEIGHT);
     TextFieldLook::new(

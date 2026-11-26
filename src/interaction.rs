@@ -65,8 +65,8 @@ impl Controls {
     #[must_use]
     pub fn new(radii: [f32; 4]) -> Self {
         Self {
-            drag: Binding::container(None),
-            radii: Binding::container(radii),
+            drag: Binding::new(None),
+            radii: Binding::new(radii),
         }
     }
 }
@@ -264,7 +264,7 @@ impl Interactive {
             appearance,
             translucency,
             drag_activity: SpringState::at(0.0),
-            frame: Binding::container(Group::container(Vec::new(), smoothing)),
+            frame: Binding::new(Group::container(Vec::new(), smoothing)),
         };
         this.publish();
         this

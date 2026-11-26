@@ -84,7 +84,7 @@ pub(in super::super) fn look(
         Driven::new(|inputs: &Inputs<'_, Segment>| {
             let selected = inputs.state.contains(InteractionState::SELECTED);
             Font::default()
-                .size(LABEL_SIZE)
+                .font_size(LABEL_SIZE)
                 .weight(segmented::label_weight(selected))
         }),
         Driven::<_, Segment>::constant(Glass::color(glass.palette.foreground)),

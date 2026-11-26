@@ -11,7 +11,7 @@ use hydrolysis_style::theme::{
     TabsMetrics, TabsSpec, TabsValue, Transition, ValueMotion,
 };
 use waterui::interaction::InteractionState;
-use waterui::navigation::tab::NativeTabStyle;
+use waterui::navigation::tab::TabStyle;
 use waterui_core::Environment;
 
 use crate::dynamics;
@@ -82,7 +82,7 @@ fn lens_rect(inputs: &Inputs<'_, TabsValue>, vertical: bool) -> Rect {
         .value
         .items
         .first()
-        .map_or(vertical, |item| item.placement == NativeTabStyle::Sidebar);
+        .map_or(vertical, |item| item.placement == TabStyle::Sidebar);
     let (gx, gy) = if is_sidebar {
         (LENS_GROWTH_Y, LENS_GROWTH_X)
     } else {
@@ -196,7 +196,7 @@ pub(in super::super) fn look(glass: &Glass, spec: TabsSpec, _env: &Environment) 
     // separate from content, so no hairline divider protrudes past the
     // capsule shoulders (§8.7, Colours).
     let divider = Custom::<(), _>::new((), |_recorder, _frame, ()| {});
-    let vertical = spec.placement() == NativeTabStyle::Sidebar;
+    let vertical = spec.placement() == TabStyle::Sidebar;
     let mut motion = control_motion();
     motion.drag = Transition::new(
         spring_animation(dynamics::Spring::JELLY_DRAG_ACTIVE),
