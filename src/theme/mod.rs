@@ -32,7 +32,7 @@ use cherenkov_record::kurbo::Rect;
 use cherenkov_record::{MaterialRegistry, Recorder};
 use hydrolysis_style::Style;
 use hydrolysis_style::theme::{
-    BadgeLook, ButtonLook, ButtonSpec, CardLook, CheckboxLook, DialogLook, GlassLook,
+    BadgeLook, ButtonLook, ButtonSpec, CardLook, CheckboxLook, DialogLook, FloatingLook, GlassLook,
     IndicatorLook, LinearProgressLook, ListLook, ListSpec, MenuLook, MenuPickerLook, MenuSpec,
     NavigationBarLook, NavigationSpec, PickerSpec, ProgressSpec, RadioGroupLook,
     ScrollIndicatorLook, SegmentedLook, SegmentedSpec, SheetLook, SliderLook, SliderSpec,
@@ -326,6 +326,10 @@ impl WidgetTheme for Glass {
 
     fn card(&self, style: CardStyle, env: &Environment) -> CardLook {
         looks::card(self, style, env)
+    }
+
+    fn floating(&self, env: &Environment) -> FloatingLook {
+        looks::floating(self, env)
     }
 
     fn list(&self, _spec: &ListSpec, _env: &Environment) -> ListLook {
@@ -1147,5 +1151,53 @@ mod tests {
             assert!(sheet.show_drag_handle);
             assert!(sheet.drag_handle_width > 0.0 && sheet.drag_handle_height > 0.0);
         }
+    }
+
+    #[test]
+    fn floating_look_is_a_continuous_glass_surface_with_elevation() {
+        let g = Glass::light();
+        let env = environment(&g);
+        let look = g.floating(&env);
+
+        let Fill::Backdrop(backdrop) = look.surface().fill() else {
+            panic!("expected glass backdrop fill on floating look");
+        };
+        assert_eq!(backdrop.shader(), materials::GLASS_SHADER);
+        assert_eq!(
+            look.surface()
+                .get_content_effect()
+                .expect("floating glass content effect")
+                .shader(),
+            materials::GLASS_CONTENT_SHADER
+        );
+        let small = Rect::new(0.0, 0.0, 32.0, 32.0);
+        let large = Rect::new(0.0, 0.0, 200.0, 120.0);
+        let elevation = look.surface().get_elevation().target(&Inputs::at_rest(
+            large,
+            InteractionState::empty(),
+            &(),
+        ));
+        assert!(
+            elevation.key.sigma > 0.0,
+            "floating glass surface carries a drop shadow"
+        );
+        assert_eq!(look.minimum_width(), f64::from(button::MIN_HIT_SIDE));
+        assert_eq!(look.minimum_height(), f64::from(button::MIN_HIT_SIDE));
+
+        let corners = look.surface().shape().corners();
+        assert_eq!(
+            corners
+                .target(&Inputs::at_rest(small, InteractionState::empty(), &()))
+                .radii_on(small)
+                .top_left,
+            16.0
+        );
+        assert_eq!(
+            corners
+                .target(&Inputs::at_rest(large, InteractionState::empty(), &()))
+                .radii_on(large)
+                .top_left,
+            22.0
+        );
     }
 }

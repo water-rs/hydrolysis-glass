@@ -15,6 +15,7 @@
 mod background;
 mod button;
 mod card;
+mod floating;
 mod menu;
 mod menu_picker;
 mod navigation;
@@ -31,6 +32,7 @@ mod toggle;
 pub(super) use background::look as glass_background;
 pub(super) use button::look as button;
 pub(super) use card::look as card;
+pub(super) use floating::look as floating;
 pub(super) use menu::look as menu;
 pub(super) use menu_picker::look as menu_picker;
 pub(super) use navigation::look as navigation_bar;
