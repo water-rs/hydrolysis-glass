@@ -47,19 +47,23 @@ pub(super) use toggle::{checkbox, switch};
 use cherenkov_record::kurbo::{Line, Point, Rect, Size, Vec2};
 use cherenkov_record::{Draw as _, Live, Paint, ShapeData, Stroke, WorkingColor};
 use hydrolysis_style::theme::{
-    BadgeLook, BadgeMetrics, Chrome, CornerShape, Custom, Driven, FocusIndicator, HitRegion,
-    Inputs, ListControls, ListDividerMetrics, ListGestures, ListLook, ListMetrics, ListRowMetrics,
-    ListSectionMetrics, ListTrailingControlMetrics, Motion, PressFeedback, ScrollIndicatorLook,
-    StateLayer, Surface as ChromeSurface, TableLook, TableMetrics, Transition, ValueMotion,
+    BadgeLook, BadgeMetrics, Chrome, CornerShape, Custom, DialogLook, Driven, FocusIndicator,
+    HitRegion, Inputs, ListControls, ListDividerMetrics, ListGestures, ListLook, ListMetrics,
+    ListRowMetrics, ListSectionMetrics, ListTrailingControlMetrics, Motion, PressFeedback,
+    ScrollIndicatorLook, SheetLook, StateLayer, Surface as ChromeSurface, TableLook, TableMetrics,
+    Transition, ValueMotion,
 };
 use waterui::animation::Animation;
 use waterui::interaction::InteractionState;
+use waterui::layout::Alignment;
+use waterui::layout::padding::EdgeInsets;
 use waterui::text::font::{Font, Footnote};
 
 use super::Glass;
 use super::button::{CANCEL_DISTANCE, MIN_HIT_SIDE, Spring};
 use super::chrome::{self, FOCUS_RING_GAP, FOCUS_RING_WIDTH, HOVER_ALPHA, PRESSED_ALPHA};
 use super::palette::{Rgba, alpha, working};
+use super::surfaces::{CONTAINER_CORNER_RADIUS, SHEET_CORNER_RADIUS};
 use super::{DRAG_DURATION, PRESS_DURATION};
 
 /// Default opacity applied to disabled button labels over the background.
@@ -346,4 +350,64 @@ pub(super) fn table(glass: &Glass) -> TableLook {
             );
         }),
     )
+}
+
+/// Minimum width of a modal alert dialog card, in logical points.
+const DIALOG_MIN_WIDTH: f32 = 270.0;
+/// Maximum width of a modal alert dialog card, in logical points.
+const DIALOG_MAX_WIDTH: f32 = 440.0;
+/// Inner padding of a modal alert dialog card, in logical points.
+const DIALOG_CONTENT_PADDING: f32 = 20.0;
+/// Vertical spacing between dialog title, message, and actions, in logical points.
+const DIALOG_CONTENT_SPACING: f32 = 12.0;
+/// Extra vertical padding above the dialog action row, in logical points.
+const DIALOG_ACTIONS_TOP_PADDING: f32 = 8.0;
+/// Horizontal spacing between dialog action buttons, in logical points.
+const DIALOG_ACTIONS_SPACING: f32 = 8.0;
+
+/// Maximum width of a non-fullscreen modal sheet surface, in logical points.
+const SHEET_MAX_WIDTH: f32 = 640.0;
+/// Width of the modal sheet drag indicator pill, in logical points.
+const SHEET_DRAG_HANDLE_WIDTH: f32 = 36.0;
+/// Height of the modal sheet drag indicator pill, in logical points.
+const SHEET_DRAG_HANDLE_HEIGHT: f32 = 5.0;
+/// Vertical padding above and below the modal sheet drag indicator pill, in logical points.
+const SHEET_DRAG_HANDLE_VERTICAL_PADDING: f32 = 8.0;
+/// Alpha of the modal sheet drag indicator pill relative to the muted foreground role.
+const SHEET_DRAG_HANDLE_OPACITY: f32 = 0.4;
+
+/// The look of a self-drawn modal dialog card.
+pub(super) fn dialog(glass: &Glass) -> DialogLook {
+    let palette = glass.palette;
+    DialogLook {
+        container_color: Glass::color(palette.surface),
+        title_color: Glass::color(palette.foreground),
+        message_color: Glass::color(palette.muted_foreground),
+        primary_action_color: Glass::color(palette.accent),
+        destructive_action_color: Glass::color(palette.error),
+        default_action_color: Glass::color(palette.foreground),
+        corner_radius: CONTAINER_CORNER_RADIUS,
+        content_padding: EdgeInsets::all(DIALOG_CONTENT_PADDING),
+        min_width: DIALOG_MIN_WIDTH,
+        max_width: DIALOG_MAX_WIDTH,
+        content_spacing: DIALOG_CONTENT_SPACING,
+        actions_top_padding: DIALOG_ACTIONS_TOP_PADDING,
+        actions_spacing: DIALOG_ACTIONS_SPACING,
+        actions_alignment: Alignment::Trailing,
+    }
+}
+
+/// The look of a self-drawn modal sheet surface.
+pub(super) fn sheet(glass: &Glass) -> SheetLook {
+    let palette = glass.palette;
+    SheetLook {
+        container_color: Glass::color(palette.surface),
+        max_width: SHEET_MAX_WIDTH,
+        corner_radius: SHEET_CORNER_RADIUS,
+        show_drag_handle: true,
+        drag_handle_color: Glass::color(faded(palette.muted_foreground, SHEET_DRAG_HANDLE_OPACITY)),
+        drag_handle_width: SHEET_DRAG_HANDLE_WIDTH,
+        drag_handle_height: SHEET_DRAG_HANDLE_HEIGHT,
+        drag_handle_vertical_padding: SHEET_DRAG_HANDLE_VERTICAL_PADDING,
+    }
 }
