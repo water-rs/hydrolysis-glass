@@ -934,14 +934,16 @@ element's content (§2, item 5). A button is of one of three **kinds**:
   label.
 - **Bordered**: a non-glass button drawn as a continuous capsule whose
   composited fill over the page background renders as `(233, 233, 234)` over
-  white in light appearance (`(120, 120, 128)` at encoded-space alpha `0.16`)
-  and `(38, 38, 41)` over black in dark appearance (`(120, 120, 128)` at
-  encoded-space alpha `0.32`, or linear-space alpha `0.105` when compositing
-  in linear Display P3; halved while disabled) under the theme's state layer
-  and focus ring, with an accent label (or the tint when tinted), using the
-  same size-group typography and insets as the glass buttons [measured].
-  `Borderless` keeps `0.0` pointer hover while preserving `0.06` focus and
-  `0.12` press/drag layers so touch-opened menu rows carry no hover bar.
+  white in light appearance and `(38, 38, 41)` over black in dark appearance:
+  on a linear Display P3 compositing canvas, `(120, 120, 128)` uses straight
+  alpha `0.228` in light appearance and `0.105` in dark (equivalent to
+  encoded-space alpha `0.16` light and `0.32` dark; applying encoded-space
+  `0.32` on a linear canvas renders `(69, 69, 74)`), halved while disabled,
+  under the theme's state layer and focus ring, with an accent label (or the
+  tint when tinted), using the same size-group typography and insets as the
+  glass buttons [measured]. `Borderless` keeps `0.0` pointer hover while
+  preserving `0.06` focus and `0.12` press/drag layers so touch-opened menu
+  rows carry no hover bar.
 
 The tint defaults to the accent colour, (63, 143, 247) in dark appearance and
 (59, 134, 247) in light [measured].
@@ -1344,10 +1346,11 @@ width; the height and the parts are the same at every control size,
 mini through extra large [measured: simulator].
 
 - **Label spacing.** A labelled slider places its `Body` (`17.0` pt, §8.0)
-  label above the `31` pt slider row with `4.0` pt vertical spacing between
+  label above the `31` pt slider row with `8.0` pt vertical spacing between
   the label band and the slider row (in an `80` pt viewport with `12` pt
   padding, `"Volume"` ink sits at `y = 16.0..29.0` pt, the `24` pt knob at
-  `y = 41.0..65.0` pt, and the `6` pt track at `y = 49.5..55.5` pt) [measured].
+  `y = 41.0..65.0` pt, and the `6` pt track at `y = 49.5..55.5` pt; reducing
+  the gap to `4.0` pt shifts the track `2.5` pt too high) [measured].
 - **Corners.** The track and the knob are capsules, radius 3 and 12, with
   continuous corners [chosen: the 1/3 pt sampling does not separate
   circular from continuous corners].
@@ -1721,8 +1724,9 @@ highlight. At rest no part is glass.
   the container [chosen].
 - **Floating label.** Rests vertically centred in the container; while
   the field holds focus or content, it keeps its full `1.0` scale (`17` pt)
-  and moves `6.0` pt below the container's top edge (matching the vertical
-  inset so both lines sit centred at `y = 21.0` and `y = 46.0` pt) [measured].
+  and moves `8.0` pt below the container's top edge (aligning both lines at
+  `y = 21.0` and `y = 46.0` pt inside an `80` pt padded viewport; `6.0` pt
+  leaves both `2.0` pt high at `19.0` and `44.0` pt) [measured].
 - **Focus outlines.** While focused and enabled, an accent outline of
   width `1.5` pt sits flush inside the container's edge (`0.75` pt inset,
   corner radius `9.25` pt), and the theme's `2` pt accent focus ring sits
@@ -2105,10 +2109,12 @@ were measured from `2 px/pt` reference captures (`300 × 80` pt linear,
 
 - **Geometry.** Capsule bar `4.0` pt tall (default width `120.0` pt, radius
   `2.0` pt), filled from the leading edge to `v · width` (mirrored in RTL)
-  [measured]. Top label band `18.0` pt tall with `7.0` pt spacing above the
-  bar; bottom value label band with `8.0` pt spacing below the bar (`"Please
-  wait..."` at `y = 14.5..28.0` pt, bar at `y = 38.0..42.0` pt, `"65%"` at
-  `y = 51.5..64.5` pt in a `300 × 80` pt frame) [measured].
+  [measured]. Top label band `20.0` pt tall (matching `17.0` pt `Body`) with
+  `7.0` pt spacing above the bar; bottom value label band with `7.0` pt
+  spacing below the bar (`"Please wait..."` at `y = 14.5..28.0` pt, bar at
+  `y = 38.0..42.0` pt, `"65%"` at `y = 51.5..64.5` pt in a `300 × 80` pt
+  frame; increasing bottom spacing to `8.0` pt shifts the `4` pt bar up by
+  `0.5` pt) [measured].
 - **Colours (encoded space).** Unfilled track `(120, 120, 128)` at alpha
   `0.17` in light appearance (`(232, 232, 233)` over white) and alpha `0.34`
   in dark appearance (`(41, 41, 43)` over black); filled bar in opaque accent
@@ -2125,10 +2131,10 @@ were measured from `2 px/pt` reference captures (`300 × 80` pt linear,
   (`Cap::Butt`) so the start edge terminates cleanly at `−π/2` without
   overhanging counter-clockwise into the fourth quadrant [measured: at
   `v = 0.65`, blue spans `0°..234°` clockwise with zero blue at `350°`].
-  Top label spacing `7.0` pt above the ring; bottom value label spacing
-  `8.0` pt below (`"Please wait..."` at `y = 6.5..20.0` pt, ring at
-  `y = 30.0..50.0` pt, `"65%"` at `y = 59.5..72.5` pt in a `160 × 80` pt
-  frame) [measured].
+  Top label band `20.0` pt tall with `7.0` pt spacing above the ring; bottom
+  value label spacing `7.0` pt below (`"Please wait..."` at `y = 6.5..20.0` pt,
+  ring at `y = 30.0..50.0` pt, `"65%"` at `y = 59.5..72.5` pt in a `160 × 80`
+  pt frame) [measured].
 - **Colours (encoded space).** Full unfilled ring track `(232, 232, 232)` in
   light appearance and `(42, 42, 44)` in dark appearance; active arc in opaque
   accent [measured].
