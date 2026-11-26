@@ -14,11 +14,11 @@ use hydrolysis_style::theme::{
     Custom, DragMapping, Driven, DrivenSet, HitRegion, Inputs, Knob, Motion, SliderLayout,
     SliderLook, SliderSpec, Transition, ValueIndicator, ValueMotion,
 };
-use waterui::animation::Animation;
-use waterui::interaction::InteractionState;
-use waterui::text::font::{Font, Footnote};
-use waterui::theme::Tint;
+use waterui_controls::theme::Tint;
 use waterui_core::Environment;
+use waterui_core::animation::Animation;
+use waterui_interaction::interaction::InteractionState;
+use waterui_text::font::{Font, Footnote};
 
 use super::super::Glass;
 use super::super::PRESS_DURATION;

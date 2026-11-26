@@ -4,12 +4,12 @@
 use core::time::Duration;
 
 use hydrolysis_style::theme::SnackbarLook;
-use waterui::animation::Animation;
-use waterui::background::Glass as GlassBackground;
-use waterui::color::Color;
-use waterui::layout::padding::EdgeInsets;
-use waterui::text::font::{Body, Font, Headline};
-use waterui::theme::color::{Accent, Foreground, Surface};
+use waterui_controls::theme::color::{Accent, Foreground, Surface};
+use waterui_core::animation::Animation;
+use waterui_graphics::color::Color;
+use waterui_layout::padding::EdgeInsets;
+use waterui_shape::background::Glass as GlassBackground;
+use waterui_text::font::{Body, Font, Headline};
 
 const HORIZONTAL_PADDING: f32 = 20.0;
 const VERTICAL_PADDING: f32 = 14.0;

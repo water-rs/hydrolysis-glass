@@ -10,9 +10,9 @@ use hydrolysis_style::theme::{
     Backdrop, CheckboxLook, Custom, Driven, HitRegion, Inputs, Motion, SwitchDrag, SwitchLook,
     ToggleBackdrop, ToggleControl, ToggleSpec, Transition, ValueMotion,
 };
-use waterui::interaction::InteractionState;
-use waterui::theme::Tint;
+use waterui_controls::theme::Tint;
 use waterui_core::Environment;
+use waterui_interaction::interaction::InteractionState;
 
 use super::super::Glass;
 use super::super::chrome::{FOCUS_RING_GAP, FOCUS_RING_WIDTH};

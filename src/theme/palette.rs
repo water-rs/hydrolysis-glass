@@ -5,8 +5,8 @@
 //! toggles, tracks, dividers, menus — and the tint a prominent capsule folds
 //! into its body.
 
-use waterui::color::{ColorScheme, P3};
 use waterui_graphics::WorkingColor;
+use waterui_graphics::color::{ColorScheme, P3};
 
 use crate::material::recipe::Appearance;
 

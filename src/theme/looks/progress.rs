@@ -18,8 +18,8 @@ use hydrolysis_style::theme::{
     Custom, Driven, DrivenSet, IndicatorLook, Inputs, LinearProgressLook, Motion, ProgressControl,
     ProgressSpec, ValueMotion,
 };
-use waterui::animation::Animation;
 use waterui_core::Environment;
+use waterui_core::animation::Animation;
 
 use crate::material::recipe::Appearance;
 
@@ -367,7 +367,7 @@ fn loading_part(
 mod tests {
     use hydrolysis_style::Style as _;
     use hydrolysis_style::theme::SpecTint;
-    use waterui::component::progress::ProgressStyle;
+    use waterui_controls::progress::ProgressStyle;
     use waterui_core::layout::LayoutDirection;
 
     use super::*;

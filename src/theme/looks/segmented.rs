@@ -13,10 +13,10 @@ use hydrolysis_style::theme::{
     Custom, Driven, DrivenSet, HitRegion, Inputs, Motion, Segment, SegmentLabel, SegmentedDrag,
     SegmentedLayout, SegmentedLook, SegmentedSpec, SegmentedValue, Transition, ValueMotion,
 };
-use waterui::animation::Animation;
-use waterui::interaction::InteractionState;
-use waterui::text::font::Font;
 use waterui_core::Environment;
+use waterui_core::animation::Animation;
+use waterui_interaction::interaction::InteractionState;
+use waterui_text::font::Font;
 
 use super::super::Glass;
 use super::super::chrome::{FOCUS_RING_GAP, FOCUS_RING_WIDTH};

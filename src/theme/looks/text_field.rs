@@ -15,10 +15,10 @@ use hydrolysis_style::theme::{
     Caret, Chrome, CornerShape, Custom, Driven, FloatingLabel, InputFieldMetrics, Inputs, Label,
     Surface as ChromeSurface, TextCaretMotion, TextFieldLook, TextFieldSpec, ValueMotion,
 };
-use waterui::animation::Animation;
-use waterui::color::Color;
-use waterui::text::font::{Body, Font, FontWeight};
 use waterui_core::Environment;
+use waterui_core::animation::Animation;
+use waterui_graphics::color::Color;
+use waterui_text::font::{Body, Font, FontWeight};
 
 use super::super::Glass;
 use super::super::PRESS_DURATION;
