@@ -14,8 +14,8 @@ pub const BUTTON_PRESS_SCALE_GAIN: f32 = 0.245;
 /// Maximum half-axis growth during button press, pt (`Delta_max = 10.0 pt`).
 pub const PRESS_MAX_HALF_AXIS_GROWTH: f32 = 10.0;
 
-/// Press-scale gain for toggle and slider lens thumbs (`1 + 0.35 * p`).
-pub const THUMB_PRESS_SCALE_GAIN: f32 = 0.35;
+/// Press-scale gain for toggle and slider lens thumbs (`1 + 0.60 * p`, §8.2, §8.3, §9.2).
+pub const THUMB_PRESS_SCALE_GAIN: f32 = 0.60;
 
 /// Press-scale gain for segmented selection pills (`1 + 0.15 * p`).
 pub const SEGMENTED_PRESS_SCALE_GAIN: f32 = 0.15;
@@ -81,6 +81,21 @@ impl Spring {
     /// Popover / menu vertical dismissal spring (`T_r = 0.807 s`, `zeta = 0.756`,
     /// lagging width by ~45 ms during contraction).
     pub const POPOVER_DISMISS_VERTICAL: Self = Self::new(0.807, 0.756);
+
+    /// Popover / menu corner-radius morph spring (`T_r = 0.311 s`, `zeta = 0.750`, §9.2).
+    pub const POPOVER_RADIUS: Self = Self::new(0.311, 0.750);
+
+    /// Modal sheet presentation spring (`T_r = 0.400 s`, `zeta = 0.850`, ~0.6% overshoot,
+    /// §8.10, §9.3). **[chosen]**
+    pub const SHEET_PRESENT: Self = Self::new(0.400, 0.850);
+
+    /// Modal sheet dismissal spring (`T_r = 0.350 s`, `zeta = 1.000`, critically damped,
+    /// §8.10, §9.3). **[chosen]**
+    pub const SHEET_DISMISS: Self = Self::new(0.350, 1.000);
+
+    /// Modal sheet detent snap spring (`T_r = 0.380 s`, `zeta = 0.850`, §8.10, §9.3).
+    /// **[chosen]**
+    pub const SHEET_DETENT: Self = Self::new(0.380, 0.850);
 
     /// Constructs a unit-mass spring from its response period (seconds) and damping ratio.
     #[must_use]
@@ -296,10 +311,20 @@ pub fn axis_press_scale(progress: f32, extent: f32, gain: f32) -> f32 {
     delta_ratio.min(max_ratio).mul_add(1.0, 1.0).max(0.0)
 }
 
-/// Uniform press scale for toggle and slider glass lens thumbs (`1 + 0.35 * p`).
+/// Uniform press scale for toggle and slider glass lens thumbs (`1 + 0.60 * p`, §8.2, §8.3).
 #[must_use]
 pub const fn thumb_press_scale(progress: f32) -> f32 {
     THUMB_PRESS_SCALE_GAIN.mul_add(progress, 1.0)
+}
+
+/// Rubber-band drag resistance past the maximum sheet detent (§8.10):
+/// `12 * delta / (delta + 24)` pt for positive overscroll `delta`, `0` otherwise. **[chosen]**
+#[must_use]
+pub fn sheet_rubber_band_offset(overscroll: f32) -> f32 {
+    if overscroll <= 0.0 || !overscroll.is_finite() {
+        return 0.0;
+    }
+    (12.0 * overscroll) / (overscroll + 24.0)
 }
 
 /// Uniform press scale for segmented control selection pills (`1 + 0.15 * p`).

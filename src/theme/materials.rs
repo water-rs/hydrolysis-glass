@@ -98,8 +98,8 @@ const REACH_PX_PER_PT: f32 = 4.0;
 const PRIMARY_LOBE_PT: f32 = 60.0;
 /// The largest blur radius, at gain 1 (§4.3).
 const LARGEST_BLUR_RADIUS: f32 = 5.0;
-/// The haze's largest radius (§4.4).
-const LARGEST_HAZE_RADIUS: f32 = 5.0;
+/// The haze's largest radius (§4.4, §5.1).
+const LARGEST_HAZE_RADIUS: f32 = 8.0;
 /// The ambient pickup's lobe and blur radius, `0.35·m` at the
 /// measured-range bound `m = 200.33` (§4.7): pt for the lobe, recipe
 /// capture texels for the blur.
@@ -693,7 +693,7 @@ const BORDER_ROW: [f32; 5] = [0.4, FRAC_PI_2, 0.533, -0.533, -0.3];
 /// The highlight terms the shader folds in, shared by every recipe: inner
 /// fade, both gains, the knee, both bearings, and the glow's gain, width
 /// and aperture multipliers. Their colours are [`HIGHLIGHT_COLOUR`].
-const HIGHLIGHT_TERMS: [f32; 9] = [0.75, 0.5, 0.5, 0.5, 0.0, PI, 0.14, 6.0, 0.65];
+const HIGHLIGHT_TERMS: [f32; 9] = [0.75, 0.5, 0.5, 0.5, 0.0, PI, 0.15, 8.0, 0.65];
 
 /// Both highlight lights' colour, folded into the shader: opaque white.
 const HIGHLIGHT_COLOUR: [f32; 4] = [1.0; 4];

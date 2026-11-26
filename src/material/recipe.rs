@@ -321,11 +321,34 @@ fn ramp_144(m: f32) -> f32 {
     ((m - 56.0) / 144.0).clamp(0.0, 1.0)
 }
 
-/// §5.1 / §12: the dark appearance's luminance limit — 0.85 at `s = 0.0`,
-/// 0.75 at `s = 0.5`, dropping to 0.55 at `s = 1.0`.
+/// §5.1 / §5.4: the dark appearance's luminance limit by size and translucency.
+/// `0.6` at `m <= 60`, `0.54 -> 0.5 -> 0.5` at `m = 80`, `0.45 -> 0.35 -> 0.35` at `m = 200.33`.
 #[must_use]
-fn luminance_limit(_m: f32, s: f32) -> f32 {
-    translucency_row(0.85, 0.75, 0.55, s)
+fn luminance_limit_dark(m: f32, s: f32) -> f32 {
+    size_table(
+        m,
+        0.6,
+        translucency_row(0.54, 0.5, 0.5, s),
+        translucency_row(0.45, 0.35, 0.35, s),
+    )
+}
+
+/// §5.1 / §5.3: the light appearance's luminance limit by size (`0.825` at `m <= 60`,
+/// `1.0` at `m = 200.33`).
+#[must_use]
+fn luminance_limit_light(m: f32) -> f32 {
+    mix(0.825, 1.0, card_blend(m))
+}
+
+/// Interpolation weight from `m <= 60` controls (`0.0`) to `m = 200.33` large cards (`1.0`).
+#[must_use]
+fn card_blend(m: f32) -> f32 {
+    ((m - 60.0) / 140.33).clamp(0.0, 1.0)
+}
+
+#[must_use]
+fn mix(a: f32, b: f32, t: f32) -> f32 {
+    (b - a).mul_add(t, a)
 }
 
 /// The §4.6 grade: a luma floor and ceiling and a chroma scale, applied
@@ -503,8 +526,8 @@ impl Highlight {
             first_bearing: 0.0,
             second_bearing: PI,
             aperture: size_table(m, 4.0 * PI / 9.0, 4.0 * PI / 9.0, FRAC_PI_2),
-            glow_gain: 0.14,
-            glow_width: 6.0,
+            glow_gain: 0.15,
+            glow_width: 8.0,
             glow_aperture: 0.65,
             first_colour: [1.0; 4],
             second_colour: [1.0; 4],
@@ -749,42 +772,52 @@ impl Recipe {
         self.blur_radius * self.blur_gain(d)
     }
 
-    /// §4.6 / §5.1 regular grade and wash for `dark` and translucency `s`.
-    fn regular_grade_wash(dark: bool, s: f32) -> (Grade, [f32; 3], f32) {
+    /// §4.6 / §5.3 / §5.4 regular grade and wash for `m`, `dark`, and translucency `s`.
+    fn regular_grade_wash(m: f32, dark: bool, s: f32) -> (Grade, [f32; 3], f32) {
+        let t = card_blend(m);
         if dark {
             let wash = if s <= 0.5 {
-                [0.006; 3]
+                [0.0; 3]
             } else {
-                let t = 2.0f32.mul_add(s, -1.0);
-                [0.006f32.mul_add(1.0 - t, 0.125 * t); 3]
+                let u = 2.0f32.mul_add(s, -1.0);
+                [0.125 * u; 3]
             };
-            (
-                Grade::new(0.15, 1.02, 1.20),
-                wash,
-                translucency_row(0.0, 0.04, 0.5, s),
-            )
+            let grade = Grade::new(0.125, mix(1.160, 1.125, t), mix(1.25, 1.30, t));
+            let wash_alpha_mid = mix(0.02, 0.0, t);
+            (grade, wash, translucency_row(0.0, wash_alpha_mid, 0.5, s))
         } else {
+            let grade = Grade::new(mix(0.350, 0.40, t), mix(1.100, 1.03, t), mix(1.45, 1.20, t));
+            let wash_alpha_mid = mix(0.25, 0.20, t);
             (
-                Grade::new(0.19, 1.16, 1.57),
-                [0.996; 3],
-                translucency_row(0.0, 0.20, 0.5, s),
+                grade,
+                [1.0; 3],
+                translucency_row(0.0, wash_alpha_mid, 0.5, s),
             )
         }
     }
 
-    /// §4.4 / §12 regular haze weights `(min_weight, max_weight, mix)` for `dark` and `s`.
-    fn regular_haze_weights(dark: bool, s: f32) -> (f32, f32, f32) {
+    /// §4.4 / §5.3 / §5.4 regular haze weights `(min_weight, max_weight, mix)` for `m`, `dark`, and `s`.
+    fn regular_haze_weights(m: f32, dark: bool, s: f32) -> (f32, f32, f32) {
+        let t = card_blend(m);
         if dark {
+            let weight_ctrl = translucency_row(0.30, 0.58, 0.90, s);
+            let weight_card = translucency_row(0.675, 0.90, 0.90, s);
+            let blend_ctrl = translucency_row(0.0, 0.08, 0.50, s);
+            let blend_card = translucency_row(0.0, 0.50, 1.0, s);
             (
-                translucency_row(0.30, 0.58, 0.90, s),
+                mix(weight_ctrl, weight_card, t),
                 0.0,
-                translucency_row(0.0, 0.08, 0.50, s),
+                mix(blend_ctrl, blend_card, t),
             )
         } else {
+            let weight_ctrl = translucency_row(0.35, 0.66, 0.90, s);
+            let weight_card = translucency_row(0.675, 0.90, 0.90, s);
+            let blend_ctrl = translucency_row(0.0, 0.19, 0.55, s);
+            let blend_card = translucency_row(0.0, 0.50, 1.0, s);
             (
                 0.0,
-                translucency_row(0.35, 0.66, 0.90, s),
-                translucency_row(0.0, 0.19, 0.55, s),
+                mix(weight_ctrl, weight_card, t),
+                mix(blend_ctrl, blend_card, t),
             )
         }
     }
@@ -798,8 +831,8 @@ impl Recipe {
         } else {
             switching_law(m, |m| 0.5 * ramp_144(m))
         };
-        let (grade, wash, wash_alpha) = Self::regular_grade_wash(dark, s);
-        let (haze_min_weight, haze_max_weight, haze_mix) = Self::regular_haze_weights(dark, s);
+        let (grade, wash, wash_alpha) = Self::regular_grade_wash(m, dark, s);
+        let (haze_min_weight, haze_max_weight, haze_mix) = Self::regular_haze_weights(m, dark, s);
         Self {
             capture_scale: if m < 140.0 {
                 translucency_row(0.5, 0.5, 0.125, s)
@@ -816,9 +849,9 @@ impl Recipe {
             rim_ramp: [-1.0, 0.0],
             rim_mix: 0.6,
             luminance_limit: if dark {
-                luminance_limit(m, s)
+                luminance_limit_dark(m, s)
             } else {
-                translucency_row(0.90, 0.81, 0.81, s)
+                luminance_limit_light(m)
             },
             grade,
             wash,
@@ -835,7 +868,7 @@ impl Recipe {
                 Grade::new(0.9, 1.0, 1.2)
             },
             ambient_favours_light: !dark,
-            haze_radius: 5.0,
+            haze_radius: 8.0,
             haze_min_weight,
             haze_max_weight,
             haze_mix,
@@ -906,7 +939,7 @@ impl Recipe {
             ambient_ramp: [1.0, 0.0],
             ambient_grade: Grade::new(0.75, 1.0, 1.2),
             ambient_favours_light: true,
-            haze_radius: 5.0 * translucency_row(0.0, 0.0, 1.0, s),
+            haze_radius: 8.0 * translucency_row(0.0, 0.0, 1.0, s),
             haze_min_weight: 0.0,
             haze_max_weight: 0.0,
             haze_mix: translucency_row(0.0, 0.0, 1.0, s),
@@ -1048,39 +1081,67 @@ mod tests {
 
     #[test]
     fn regular_grade_and_wash() {
-        for (r, dark) in [
-            (regular_columns(Appearance::Dark), true),
-            (regular_columns(Appearance::Light), false),
-        ]
-        .iter()
-        .flat_map(|(rs, d)| rs.iter().map(move |r| (r, *d)))
-        {
-            let (b, w, s) = (r.grade.floor, r.grade.ceiling, r.grade.chroma);
-            if dark {
-                assert_eq!([b, w, s], [0.15, 1.02, 1.20]);
-                assert_eq!(r.wash, [0.006; 3]);
-                assert_eq!(r.wash_alpha, 0.04);
-            } else {
-                assert_eq!([b, w, s], [0.19, 1.16, 1.57]);
-                assert_eq!(r.wash, [0.996; 3]);
-                assert_eq!(r.wash_alpha, 0.20);
-            }
-            assert_eq!(r.grade_mix, 1.0);
+        // Large card (`m = 200.33`, §5.3).
+        let dark_card = regular(200.33, Appearance::Dark);
+        assert_eq!(
+            [
+                dark_card.grade.floor,
+                dark_card.grade.ceiling,
+                dark_card.grade.chroma
+            ],
+            [0.125, 1.125, 1.30]
+        );
+        assert_eq!(dark_card.wash, [0.0; 3]);
+        assert_eq!(dark_card.wash_alpha, 0.0);
+        assert_eq!(dark_card.grade_mix, 1.0);
+
+        let light_card = regular(200.33, Appearance::Light);
+        assert_eq!(
+            [
+                light_card.grade.floor,
+                light_card.grade.ceiling,
+                light_card.grade.chroma
+            ],
+            [0.40, 1.03, 1.20]
+        );
+        assert_eq!(light_card.wash, [1.0; 3]);
+        assert_eq!(light_card.wash_alpha, 0.20);
+        assert_eq!(light_card.grade_mix, 1.0);
+
+        // Controls (`m <= 60`, §5.3).
+        for m in [34.33, 40.0, 55.67, 60.0] {
+            let dark = regular(m, Appearance::Dark);
+            assert_eq!(
+                [dark.grade.floor, dark.grade.ceiling, dark.grade.chroma],
+                [0.125, 1.160, 1.25]
+            );
+            assert_eq!(dark.wash, [0.0; 3]);
+            assert_eq!(dark.wash_alpha, 0.02);
+
+            let light = regular(m, Appearance::Light);
+            assert_eq!(
+                [light.grade.floor, light.grade.ceiling, light.grade.chroma],
+                [0.350, 1.100, 1.45]
+            );
+            assert_eq!(light.wash, [1.0; 3]);
+            assert_eq!(light.wash_alpha, 0.25);
         }
     }
 
     #[test]
     fn regular_luminance_limit() {
-        assert!(
-            regular_columns(Appearance::Dark)
-                .iter()
-                .all(|r| (r.luminance_limit - 0.75).abs() < 1e-6)
-        );
-        assert!(
-            regular_columns(Appearance::Light)
-                .iter()
-                .all(|r| (r.luminance_limit - 0.81).abs() < 1e-6)
-        );
+        let dark = regular_columns(Appearance::Dark);
+        assert!((dark[0].luminance_limit - 0.35).abs() < 1e-6);
+        assert!((dark[1].luminance_limit - 0.50).abs() < 1e-6);
+        for r in &dark[2..] {
+            assert!((r.luminance_limit - 0.60).abs() < 1e-6);
+        }
+
+        let light = regular_columns(Appearance::Light);
+        assert!((light[0].luminance_limit - 1.0).abs() < 1e-6);
+        for r in &light[2..] {
+            assert!((r.luminance_limit - 0.825).abs() < 1e-6);
+        }
     }
 
     #[test]
@@ -1117,19 +1178,29 @@ mod tests {
 
     #[test]
     fn regular_haze() {
-        for r in &regular_columns(Appearance::Dark) {
-            assert_eq!(r.haze_radius, 5.0);
-            assert!((haze_sigma(r.haze_radius) - 10.0).abs() < 1e-6);
-            assert_eq!(r.haze_min_weight, 0.58);
+        let dark = regular_columns(Appearance::Dark);
+        assert_eq!(dark[0].haze_radius, 8.0);
+        assert!((haze_sigma(dark[0].haze_radius) - 16.0).abs() < 1e-6);
+        assert!((dark[0].haze_min_weight - 0.90).abs() < 1e-6);
+        assert_eq!(dark[0].haze_max_weight, 0.0);
+        assert!((dark[0].haze_mix - 0.50).abs() < 1e-6);
+        for r in &dark[2..] {
+            assert_eq!(r.haze_radius, 8.0);
+            assert!((r.haze_min_weight - 0.58).abs() < 1e-6);
             assert_eq!(r.haze_max_weight, 0.0);
-            assert_eq!(r.haze_mix, 0.08);
+            assert!((r.haze_mix - 0.08).abs() < 1e-6);
         }
-        for r in &regular_columns(Appearance::Light) {
-            assert_eq!(r.haze_radius, 5.0);
-            assert!((haze_sigma(r.haze_radius) - 10.0).abs() < 1e-6);
+
+        let light = regular_columns(Appearance::Light);
+        assert_eq!(light[0].haze_radius, 8.0);
+        assert_eq!(light[0].haze_min_weight, 0.0);
+        assert!((light[0].haze_max_weight - 0.90).abs() < 1e-6);
+        assert!((light[0].haze_mix - 0.50).abs() < 1e-6);
+        for r in &light[2..] {
+            assert_eq!(r.haze_radius, 8.0);
             assert_eq!(r.haze_min_weight, 0.0);
-            assert_eq!(r.haze_max_weight, 0.66);
-            assert_eq!(r.haze_mix, 0.19);
+            assert!((r.haze_max_weight - 0.66).abs() < 1e-6);
+            assert!((r.haze_mix - 0.19).abs() < 1e-6);
         }
     }
 
@@ -1198,8 +1269,8 @@ mod tests {
             assert_eq!(h.inner_fade, 0.75);
             assert_eq!(h.first_colour, [1.0; 4]);
             assert_eq!(h.second_colour, [1.0; 4]);
-            assert_eq!(h.glow_gain, 0.14);
-            assert_eq!(h.glow_width, 6.0);
+            assert_eq!(h.glow_gain, 0.15);
+            assert_eq!(h.glow_width, 8.0);
             assert_eq!(h.glow_aperture, 0.65);
         }
         assert!((d[0].highlight.aperture - FRAC_PI_2).abs() < 1e-6);
@@ -1272,21 +1343,21 @@ mod tests {
 
     #[test]
     fn translucency_table() {
-        // Regular wash, dark: [0.006]@0 → [0.006]@0.04 → [0.125]@0.5.
+        // Regular wash, dark large card (§5.4): black@0 -> black@0 -> grey 0.125@0.5.
         let f = |s| {
             let r = regular_s(200.33, s);
             (r.wash, r.wash_alpha)
         };
         let (rgb0, a0) = f(0.0);
-        assert_eq!(rgb0, [0.006; 3]);
+        assert_eq!(rgb0, [0.0; 3]);
         assert_eq!(a0, 0.0);
         let (rgb1, a1) = f(0.5);
-        assert_eq!(rgb1, [0.006; 3]);
-        assert_eq!(a1, 0.04);
+        assert_eq!(rgb1, [0.0; 3]);
+        assert_eq!(a1, 0.0);
         let (rgb2, a2) = f(1.0);
         assert_eq!(rgb2, [0.125; 3]);
         assert_eq!(a2, 0.5);
-        // Regular wash, light: white(0.996)@0 → 0.20 → 0.5.
+        // Regular wash, light large card: white@0 -> 0.20 -> 0.5.
         let light = |s| {
             Recipe::for_size(
                 200.33,
@@ -1315,11 +1386,11 @@ mod tests {
             &[0.333, 0.25, 0.125, 0.5, 0.5, 0.125],
             1e-3,
         );
-        // Haze min weight (dark) / max weight (light), and mix (§12).
+        // Haze min weight (dark) / max weight (light), and mix (§5.4 large card).
         let min_weight = |s| regular_s(200.33, s).haze_min_weight;
         assert_close(
             &[min_weight(0.0), min_weight(0.5), min_weight(1.0)],
-            &[0.30, 0.58, 0.90],
+            &[0.675, 0.90, 0.90],
             1e-6,
         );
         let max_weight = |s| {
@@ -1333,13 +1404,13 @@ mod tests {
         };
         assert_close(
             &[max_weight(0.0), max_weight(0.5), max_weight(1.0)],
-            &[0.35, 0.66, 0.90],
+            &[0.675, 0.90, 0.90],
             1e-6,
         );
         let dark_haze = |s| regular_s(200.33, s).haze_mix;
         assert_close(
             &[dark_haze(0.0), dark_haze(0.5), dark_haze(1.0)],
-            &[0.0, 0.08, 0.50],
+            &[0.0, 0.50, 1.0],
             1e-6,
         );
         let light_haze = |s| {
@@ -1353,7 +1424,7 @@ mod tests {
         };
         assert_close(
             &[light_haze(0.0), light_haze(0.5), light_haze(1.0)],
-            &[0.0, 0.19, 0.55],
+            &[0.0, 0.50, 1.0],
             1e-6,
         );
         regular_luminance_limit_translucency();
@@ -1361,42 +1432,40 @@ mod tests {
     }
 
     fn regular_luminance_limit_translucency() {
-        // Luminance limits (§12): dark 0.85@0 -> 0.75@0.5 -> 0.55@1.0;
-        // light 0.90@0 -> 0.81@0.5 -> 0.81@1.0.
+        // Luminance limits (§5.1, §5.4): dark by size, light 0.825 at m <= 60 / 1.0 at m = 200.33.
         let lim = |m, s| regular_s(m, s).luminance_limit;
         assert_close(
             &[lim(200.33, 0.0), lim(200.33, 0.5), lim(200.33, 1.0)],
-            &[0.85, 0.75, 0.55],
+            &[0.45, 0.35, 0.35],
             1e-6,
         );
         assert_close(
             &[lim(80.0, 0.0), lim(80.0, 0.5), lim(80.0, 1.0)],
-            &[0.85, 0.75, 0.55],
+            &[0.54, 0.50, 0.50],
             1e-6,
         );
         assert_close(
             &[lim(60.0, 0.0), lim(60.0, 0.5), lim(60.0, 1.0)],
-            &[0.85, 0.75, 0.55],
+            &[0.60, 0.60, 0.60],
             1e-6,
         );
-        let light_lim = |s| {
-            Recipe::for_size(
-                80.0,
-                Family::Regular,
-                Appearance::Light,
-                Translucency::new(s),
-            )
-            .luminance_limit
+        let light_lim = |m, s| {
+            Recipe::for_size(m, Family::Regular, Appearance::Light, Translucency::new(s))
+                .luminance_limit
         };
         assert_close(
-            &[light_lim(0.0), light_lim(0.5), light_lim(1.0)],
-            &[0.90, 0.81, 0.81],
+            &[
+                light_lim(60.0, 0.5),
+                light_lim(200.33, 0.5),
+                light_lim(200.33, 1.0),
+            ],
+            &[0.825, 1.0, 1.0],
             1e-6,
         );
     }
 
     fn clear_translucency() {
-        // Clear: blur radius, gains, haze radius/mix.
+        // Clear: blur radius, gains, haze radius/mix (§5.4).
         assert_close(
             &[
                 clear_s(80.0, 0.0).blur_radius,
@@ -1415,7 +1484,7 @@ mod tests {
                 clear_s(80.0, 0.5).haze_radius,
                 clear_s(80.0, 1.0).haze_radius,
             ],
-            &[0.0, 0.0, 5.0],
+            &[0.0, 0.0, 8.0],
             1e-6,
         );
         assert_close(
@@ -1432,10 +1501,10 @@ mod tests {
 
     #[test]
     fn translucency_midpoints_lie_on_the_linear_rows() {
-        // The observations at 0.25 and 0.75 (§12 piecewise-linear trow).
+        // Observations at 0.25 and 0.75 (§5.4 piecewise-linear rows on large card).
         let dark_haze = |s| regular_s(200.33, s).haze_mix;
-        assert!((dark_haze(0.25) - 0.04).abs() < 1e-6);
-        assert!((dark_haze(0.75) - 0.29).abs() < 1e-6);
+        assert!((dark_haze(0.25) - 0.25).abs() < 1e-6);
+        assert!((dark_haze(0.75) - 0.75).abs() < 1e-6);
         let light_haze = |s| {
             Recipe::for_size(
                 200.33,
@@ -1445,11 +1514,11 @@ mod tests {
             )
             .haze_mix
         };
-        assert!((light_haze(0.25) - 0.095).abs() < 1e-6);
-        assert!((light_haze(0.75) - 0.37).abs() < 1e-6);
+        assert!((light_haze(0.25) - 0.25).abs() < 1e-6);
+        assert!((light_haze(0.75) - 0.75).abs() < 1e-6);
         let min_weight = |s| regular_s(200.33, s).haze_min_weight;
-        assert!((min_weight(0.25) - 0.44).abs() < 1e-6);
-        assert!((min_weight(0.75) - 0.74).abs() < 1e-6);
+        assert!((min_weight(0.25) - 0.7875).abs() < 1e-6);
+        assert!((min_weight(0.75) - 0.90).abs() < 1e-6);
         let max_weight = |s| {
             Recipe::for_size(
                 200.33,
@@ -1459,22 +1528,11 @@ mod tests {
             )
             .haze_max_weight
         };
-        assert!((max_weight(0.25) - 0.505).abs() < 1e-6);
-        assert!((max_weight(0.75) - 0.78).abs() < 1e-6);
+        assert!((max_weight(0.25) - 0.7875).abs() < 1e-6);
+        assert!((max_weight(0.75) - 0.90).abs() < 1e-6);
         let lim_dark = |s| regular_s(200.33, s).luminance_limit;
-        assert!((lim_dark(0.25) - 0.80).abs() < 1e-6);
-        assert!((lim_dark(0.75) - 0.65).abs() < 1e-6);
-        let lim_light = |s| {
-            Recipe::for_size(
-                200.33,
-                Family::Regular,
-                Appearance::Light,
-                Translucency::new(s),
-            )
-            .luminance_limit
-        };
-        assert!((lim_light(0.25) - 0.855).abs() < 1e-6);
-        assert!((lim_light(0.75) - 0.81).abs() < 1e-6);
+        assert!((lim_dark(0.25) - 0.40).abs() < 1e-6);
+        assert!((lim_dark(0.75) - 0.35).abs() < 1e-6);
         assert!((clear_s(80.0, 0.25).blur_radius - 0.375).abs() < 1e-6);
         assert!((clear_s(80.0, 0.75).blur_radius - 0.75).abs() < 1e-6);
         let wash_light = |s| {

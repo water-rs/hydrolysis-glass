@@ -16,12 +16,12 @@ use super::{hit_region, state_chrome};
 /// Inline navigation bar title size, pt.
 const INLINE_TITLE_SIZE: f32 = 17.0;
 
-/// The measures of the navigation chrome: 44 pt inline bars and 96 pt
-/// medium and large ones, titles and items inset 16 pt and 8 pt apart, a
-/// 56 pt search field (§8.6) and a 44 pt back button 8 pt from the leading
-/// edge (§8.8, Geometry).
+/// The measures of the navigation chrome: 64 pt standalone automatic top bars,
+/// 44 pt inline bars, and 96 pt medium/large ones, titles and items inset 16 pt
+/// and 8 pt apart, a 56 pt search field (§8.6) and a 44 pt back button 8 pt
+/// from the leading edge (§8.8, Geometry).
 const METRICS: NavigationMetrics = NavigationMetrics {
-    automatic_bar_height: 44.0,
+    automatic_bar_height: 64.0,
     inline_bar_height: 44.0,
     medium_bar_height: 96.0,
     large_bar_height: 96.0,

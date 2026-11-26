@@ -44,6 +44,8 @@ pub struct Palette {
     pub track: Rgba,
     /// The knob of a toggle switch and the handle of a slider.
     pub knob: Rgba,
+    /// Modal scrim behind sheets and dialogs (§8.0, §8.10).
+    pub scrim: Rgba,
 }
 
 impl Palette {
@@ -63,6 +65,7 @@ impl Palette {
         state_layer: [0.0, 0.0, 0.0, 1.0],
         track: [0.471, 0.471, 0.502, 0.16],
         knob: [1.0, 1.0, 1.0, 1.0],
+        scrim: [0.0, 0.0, 0.0, 0.32],
     };
 
     /// Roles for the dark appearance.
@@ -81,6 +84,7 @@ impl Palette {
         state_layer: [1.0, 1.0, 1.0, 1.0],
         track: [0.471, 0.471, 0.502, 0.32],
         knob: [1.0, 1.0, 1.0, 1.0],
+        scrim: [0.0, 0.0, 0.0, 0.50],
     };
 
     /// The palette for a `WaterUI` colour scheme.

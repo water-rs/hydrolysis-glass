@@ -195,6 +195,18 @@ fn max_channel_diff(a: &Image, b: &Image) -> f32 {
         .fold(0.0f32, f32::max)
 }
 
+/// Mean absolute per-channel difference across two same-sized frames.
+fn mean_channel_diff(a: &Image, b: &Image) -> f64 {
+    assert_eq!((a.width, a.height), (b.width, b.height));
+    let sum: f64 = a
+        .pixels
+        .iter()
+        .zip(b.pixels.iter())
+        .flat_map(|(p, q)| (0..4).map(|c| f64::from((p[c] - q[c]).abs())))
+        .sum();
+    sum / (f64::from(a.width) * f64::from(a.height) * 4.0)
+}
+
 /// [`assert_agrees`]'s comparison, with the verdict returned: `Err` names
 /// the worst pixel when `engine` is outside the tolerance of `reference`.
 #[allow(
@@ -550,11 +562,11 @@ fn sized_button_element(appearance: Appearance, size: ControlSize, rect: [f32; 4
 #[test]
 fn a_material_group_of_mixed_sizes_renders_with_the_container_recipe() {
     /// The label block both buttons carry, pt: a regular button's frame
-    /// is this plus `28 × 14`, a large one's plus `40 × 30`.
+    /// is this plus `25 × 14`, a large one's plus `40 × 30`.
     const LABEL: [f32; 2] = [60.0, 20.33];
     const GAP: f32 = 16.0;
     const AT: [f32; 2] = [101.0, 400.0];
-    let regular = [AT[0], AT[1], LABEL[0] + 28.0, LABEL[1] + 14.0];
+    let regular = [AT[0], AT[1], LABEL[0] + 25.0, LABEL[1] + 14.0];
     let large = [
         regular[0] + regular[2] + GAP,
         AT[1],
@@ -1710,13 +1722,15 @@ fn the_lens_fades_out_through_the_release() {
         "segmented_lens_light_release_t0100",
     );
     let rest = segmented_at_rest(Appearance::Light, 1);
-    let held_vs_rest = max_channel_diff(&held, &rest);
     let fading_vs_held = max_channel_diff(&fading, &held);
     let fading_vs_rest = max_channel_diff(&fading, &rest);
+    let held_vs_rest_mean = mean_channel_diff(&held, &rest);
+    let fading_vs_rest_mean = mean_channel_diff(&fading, &rest);
     assert!(
-        fading_vs_held > 0.05 && fading_vs_rest > 0.05 && fading_vs_rest < held_vs_rest,
+        fading_vs_held > 0.05 && fading_vs_rest > 0.05 && fading_vs_rest_mean < held_vs_rest_mean,
         "the lens 0.1 s into the release is not partway between held and rest \
-         (held_delta={fading_vs_held}, rest_delta={fading_vs_rest}, held_rest={held_vs_rest})"
+         (held_delta={fading_vs_held}, rest_delta={fading_vs_rest}, \
+          rest_mean={fading_vs_rest_mean}, held_rest_mean={held_vs_rest_mean})"
     );
     capture_at(
         &mut app,
@@ -2546,34 +2560,34 @@ fn stepper_taps_step_and_respect_bounds_and_disabled() {
     );
     app.settle();
 
-    // Row sits at x = 51..351; the 65 × 32 pt controls sit at x = 286..351,
-    // with decrement centered at 302 and increment at 335, y = 40..72.
+    // Row sits at x = 51..351; the 93 × 32 pt controls sit at x = 258..351,
+    // with decrement centered at 281 and increment at 328, y = 40..72 (§8.5).
     let tap = |app: &mut GlassApp, x: f32, y: f32| {
         app.touch_down(x, y);
         app.touch_up(x, y);
         app.settle();
     };
-    tap(&mut app, 335.0, 56.0);
+    tap(&mut app, 328.0, 56.0);
     assert_eq!(value.snapshot(), 1, "first increment tap steps 0 -> 1");
     // 36.0 is 4 pt above the 32 pt visual button yet inside the 44 pt hit box.
-    tap(&mut app, 335.0, 36.0);
+    tap(&mut app, 328.0, 36.0);
     assert_eq!(
         value.snapshot(),
         2,
         "extended 44 pt vertical hit region accepts increment 1 -> 2"
     );
-    tap(&mut app, 335.0, 56.0);
+    tap(&mut app, 328.0, 56.0);
     assert_eq!(value.snapshot(), 2, "increment at upper bound is ignored");
-    tap(&mut app, 302.0, 56.0);
+    tap(&mut app, 281.0, 56.0);
     assert_eq!(value.snapshot(), 1, "decrement steps 2 -> 1");
-    tap(&mut app, 302.0, 56.0);
+    tap(&mut app, 281.0, 56.0);
     assert_eq!(value.snapshot(), 0, "decrement steps 1 -> 0");
-    tap(&mut app, 302.0, 56.0);
+    tap(&mut app, 281.0, 56.0);
     assert_eq!(value.snapshot(), 0, "decrement at lower bound is ignored");
 
     // Disabled stepper ignores taps on either end.
-    tap(&mut app, 335.0, 136.0);
-    tap(&mut app, 302.0, 136.0);
+    tap(&mut app, 328.0, 136.0);
+    tap(&mut app, 281.0, 136.0);
     assert_eq!(
         disabled_value.snapshot(),
         1,

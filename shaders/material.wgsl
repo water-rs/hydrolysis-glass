@@ -435,11 +435,11 @@ fn tint_alphas(r: Recipe, d: f32, cov: f32) -> vec2<f32> {
     return select(vec2<f32>(0.0), vec2<f32>(a_flat, a_rim), r.hl_bb.w >= 0.5 && cov > 0.0);
 }
 
-// Prominent fill target tint modulated by the underlying body luma `Y_b`.
+// Prominent fill target tint modulated by the underlying body luma `Y_b` (§8.1).
 fn prominent_tint_rgb(rgb: vec3<f32>, outc: vec3<f32>, is_light: bool) -> vec3<f32> {
     let y_b = luma(outc);
     let c_prom_light = rgb * (0.60 + 0.40 * y_b);
-    let c_prom_dark = mix(rgb, vec3<f32>(1.0), sat(0.21 * (y_b - 0.16)));
+    let c_prom_dark = mix(rgb, vec3<f32>(1.0), sat(0.12 * (y_b - 0.16)));
     return select(c_prom_dark, c_prom_light, is_light);
 }
 

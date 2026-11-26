@@ -6,7 +6,8 @@ use hydrolysis_glass::dynamics::{
     PRESS_MAX_HALF_AXIS_GROWTH, PopoverMorph, SEGMENTED_PRESS_SCALE_GAIN, Spring, SpringState,
     SpringState2, TAB_BAR_PRESS_SCALE_GAIN, THUMB_PRESS_SCALE_GAIN, jelly_strain_target,
     lens_blend, lens_color_mix, press_scale, rubber_band_lag, segmented_press_scale,
-    specular_press_boost, tab_bar_press_scale, thumb_press_scale, touch_wash_alpha,
+    sheet_rubber_band_offset, specular_press_boost, tab_bar_press_scale, thumb_press_scale,
+    touch_wash_alpha,
 };
 use hydrolysis_glass::interaction::{Interactive, Member};
 use hydrolysis_glass::material::geometry::{CONTINUOUS_EXPONENT, CornerCurve, Rect, Shape};
@@ -40,6 +41,47 @@ fn spring_presets_match_specification_coefficients() {
     assert_eq!(Spring::POPOVER_PRESENT_VERTICAL, Spring::new(0.311, 0.333));
     assert_eq!(Spring::POPOVER_DISMISS, Spring::new(0.624, 0.619));
     assert_eq!(Spring::POPOVER_DISMISS_VERTICAL, Spring::new(0.807, 0.756));
+    assert_eq!(Spring::POPOVER_RADIUS, Spring::new(0.311, 0.750));
+    assert_eq!(Spring::SHEET_PRESENT, Spring::new(0.400, 0.850));
+    assert_eq!(Spring::SHEET_DISMISS, Spring::new(0.350, 1.000));
+    assert_eq!(Spring::SHEET_DETENT, Spring::new(0.380, 0.850));
+
+    // §8.10 / §9.3 sheet spring stiffness and damping.
+    assert!((Spring::SHEET_PRESENT.stiffness() - 246.74).abs() < 0.5);
+    assert!((Spring::SHEET_PRESENT.damping() - 26.70).abs() < 0.2);
+    assert!((Spring::SHEET_DISMISS.stiffness() - 322.27).abs() < 0.5);
+    assert!((Spring::SHEET_DISMISS.damping() - 35.90).abs() < 0.2);
+    assert!((Spring::SHEET_DETENT.stiffness() - 273.40).abs() < 0.5);
+    assert!((Spring::SHEET_DETENT.damping() - 28.11).abs() < 0.2);
+}
+
+#[test]
+fn sheet_presentation_dismissal_and_rubber_band_match_specification() {
+    // §8.10: `SHEET_PRESENT` (`T_r = 0.400`, `zeta = 0.850`) overshoots by ~0.6%.
+    let present = step_series(Spring::SHEET_PRESENT, 0.0, 1.0, 0.001, 800);
+    let peak = present.iter().copied().fold(0.0_f32, f32::max);
+    assert!(
+        (peak - 1.0063).abs() < 0.003,
+        "expected ~0.6% overshoot on SHEET_PRESENT, got {peak}"
+    );
+    assert!((*present.last().expect("non-empty") - 1.0).abs() < 1e-3);
+
+    // §8.10: `SHEET_DISMISS` (`T_r = 0.350`, `zeta = 1.000`) exits critically damped with zero overshoot.
+    let dismiss = step_series(Spring::SHEET_DISMISS, 1.0, 0.0, 0.001, 800);
+    let mut prev = 1.0_f32;
+    for &v in &dismiss {
+        assert!(v <= prev + 1e-6, "sheet dismiss bounced: {prev} -> {v}");
+        assert!(v >= -1e-6, "sheet dismiss overshot 0: {v}");
+        prev = v;
+    }
+    assert!(dismiss.last().expect("non-empty").abs() < 1e-3);
+
+    // §8.10: rubber-band resistance `12 * delta / (delta + 24)` pt past max detent.
+    assert_eq!(sheet_rubber_band_offset(-5.0), 0.0);
+    assert_eq!(sheet_rubber_band_offset(0.0), 0.0);
+    assert!((sheet_rubber_band_offset(24.0) - 6.0).abs() < 1e-6);
+    assert!(sheet_rubber_band_offset(10_000.0) < 12.0);
+    assert!((THUMB_PRESS_SCALE_GAIN - 0.60).abs() < 1e-6);
 }
 
 #[test]

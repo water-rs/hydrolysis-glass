@@ -24,10 +24,10 @@ use super::super::materials::{self, CONTINUOUS_SMOOTHING, GLASS_SHADER};
 use super::super::{Glass, record_standalone};
 use super::{control_motion, is_disabled, paint, spring_animation, stretch_along_axis};
 
-/// The measures of compact vertical items: a 60 pt bar, items at least
+/// The measures of compact vertical items: a 62 pt bar, items at least
 /// 64 pt wide with their labels inset 12 pt, and 6 pt between an icon and
 /// its label (§8.7, Geometry).
-const VERTICAL_METRICS: TabsMetrics = TabsMetrics::new(60.0, 64.0, 12.0, 6.0);
+const VERTICAL_METRICS: TabsMetrics = TabsMetrics::new(62.0, 64.0, 12.0, 6.0);
 /// Width threshold where bottom bar items switch to horizontal layout, pt
 /// (§8.7, Geometry).
 const HORIZONTAL_BREAKPOINT: f64 = 600.0;
@@ -38,17 +38,16 @@ const HORIZONTAL_METRICS: TabsMetrics = TabsMetrics::new(48.0, 64.0, 16.0, 8.0);
 /// Minimum slot width per item in a compact floating bottom tab pill, pt
 /// (§8.7, Geometry).
 const COMPACT_ITEM_MIN_WIDTH: f64 = 94.0;
-/// Outer floating clearance from the bottom and horizontal viewport edges, pt
-/// (§8.7, Geometry).
-const FLOATING_MARGIN: f64 = 12.0;
+/// Outer floating clearance from the bottom viewport edge, pt (§8.7, Geometry).
+const FLOATING_MARGIN: f64 = 21.0;
 /// Inset of the selected highlight capsule inside the item's bounds, pt
 /// (§8.7, Geometry).
 const HIGHLIGHT_INSET: f64 = 4.0;
-/// Alpha of the resting selection pill over the tab bar in encoded space (§5):
-/// black @ `0.055` produces `(235, 235, 235)` over Light `(248, 248, 248)`,
+/// Alpha of the resting selection pill over the tab bar in encoded space (§8.7):
+/// black @ `0.068` produces `(234, 233, 234)` over Light `(252, 252, 252)`,
 /// while black @ `0.6875` produces the recessed `(10, 10, 10)` well inside
 /// Dark `(32, 32, 32)`.
-const REST_PILL_ALPHA_LIGHT: f32 = 0.055;
+const REST_PILL_ALPHA_LIGHT: f32 = 0.068;
 const REST_PILL_ALPHA_DARK: f32 = 0.6875;
 /// Active glass lens expansion over the resting pill (§1.4): `+36%` width and
 /// `+28%` height so the lifted lens spans full item width while overhanging

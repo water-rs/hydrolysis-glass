@@ -29,8 +29,8 @@ use super::super::{
 };
 use super::paint;
 
-/// Unfilled bar track over `#FFFFFF` (Light `(232, 232, 233)`) and `#000000`
-/// (Dark `(41, 41, 43)`), composited in encoded space (§5).
+/// Unfilled linear bar track over `#FFFFFF` (Light `(232, 232, 233)`) and `#000000`
+/// (Dark `(41, 41, 43)`), composited in encoded space (§8.12).
 const fn unfilled_track(appearance: Appearance) -> Rgba {
     match appearance {
         Appearance::Dark => [120.0 / 255.0, 120.0 / 255.0, 128.0 / 255.0, 0.34],
@@ -38,14 +38,22 @@ const fn unfilled_track(appearance: Appearance) -> Rgba {
     }
 }
 
-/// The bar's length and thickness, pt.
+/// Unfilled circular ring track: `(232, 232, 232)` light and `(42, 42, 44)` dark (§8.12).
+const fn circular_unfilled_track(appearance: Appearance) -> Rgba {
+    match appearance {
+        Appearance::Dark => [42.0 / 255.0, 42.0 / 255.0, 44.0 / 255.0, 1.0],
+        Appearance::Light => [232.0 / 255.0, 232.0 / 255.0, 232.0 / 255.0, 1.0],
+    }
+}
+
+/// The bar's length and thickness, pt (§8.12).
 const BAR: Size = Size::new(120.0, 4.0);
-/// The height of the label above a bar, pt.
+/// The height of the label above a bar, pt (§8.12).
 const LABEL_HEIGHT: f64 = 18.0;
-/// The gap between an indicator and its label above, pt.
+/// The gap between an indicator and its label above, pt (§8.12).
 const LABEL_SPACING: f64 = 7.0;
-/// The gap between an indicator and its value label below, pt.
-const VALUE_LABEL_SPACING: f64 = 7.0;
+/// The gap between an indicator and its value label below, pt (§8.12).
+const VALUE_LABEL_SPACING: f64 = 8.0;
 /// The ring's diameter and the stroke's width, pt.
 const RING: f64 = 20.0;
 const RING_STROKE: f64 = 2.5;
@@ -253,12 +261,17 @@ fn ring(frame: Rect, from: f64) -> (BezPath, f64) {
 }
 
 /// The arc of the ring's circumference `share` of it long, stroked by one
-/// dash and the rest of the ring as gap.
-fn arc_stroke(circumference: f64, share: f64) -> Stroke {
+/// dash and the rest of the ring as gap, with the specified `cap`.
+fn arc_stroke_with_cap(circumference: f64, share: f64, cap: Cap) -> Stroke {
     let arc = share * circumference;
     Stroke::new(RING_STROKE)
-        .with_caps(Cap::Round)
+        .with_caps(cap)
         .with_dashes(0.0, [arc, circumference - arc])
+}
+
+/// The indeterminate arc stroke with rounded caps.
+fn arc_stroke(circumference: f64, share: f64) -> Stroke {
+    arc_stroke_with_cap(circumference, share, Cap::Round)
 }
 
 fn circular_determinate(
@@ -269,9 +282,10 @@ fn circular_determinate(
     let start = -core::f64::consts::FRAC_PI_2;
     Custom::new(
         (
-            solid(unfilled_track(glass.palette.appearance)),
+            solid(circular_unfilled_track(glass.palette.appearance)),
             Driven::new(move |inputs: &Inputs<'_, f64>| {
-                arc_stroke(ring(inputs.frame, start).1, *inputs.value)
+                // Butt caps terminate cleanly at 12 o'clock without counter-clockwise overhang (§8.12).
+                arc_stroke_with_cap(ring(inputs.frame, start).1, *inputs.value, Cap::Butt)
             }),
             tint(spec, env),
         ),
@@ -392,9 +406,9 @@ mod tests {
         assert_eq!(look.control().size(), Size::new(120.0, 4.0));
         assert!((look.get_label_height() - 18.0).abs() < 1e-9);
         assert!((look.get_label_spacing() - 7.0).abs() < 1e-9);
-        assert!((look.get_value_label_spacing() - 7.0).abs() < 1e-9);
+        assert!((look.get_value_label_spacing() - 8.0).abs() < 1e-9);
         let layout = look.layout(120.0, Some(14.0), Some(14.0));
-        assert!((layout.height - 54.0).abs() < 1e-9);
+        assert!((layout.height - 55.0).abs() < 1e-9);
     }
 
     #[test]
@@ -406,8 +420,8 @@ mod tests {
         assert_eq!(look.control().size(), Size::new(20.0, 20.0));
         assert!((look.get_label_height() - 18.0).abs() < 1e-9);
         assert_eq!(look.get_label_spacing(), Some(7.0));
-        assert_eq!(look.get_value_label_spacing(), Some(7.0));
+        assert_eq!(look.get_value_label_spacing(), Some(8.0));
         let layout = look.layout(120.0, Some(14.0), Some(14.0));
-        assert!((layout.height - 70.0).abs() < 1e-9);
+        assert!((layout.height - 71.0).abs() < 1e-9);
     }
 }

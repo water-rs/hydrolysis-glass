@@ -71,8 +71,8 @@ pub const THUMB_INSET: f64 = 2.0;
 /// Opacity of the whole control while it is disabled **[fitted:
 /// simulator]**.
 pub const DISABLED_OPACITY: f32 = 0.5;
-/// Size of a label's text at every size group, pt **[measured: simulator]**.
-pub const LABEL_SIZE: f32 = 13.0;
+/// Size of a label's text at every size group, pt (§8.4, Geometry).
+pub const LABEL_SIZE: f32 = 17.0;
 
 /// A label's weight: medium on the selected segment, regular elsewhere
 /// **[measured: simulator]**.
@@ -281,7 +281,7 @@ mod tests {
     fn labels_are_medium_when_selected_and_regular_otherwise() {
         assert_eq!(label_weight(true), FontWeight::Medium);
         assert_eq!(label_weight(false), FontWeight::Normal);
-        assert_eq!(LABEL_SIZE, 13.0);
+        assert_eq!(LABEL_SIZE, 17.0);
     }
 
     /// The red channel of the fills over a backdrop, 8-bit: the values of
