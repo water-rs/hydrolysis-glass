@@ -332,7 +332,8 @@ pub(super) fn table(glass: &Glass) -> TableLook {
             cell_vertical_inset: 8.0,
             header_height: 36.0,
             row_height: 40.0,
-            outline_width: chrome::HAIRLINE,
+            // Matches `chrome::HAIRLINE` (`f64` stroke width).
+            outline_width: 0.5,
         },
         Custom::<(), _>::new((), move |recorder, frame, ()| {
             chrome::table_background(&palette, recorder, frame);
