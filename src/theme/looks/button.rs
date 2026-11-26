@@ -16,7 +16,7 @@ use waterui_interaction::interaction::InteractionState;
 use waterui_text::font::{Body, Font, FontWeight};
 
 use crate::dynamics::{self, PRESS_MAX_HALF_AXIS_GROWTH};
-use crate::material::recipe::{Appearance, Family, Recipe};
+use crate::material::recipe::{Family, Recipe};
 
 use super::super::Glass;
 use super::super::button::{GROWTH_PER_PRESS, Kind, SizeGroup};
@@ -146,12 +146,9 @@ fn borderless_chrome(glass: &Glass) -> Chrome {
 }
 
 /// The chrome of a bordered capsule button: a track-filled continuous capsule
-/// under the theme's state layer and focus ring.
+/// under the theme's state layer and focus ring (§8.1).
 fn bordered_chrome(glass: &Glass) -> Chrome {
-    let base = match glass.palette.appearance {
-        Appearance::Dark => alpha(glass.palette.track, 0.105),
-        Appearance::Light => glass.palette.track,
-    };
+    let base = glass.palette.track;
     let fill = Driven::new(move |inputs: &Inputs<'_, ()>| {
         paint(faded(
             base,

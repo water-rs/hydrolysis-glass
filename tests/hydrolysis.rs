@@ -550,11 +550,11 @@ fn sized_button_element(appearance: Appearance, size: ControlSize, rect: [f32; 4
 #[test]
 fn a_material_group_of_mixed_sizes_renders_with_the_container_recipe() {
     /// The label block both buttons carry, pt: a regular button's frame
-    /// is this plus `28 × 14`, a large one's plus `40 × 30`.
+    /// is this plus `25 × 14`, a large one's plus `40 × 30`.
     const LABEL: [f32; 2] = [60.0, 20.33];
     const GAP: f32 = 16.0;
     const AT: [f32; 2] = [101.0, 400.0];
-    let regular = [AT[0], AT[1], LABEL[0] + 28.0, LABEL[1] + 14.0];
+    let regular = [AT[0], AT[1], LABEL[0] + 25.0, LABEL[1] + 14.0];
     let large = [
         regular[0] + regular[2] + GAP,
         AT[1],
@@ -2546,34 +2546,34 @@ fn stepper_taps_step_and_respect_bounds_and_disabled() {
     );
     app.settle();
 
-    // Row sits at x = 51..351; the 65 × 32 pt controls sit at x = 286..351,
-    // with decrement centered at 302 and increment at 335, y = 40..72.
+    // Row sits at x = 51..351; the 93 × 32 pt controls sit at x = 258..351,
+    // with decrement centered at 281 and increment at 328, y = 40..72 (§8.5).
     let tap = |app: &mut GlassApp, x: f32, y: f32| {
         app.touch_down(x, y);
         app.touch_up(x, y);
         app.settle();
     };
-    tap(&mut app, 335.0, 56.0);
+    tap(&mut app, 328.0, 56.0);
     assert_eq!(value.snapshot(), 1, "first increment tap steps 0 -> 1");
     // 36.0 is 4 pt above the 32 pt visual button yet inside the 44 pt hit box.
-    tap(&mut app, 335.0, 36.0);
+    tap(&mut app, 328.0, 36.0);
     assert_eq!(
         value.snapshot(),
         2,
         "extended 44 pt vertical hit region accepts increment 1 -> 2"
     );
-    tap(&mut app, 335.0, 56.0);
+    tap(&mut app, 328.0, 56.0);
     assert_eq!(value.snapshot(), 2, "increment at upper bound is ignored");
-    tap(&mut app, 302.0, 56.0);
+    tap(&mut app, 281.0, 56.0);
     assert_eq!(value.snapshot(), 1, "decrement steps 2 -> 1");
-    tap(&mut app, 302.0, 56.0);
+    tap(&mut app, 281.0, 56.0);
     assert_eq!(value.snapshot(), 0, "decrement steps 1 -> 0");
-    tap(&mut app, 302.0, 56.0);
+    tap(&mut app, 281.0, 56.0);
     assert_eq!(value.snapshot(), 0, "decrement at lower bound is ignored");
 
     // Disabled stepper ignores taps on either end.
-    tap(&mut app, 335.0, 136.0);
-    tap(&mut app, 302.0, 136.0);
+    tap(&mut app, 328.0, 136.0);
+    tap(&mut app, 281.0, 136.0);
     assert_eq!(
         disabled_value.snapshot(),
         1,

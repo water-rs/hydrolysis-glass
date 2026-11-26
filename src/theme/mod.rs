@@ -48,6 +48,7 @@ use waterui_core::Environment;
 use waterui_core::plugin::Plugin as _;
 use waterui_graphics::color::{Color, ColorScheme};
 use waterui_interaction::interaction::InteractionState;
+use waterui_text::font::{FontWeight, ResolvedFont};
 
 use crate::material::gpu::Group;
 use crate::material::recipe::Translucency;
@@ -236,9 +237,18 @@ impl Style for Glass {
                     .selection_container(resolved(palette::alpha(p.accent, 0.3)))
                     .selection_foreground(resolved(p.foreground))
                     .error(resolved(p.error))
-                    .error_foreground(resolved(p.error_foreground)),
+                    .error_foreground(resolved(p.error_foreground))
+                    .scrim(resolved(p.scrim)),
             )
-            .fonts(FontSettings::default_scale())
+            .fonts(
+                FontSettings::new()
+                    .title(ResolvedFont::new(28.0, FontWeight::Normal))
+                    .headline(ResolvedFont::new(17.0, FontWeight::SemiBold))
+                    .body(ResolvedFont::new(17.0, FontWeight::Normal))
+                    .subheadline(ResolvedFont::new(15.0, FontWeight::Normal))
+                    .footnote(ResolvedFont::new(13.0, FontWeight::Normal))
+                    .caption(ResolvedFont::new(12.0, FontWeight::Normal)),
+            )
             .install(env);
     }
 }
@@ -471,7 +481,7 @@ mod tests {
         assert!(label_color.components[2] > 0.9 && label_color.components[0] < 0.05);
         assert_eq!(
             look.get_padding(),
-            cherenkov_record::kurbo::Vec2::new(14.0, 7.0)
+            cherenkov_record::kurbo::Vec2::new(12.5, 7.0)
         );
     }
 
@@ -545,7 +555,7 @@ mod tests {
 
         let g = Glass::light();
         let env = environment(&g);
-        let frame = Rect::new(0.0, 0.0, 32.0, 32.0);
+        let frame = Rect::new(0.0, 0.0, 46.5, 32.0);
         let ltr = g.stepper(
             &StepperSpec::new(LayoutDirection::LeftToRight, SpecTint::default()),
             &env,
@@ -554,8 +564,8 @@ mod tests {
             &StepperSpec::new(LayoutDirection::RightToLeft, SpecTint::default()),
             &env,
         );
-        assert_eq!(ltr.button(), cherenkov_record::kurbo::Size::new(32.0, 32.0));
-        assert!((ltr.get_spacing() - 1.0).abs() < 1e-9);
+        assert_eq!(ltr.button(), cherenkov_record::kurbo::Size::new(46.5, 32.0));
+        assert!(ltr.get_spacing().abs() < 1e-9);
         assert!((ltr.get_label_spacing() - 12.0).abs() < 1e-9);
         assert_eq!(
             ltr.decrement().get_hit().get_minimum(),
@@ -622,13 +632,13 @@ mod tests {
             &env,
         );
         let metrics = look.metrics();
-        assert!((metrics.label_height - 21.0).abs() < 1e-9);
+        assert!((metrics.label_height - 25.0).abs() < 1e-9);
         assert!((metrics.min_width - 120.0).abs() < 1e-9);
         assert!((metrics.min_height - 36.0).abs() < 1e-9);
         assert!(metrics.horizontal_inset.abs() < 1e-9);
         assert!((metrics.vertical_inset - 6.0).abs() < 1e-9);
         assert!((look.floating_label().get_scale() - 1.0).abs() < 1e-9);
-        assert!((look.floating_label().get_top() - 2.0).abs() < 1e-9);
+        assert!((look.floating_label().get_top() - 6.0).abs() < 1e-9);
         let blink = look.caret().blink();
         assert_eq!(blink.fade_cycle_duration, Duration::from_millis(1_000));
         assert_eq!(blink.frame_interval, Duration::from_millis(16));
@@ -791,7 +801,7 @@ mod tests {
                 horizontal_padding: 0.0,
             }
         );
-        assert!((look.get_floating_margin() - 12.0).abs() < 1e-9);
+        assert!((look.get_floating_margin() - 21.0).abs() < 1e-9);
         let selected_fg = look
             .get_selected_foreground()
             .expect("selected tab foreground")
@@ -805,7 +815,7 @@ mod tests {
             .snapshot();
         assert_eq!(unselected_fg, resolved(g.palette().foreground));
         let vertical = look.metrics(TabItemLayout::Vertical);
-        assert!((vertical.bar_height - 60.0).abs() < 1e-9);
+        assert!((vertical.bar_height - 62.0).abs() < 1e-9);
         assert!((vertical.button_min_width - 64.0).abs() < 1e-9);
         let horizontal = look.metrics(TabItemLayout::Horizontal);
         assert!((horizontal.bar_height - 48.0).abs() < 1e-9);
@@ -889,6 +899,7 @@ mod tests {
         assert!((title_font.size() - 17.0).abs() < 1e-4);
         assert_eq!(title_font.weight(), FontWeight::SemiBold);
         let metrics = look.metrics();
+        assert!((metrics.automatic_bar_height - 64.0).abs() < 1e-9);
         assert!((metrics.inline_bar_height - 44.0).abs() < 1e-9);
         assert!((metrics.large_bar_height - 96.0).abs() < 1e-9);
         assert!((metrics.horizontal_inset - 16.0).abs() < 1e-9);
@@ -1146,18 +1157,45 @@ mod tests {
 
     #[test]
     fn dialog_and_sheet_looks_use_glass_surface_radii_and_palette() {
-        for g in [Glass::light(), Glass::dark()] {
+        use waterui_core::resolve::Resolvable as _;
+        use waterui_text::font::{Body, Caption, Footnote, Headline, Subheadline, Title};
+
+        for (g, expected_scrim_alpha) in [(Glass::light(), 0.32_f32), (Glass::dark(), 0.50_f32)] {
             let env = environment(&g);
+
+            // §8.0 type scale and Scrim token installed by `install_tokens`.
+            let body = Body.resolve(&env).snapshot();
+            assert!((body.size() - 17.0).abs() < 1e-4);
+            assert_eq!(body.weight(), FontWeight::Normal);
+            let headline = Headline.resolve(&env).snapshot();
+            assert!((headline.size() - 17.0).abs() < 1e-4);
+            assert_eq!(headline.weight(), FontWeight::SemiBold);
+            assert!((Title.resolve(&env).snapshot().size() - 28.0).abs() < 1e-4);
+            assert!((Subheadline.resolve(&env).snapshot().size() - 15.0).abs() < 1e-4);
+            assert!((Footnote.resolve(&env).snapshot().size() - 13.0).abs() < 1e-4);
+            assert!((Caption.resolve(&env).snapshot().size() - 12.0).abs() < 1e-4);
+
+            let scrim = waterui_controls::theme::color::Scrim
+                .resolve(&env)
+                .snapshot();
+            assert!((scrim.components[3] - expected_scrim_alpha).abs() < 1e-4);
+
             let dialog = g.dialog(&env);
             assert!(
                 (dialog.corner_radius - surfaces::CONTAINER_CORNER_RADIUS).abs() < f32::EPSILON
             );
             assert!(dialog.min_width > 0.0 && dialog.max_width > dialog.min_width);
 
+            // §8.10 sheet chrome metrics and grabber alpha (`0.60 * 0.40 = 0.24`).
             let sheet = g.sheet(&env);
+            assert!((sheet.max_width - 640.0).abs() < f32::EPSILON);
             assert!((sheet.corner_radius - surfaces::SHEET_CORNER_RADIUS).abs() < f32::EPSILON);
             assert!(sheet.show_drag_handle);
-            assert!(sheet.drag_handle_width > 0.0 && sheet.drag_handle_height > 0.0);
+            assert!((sheet.drag_handle_width - 36.0).abs() < f32::EPSILON);
+            assert!((sheet.drag_handle_height - 5.0).abs() < f32::EPSILON);
+            assert!((sheet.drag_handle_vertical_padding - 8.0).abs() < f32::EPSILON);
+            let handle_color = sheet.drag_handle_color.resolve(&env).snapshot();
+            assert!((handle_color.components[3] - 0.24).abs() < 1e-3);
         }
     }
 

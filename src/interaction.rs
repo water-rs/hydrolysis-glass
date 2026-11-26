@@ -1,5 +1,19 @@
 //! Interaction dynamics: spring-driven drag, neighbour attraction, merge
-//! smoothing, jelly deformation, and shape morphing.
+//! smoothing, jelly deformation, and shape morphing (specification §9.2).
+//!
+//! Legacy per-frame exponential constants (`PRESS_RATE`, `DRAG_RATE`,
+//! `MORPH_RATE`) are superseded by continuous-time analytical [`Spring`]
+//! presets:
+//! - Press (`BUTTON_PRESS`, `BUTTON_RELEASE`): **[fitted]** (48/60 fps captures);
+//!   hover/focus fade (`PRESS_DURATION`) is not observable on touch-only captures
+//!   and is **[chosen]**.
+//! - Drag (`JELLY_DRAG_ACTIVE`, `JELLY_DRAG_RELEASE`): **[fitted]**; non-spring
+//!   fallback (`DRAG_DURATION`) is **[chosen]**.
+//! - Shape / corner morph: popover morph springs (`POPOVER_PRESENT`,
+//!   `POPOVER_PRESENT_VERTICAL`, `POPOVER_RADIUS`, `POPOVER_DISMISS`,
+//!   `POPOVER_DISMISS_VERTICAL`) are **[fitted]**; standalone member corner-radius
+//!   morphing (`SWITCH_KNOB`) and container neighbour attraction are not
+//!   observable in single-control captures and are **[chosen]**.
 //!
 //! Inputs are reactive signals ([`nami::Binding`] / [`nami::Computed`]);
 //! the dynamics step analytically through [`Spring`] presets and publish the

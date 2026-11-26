@@ -26,8 +26,8 @@ pub const KNOB_HEIGHT: f64 = 24.0;
 pub const SYMBOL_GAP: f64 = 12.0;
 /// Smallest width of the knob's travel the layout asks for, pt.
 pub const MIN_TRAVEL: f64 = 120.0;
-/// Space between the slider's own label and its row, pt.
-pub const LABEL_SPACING: f64 = 8.0;
+/// Space between the slider's own label and its row, pt (§8.3).
+pub const LABEL_SPACING: f64 = 4.0;
 
 /// How far the track runs past each end of the knob's travel, pt: half the
 /// knob, whose centre travels the track inset by it.
@@ -121,8 +121,8 @@ pub const fn knob_center(travel: Rect, v: f64) -> Point {
 }
 
 /// The knob for the value `v` on `travel`: [`KNOB_WIDTH`] by
-/// [`KNOB_HEIGHT`], scaled about its centre by `1 + 0.35·p` for the press
-/// progress `p`.
+/// [`KNOB_HEIGHT`], scaled about its centre by `1 + 0.60·p` for the press
+/// progress `p` (§8.3).
 #[must_use]
 pub fn knob_rect(travel: Rect, v: f64, p: f64) -> Rect {
     let growth = LENS_GROWTH.mul_add(p, 1.0);

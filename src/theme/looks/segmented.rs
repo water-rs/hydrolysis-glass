@@ -78,7 +78,7 @@ pub(in super::super) fn look(
         // a disabled control shows neither the lens nor the focus ring.
         reach: CONTAINER_OVERHANG,
     };
-    // White in dark appearance, black in light, selected or not; 13 pt,
+    // White in dark appearance, black in light, selected or not; 17 pt,
     // medium on the selected segment (§8.4, Geometry and Colours).
     let label = SegmentLabel::new(
         Driven::new(|inputs: &Inputs<'_, Segment>| {

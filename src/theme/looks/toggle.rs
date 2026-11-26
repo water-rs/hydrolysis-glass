@@ -152,23 +152,25 @@ pub(in super::super) fn switch(glass: &Glass, spec: &ToggleSpec, env: &Environme
     SwitchLook::new(control, drag)
 }
 
-/// The checkbox's side, pt.
+/// The checkbox's side, pt (§8.2, Checkbox).
 const CHECKBOX_SIDE: f64 = 16.0;
-/// The gap between a checkbox and its label, pt.
-const CHECKBOX_LABEL_SPACING: f64 = 8.0;
-/// A checkbox's corner radius, in shares of its side.
-const CHECKBOX_RADIUS: f64 = 0.25;
-/// The check mark's stroke width, in shares of the checkbox's side.
-const CHECK_STROKE: f64 = 0.13;
+/// The gap between a checkbox and its label, pt (§8.2, Checkbox).
+const CHECKBOX_LABEL_SPACING: f64 = 10.0;
+/// A checkbox's corner radius, in shares of its side (`3.5 / 16.0`, §8.2).
+const CHECKBOX_RADIUS: f64 = 3.5 / CHECKBOX_SIDE;
+/// The check mark's stroke width, in shares of the checkbox's side (`2.0 / 16.0`, §8.2).
+const CHECK_STROKE: f64 = 0.125;
 
 /// The look of a checkbox in `spec`: an outline, an accent fill that fades
 /// in as the box checks with its check mark, and a state layer with a focus
-/// ring.
+/// ring (§8.2, Checkbox).
 pub(in super::super) fn checkbox(
     glass: &Glass,
     spec: &ToggleSpec,
     env: &Environment,
 ) -> CheckboxLook {
+    use crate::material::recipe::Appearance;
+
     let palette = glass.palette;
     let tint = spec.tint().resolve(env);
     let outline = Driven::new(move |inputs: &Inputs<'_, bool>| {
@@ -183,13 +185,15 @@ pub(in super::super) fn checkbox(
         let dimmed = if is_disabled(inputs.state) { 0.5 } else { 1.0 };
         Paint::from(tint.with_alpha(tint.components[3] * checked * dimmed))
     });
-    // The check mark fades in with the fill it sits on.
+    // White check mark in light appearance, black (canvas background cutout) in dark (§8.2).
+    let check_base = match palette.appearance {
+        Appearance::Light => [1.0, 1.0, 1.0, 1.0],
+        Appearance::Dark => [0.0, 0.0, 0.0, 1.0],
+    };
     let check = Driven::new(move |inputs: &Inputs<'_, bool>| {
         let checked = f32::from(u8::from(*inputs.value));
-        paint(alpha(
-            palette.accent_foreground,
-            palette.accent_foreground[3] * checked,
-        ))
+        let dimmed = if is_disabled(inputs.state) { 0.5 } else { 1.0 };
+        paint(alpha(check_base, check_base[3] * checked * dimmed))
     });
     let layer = Driven::new(move |inputs: &Inputs<'_, bool>| {
         paint(alpha(
@@ -224,9 +228,9 @@ pub(in super::super) fn checkbox(
             let (w, h) = (frame.width(), frame.height());
             let at = |x: f64, y: f64| Point::new(x.mul_add(w, frame.x0), y.mul_add(h, frame.y0));
             let mut mark = BezPath::new();
-            mark.move_to(at(0.22, 0.52));
-            mark.line_to(at(0.42, 0.72));
-            mark.line_to(at(0.78, 0.30));
+            mark.move_to(at(0.22, 0.50));
+            mark.line_to(at(0.40, 0.72));
+            mark.line_to(at(0.70, 0.25));
             recorder.stroke(
                 mark,
                 Stroke::new(w * CHECK_STROKE)
