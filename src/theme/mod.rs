@@ -32,11 +32,12 @@ use cherenkov_record::kurbo::Rect;
 use cherenkov_record::{MaterialRegistry, Recorder};
 use hydrolysis_style::Style;
 use hydrolysis_style::theme::{
-    BadgeLook, ButtonLook, ButtonSpec, CardLook, CheckboxLook, GlassLook, IndicatorLook,
-    LinearProgressLook, ListLook, ListSpec, MenuLook, MenuPickerLook, MenuSpec, NavigationBarLook,
-    NavigationSpec, PickerSpec, ProgressSpec, RadioGroupLook, ScrollIndicatorLook, SegmentedLook,
-    SegmentedSpec, SliderLook, SliderSpec, SnackbarLook, StepperLook, StepperSpec, SwitchLook,
-    TableLook, TabsLook, TabsSpec, TextFieldLook, TextFieldSpec, ToggleSpec, WidgetTheme,
+    BadgeLook, ButtonLook, ButtonSpec, CardLook, CheckboxLook, DialogLook, GlassLook,
+    IndicatorLook, LinearProgressLook, ListLook, ListSpec, MenuLook, MenuPickerLook, MenuSpec,
+    NavigationBarLook, NavigationSpec, PickerSpec, ProgressSpec, RadioGroupLook,
+    ScrollIndicatorLook, SegmentedLook, SegmentedSpec, SheetLook, SliderLook, SliderSpec,
+    SnackbarLook, StepperLook, StepperSpec, SwitchLook, TableLook, TabsLook, TabsSpec,
+    TextFieldLook, TextFieldSpec, ToggleSpec, WidgetTheme,
 };
 use waterui::Plugin as _;
 use waterui::color::{Color, ColorScheme};
@@ -337,6 +338,14 @@ impl WidgetTheme for Glass {
 
     fn snackbar(&self, _env: &Environment) -> SnackbarLook {
         looks::snackbar()
+    }
+
+    fn dialog(&self, _env: &Environment) -> DialogLook {
+        looks::dialog(self)
+    }
+
+    fn sheet(&self, _env: &Environment) -> SheetLook {
+        looks::sheet(self)
     }
 }
 
@@ -1120,6 +1129,23 @@ mod tests {
                 .expect("outlined card carries a hairline border")
                 .target(&rest);
             assert!((border.width - chrome::HAIRLINE).abs() < 1e-9);
+        }
+    }
+
+    #[test]
+    fn dialog_and_sheet_looks_use_glass_surface_radii_and_palette() {
+        for g in [Glass::light(), Glass::dark()] {
+            let env = environment(&g);
+            let dialog = g.dialog(&env);
+            assert!(
+                (dialog.corner_radius - surfaces::CONTAINER_CORNER_RADIUS).abs() < f32::EPSILON
+            );
+            assert!(dialog.min_width > 0.0 && dialog.max_width > dialog.min_width);
+
+            let sheet = g.sheet(&env);
+            assert!((sheet.corner_radius - surfaces::SHEET_CORNER_RADIUS).abs() < f32::EPSILON);
+            assert!(sheet.show_drag_handle);
+            assert!(sheet.drag_handle_width > 0.0 && sheet.drag_handle_height > 0.0);
         }
     }
 }
