@@ -195,6 +195,18 @@ fn max_channel_diff(a: &Image, b: &Image) -> f32 {
         .fold(0.0f32, f32::max)
 }
 
+/// Mean absolute per-channel difference across two same-sized frames.
+fn mean_channel_diff(a: &Image, b: &Image) -> f64 {
+    assert_eq!((a.width, a.height), (b.width, b.height));
+    let sum: f64 = a
+        .pixels
+        .iter()
+        .zip(b.pixels.iter())
+        .flat_map(|(p, q)| (0..4).map(|c| f64::from((p[c] - q[c]).abs())))
+        .sum();
+    sum / (f64::from(a.width) * f64::from(a.height) * 4.0)
+}
+
 /// [`assert_agrees`]'s comparison, with the verdict returned: `Err` names
 /// the worst pixel when `engine` is outside the tolerance of `reference`.
 #[allow(
@@ -1710,13 +1722,15 @@ fn the_lens_fades_out_through_the_release() {
         "segmented_lens_light_release_t0100",
     );
     let rest = segmented_at_rest(Appearance::Light, 1);
-    let held_vs_rest = max_channel_diff(&held, &rest);
     let fading_vs_held = max_channel_diff(&fading, &held);
     let fading_vs_rest = max_channel_diff(&fading, &rest);
+    let held_vs_rest_mean = mean_channel_diff(&held, &rest);
+    let fading_vs_rest_mean = mean_channel_diff(&fading, &rest);
     assert!(
-        fading_vs_held > 0.05 && fading_vs_rest > 0.05 && fading_vs_rest < held_vs_rest,
+        fading_vs_held > 0.05 && fading_vs_rest > 0.05 && fading_vs_rest_mean < held_vs_rest_mean,
         "the lens 0.1 s into the release is not partway between held and rest \
-         (held_delta={fading_vs_held}, rest_delta={fading_vs_rest}, held_rest={held_vs_rest})"
+         (held_delta={fading_vs_held}, rest_delta={fading_vs_rest}, \
+          rest_mean={fading_vs_rest_mean}, held_rest_mean={held_vs_rest_mean})"
     );
     capture_at(
         &mut app,
