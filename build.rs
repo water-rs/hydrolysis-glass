@@ -1,0 +1,13 @@
+//! Forwards `DEP_WATERUI_FEATURES` from `waterui-core` into
+//! `waterui_feature` cfgs so optional component `WidgetTheme` methods stay
+//! aligned with `hydrolysis-style` and `hydrolysis`.
+
+fn main() {
+    println!("cargo::rerun-if-changed=build.rs");
+    println!("cargo::rustc-check-cfg=cfg(waterui_feature, values(any()))");
+    let features = std::env::var("DEP_WATERUI_FEATURES")
+        .expect("`waterui-core`'s build script exports DEP_WATERUI_FEATURES");
+    for feature in features.split(',').filter(|feature| !feature.is_empty()) {
+        println!("cargo::rustc-cfg=waterui_feature=\"{feature}\"");
+    }
+}

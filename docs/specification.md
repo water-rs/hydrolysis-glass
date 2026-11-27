@@ -295,46 +295,37 @@ separated from the rim's own falloff.
 
 ### 4.9 Border correction
 
-An exterior perimeter border ring darkens the silhouette's outer boundary on
-`d ∈ [−0.25, +0.75]` pt, peaking at `d = +0.25` pt (`1` px outside `d = 0` at
-`2×`), while leaving interior glass pixels `d ≤ −0.25` pt free of border
-darkening [measured].
+A perimeter border ring darkens the silhouette's outer annulus around `d = 0`
+(`ring_cov = max(cov_perim − cov_body, 0)` where the glass body is inset by
+`0.40` pt, `body_d = d + 0.40` pt, and the outer perimeter extends to
+`d = +0.20` pt), leaving interior glass pixels (`body_d ≤ −0.5 / scale`) free
+of border darkening [measured].
 
-- **Clean interior (`d ≤ −0.25` pt).** Measured `2×` lateral-cap profiles show
-  no interior darkening at `d = −0.25` pt: regular light reads
+- **Clean interior.** Measured `2×` lateral-cap profiles show no interior
+  darkening inside the inset glass body: regular light reads
   `(135, 223, 165)` / `(129, 185, 255)` against interior `(136, 223, 166)` /
   `(129, 186, 255)`, regular dark reads `(81, 169, 103)` / `(63, 123, 255)`
   against `(81, 169, 103)` / `(63, 124, 255)`, dark prominent reads
   `(70, 149, 243)` / `(68, 148, 244)` against `(70, 149, 244)` /
   `(68, 148, 244)`, and the light tab bar reads `(250, 250, 250)` against
-  `(249, 249, 249)` [measured]. Centering border darkening inside the body at
-  `d = −0.533` pt creates a spurious dark ring `1–2` px inside the edge
-  (`169` vs `249` on a white button, `200` vs `250` on a light tab bar, `20` vs
-  `38` on a dark tab bar) while leaving the outer boundary pixel undarkened.
+  `(249, 249, 249)` [measured].
 - **Lateral opposing lobes.** Two opposing directional lobes (`bearing = π/2`,
   `strength = 0.4`, `aperture = 75°` in dark and clear recipes, `106°` in light
   SDR; each lobe is a saturated directional ramp `q` shaped as
-  `q / max(1 + strength·(1 − q), ε)` summed into `h_lat`) produce identical
-  darkened backdrop values at `d = +0.25` pt across regular light, regular
-  dark, and dark prominent elements: `(190, 190, 190)` over white
-  `(255, 255, 255)`, `(43..44, 97, 50..51)` over green `(81, 165, 104)`, and
-  `(23, 52..53, 169..170)` over blue `(55, 109, 233)` [measured].
+  `q / max(1 + strength·(1 − q), ε)` summed into `h_lat`) produce dark lateral
+  perimeter lobes (`0.68` linear black alpha on `ring_cov`) across regular
+  light, regular dark, and dark prominent elements [measured].
 - **Light-appearance `360°` dark hairline base.** In light regular glass, an
-  omnidirectional crisp dark hairline runs around the full perimeter at
-  `d = +0.25` pt: top/bottom (`0°` / `180°`) read `(235, 235, 235)` /
-  `(231, 231, 231)` over white, `(71, 148, 90)` / `(70, 146, 89)` over green
-  `(81, 166, 104)`, `(45, 92, 214)` / `(45, 90, 211)` over blue
-  `(55, 109, 234)`, and `(67, 140, 83)` at `45°` over green; dark appearance
-  reads `1.0 · backdrop` at top/bottom [measured].
-- **Unified exterior and straddle perimeter law.** The radial profile is
-  `band_ext(d) = sat(1 − |d − 0.25| / 0.533)` (`border_band_offset = +0.25` pt,
-  `border_band_width = 0.533` pt), combining the omnidirectional base weight
-  `h_base` (`0.19` linear black alpha in light regular, `0` in dark and clear)
-  with the lateral lobe contribution `0.52 · h_lat` linear black alpha (or
-  equivalent Display P3 cubic colour bias `C · (1 + bias · h · (3 − 2·C))`)
-  composited outside the silhouette (`1 − cov`) and attenuating straddling
-  anti-aliased boundary pixels (`0 < cov < 1`) so sub-pixel coverage edges
-  preserve the crisp dark perimeter rather than washing it out [fitted].
+  omnidirectional dark hairline runs around the full perimeter with base weight
+  `h_base = 0.28` linear black alpha combined via `mix(h_base, 0.68, h_lat)`;
+  dark appearance carries `h_base = 0` and clear glass carries `ring_black = 0`
+  everywhere [measured].
+- **Inset glass body.** Evaluating `glass_body`, `highlight_light`, and
+  `tint_alphas` on `body_d = d + 0.40` pt with `cov_body = sat(0.5 − body_sdf / fw)`
+  keeps bright glass wash off the perimeter annulus so the `0.5` pt rim stays
+  crisp over white and saturated colour backdrops alike, while
+  `cov_perim = sat(0.5 − (geom_sdf − 0.20·u) / fw)` vanishes `1` px outside the
+  element [fitted].
 
 ### 4.10 Cast shadow
 
@@ -359,13 +350,14 @@ The clear family casts no shadow [measured].
 
 ### 4.11 Output
 
-Inside `cov > 0`, the glass body, highlight, and tint layers accumulate a
-straight (unpremultiplied) colour `C` that is premultiplied by the antialiased
-coverage `cov` once at final compositing [fitted]. Outside the silhouette
-(`1 − cov`), the §4.9 exterior perimeter border ring (together with the light
-prominent perimeter stroke of §4.13 when active) composites alongside the §4.10
-cast shadow, while straddling boundary pixels (`0 < cov < 1`) receive the §4.9
-perimeter attenuation before output [fitted]. Each colour channel is limited to
+Inside `cov_body > 0` (`body_d = d + 0.40` pt), the glass body, highlight, and
+tint layers accumulate a straight (unpremultiplied) colour `C` that is
+premultiplied by `cov_body` once at final compositing [fitted]. Across the
+perimeter annulus `ring_cov = max(cov_perim − cov_body, 0)`, the §4.9 perimeter
+border ring (or the light prominent darkened-tint stroke of §4.13 when active)
+composites alongside the §4.10 cast shadow, with total alpha
+`cov_body + ring_cov · mix(cast_alpha, 1, ring_black) + (1 − cov_perim) · cast_alpha`
+(or `cov_perim + (1 − cov_perim) · cast_alpha` for light prominent) [fitted]. Each colour channel is limited to
 the **channel ceiling**, then to the **display peak**, the largest encoded
 value the target holds: 1.0 on an SDR target, 1.2 on the observed HDR display
 [measured]. On an SDR target both limits sit above the 1.0 the target holds.
@@ -399,13 +391,10 @@ lights, a **first** and a **second**:
   `(85 → 62 → 42 → 38)` at `d = −0.25, −0.75, −1.25, −2.25` pt and over
   saturated blue `(55, 109, 234)` in dark and light appearances within `6.9`
   and `4.5` levels RMSE respectively].
-- **Outer-lip taper.** Measured top and bottom rim profiles over saturated
-  green and blue in light appearance peak `0.5–0.75` pt inside `d = 0`
-  (`(148, 249, 189)` at `d = −0.75` pt against `(137, 239, 174)` at
-  `d = −0.25` pt and `(71, 148, 90)` at `d = +0.25` pt) [measured]. The narrow
-  band is multiplied by an outer-lip ramp `sat(−d / 0.35)` so specular white
-  does not bleed onto `0 < cov < 1` boundary pixels and erase the §4.9 dark
-  hairline [fitted].
+- **Inset rim alignment.** Because the glass body and highlight evaluate on the
+  inset distance `body_d = d + 0.40` pt (§4.9), the narrow specular band peaks
+  `0.5–0.75` pt inside the nominal `d = 0` edge without bleeding onto the
+  perimeter border annulus [fitted].
 - Whether the highlights respond to device motion is open: no observation was
   made with the device tilted.
 
@@ -421,14 +410,9 @@ tint colour, and an edge gradient of the tint colour at full alpha from −1 to
   multiplying by `cov` a second time, because a duplicate `cov` factor yields
   `cov²` edge blending that washes prominent anti-aliased boundaries to
   `(229, 235, 245)` over white [fitted].
-- **Light prominent `0.5` pt outer perimeter stroke.** In light appearance,
-  prominent tinted elements carry a `0.5` pt darkened-tint outer perimeter
-  stroke over `d ∈ [0, 0.5]` pt: `(57, 129, 239)` top/bottom and
-  `(52, 119, 221)` left/right over white; `(48, 109, 175)` top/bottom and
-  `(38, 90, 176)` left over green; `(39, 93, 182)` top/bottom and
-  `(35, 84, 168)` right over blue [measured]. The stroke composites the
-  darkened tint fill `fill · (0.90 − 0.08 · h_lat)` over `d ∈ [0, 0.5]` pt
-  [fitted].
+- **Light prominent perimeter stroke.** In light appearance, prominent tinted
+  elements fill the §4.9 perimeter annulus `ring_cov` with the darkened tint
+  `fill · (0.90 − 0.08 · h_lat)` weighted by `ring_cov` [fitted].
 
 The strength with which the flat and edge tint layers composite on non-prominent
 elements, relative to the tint's declared opacity, is open.
@@ -1434,13 +1418,9 @@ width; the height and the parts are the same at every control size,
 mini through extra large [measured: simulator].
 
 - **Label spacing.** A labelled slider places its `Body` (`17.0` pt, `20.02` pt
-  natural line height, §8.0) label above the `31` pt slider row with `5.5` pt
-  vertical spacing between the label band and the slider row (`1` px downward
-  shift at `2×` relative to `5.0` pt aligns the `24` pt knob to `y = 84..127`
-  px, `42.0..63.5` pt in the `80` pt dark-appearance viewport with `12` pt
-  padding, with `"Volume"` ink above and the `6` pt track centred on the knob;
-  an `8.0` pt gap shifts the label `1.5` pt high and the track `1.5` pt low)
-  [measured].
+  natural line height, §8.0) label above the `31` pt slider row with `5.0` pt
+  vertical spacing between the label band and the slider row, keeping the `6` pt
+  track aligned on integer pixel rows [measured].
 - **Corners.** The track and the knob are capsules, radius 3 and 12, with
   continuous corners [chosen: the 1/3 pt sampling does not separate
   circular from continuous corners].

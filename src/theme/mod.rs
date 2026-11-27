@@ -28,17 +28,41 @@ pub mod switch;
 
 use core::time::Duration;
 
+use cherenkov_record::MaterialRegistry;
+#[cfg(any(test, waterui_feature = "navigation"))]
+use cherenkov_record::Recorder;
 use cherenkov_record::kurbo::Rect;
-use cherenkov_record::{MaterialRegistry, Recorder};
 use hydrolysis_style::Style;
+#[cfg(waterui_feature = "table")]
+use hydrolysis_style::theme::TableLook;
 use hydrolysis_style::theme::{
-    BadgeLook, ButtonLook, ButtonSpec, CardLook, CheckboxLook, CodeLook, DialogLook, FloatingLook,
-    GlassLook, IndicatorLook, LinearProgressLook, ListLook, ListSpec, MenuLook, MenuPickerLook,
-    MenuSpec, NavigationBarLook, NavigationSpec, PickerSpec, ProgressSpec, RadioGroupLook,
-    ScrollIndicatorLook, SegmentedLook, SegmentedSpec, SheetLook, SliderLook, SliderSpec,
-    SnackbarLook, StepperLook, StepperSpec, SwitchLook, TableLook, TabsLook, TabsSpec,
-    TextFieldLook, TextFieldSpec, ToggleSpec, WidgetTheme,
+    BadgeLook, ButtonLook, ButtonSpec, CardLook, CodeLook, DialogLook, FloatingLook, GlassLook,
+    IndicatorLook, LinearProgressLook, ProgressSpec, ScrollIndicatorLook, SheetLook, SnackbarLook,
+    WidgetTheme,
 };
+#[cfg(waterui_feature = "toggle")]
+use hydrolysis_style::theme::{CheckboxLook, SwitchLook, ToggleSpec};
+#[cfg(waterui_feature = "list")]
+use hydrolysis_style::theme::{ListLook, ListSpec};
+#[cfg(waterui_feature = "menu")]
+use hydrolysis_style::theme::{MenuLook, MenuSpec};
+#[cfg(any(waterui_feature = "picker", waterui_feature = "date-picker"))]
+use hydrolysis_style::theme::{MenuPickerLook, PickerSpec};
+#[cfg(waterui_feature = "navigation")]
+use hydrolysis_style::theme::{NavigationBarLook, NavigationSpec, TabsLook, TabsSpec};
+#[cfg(waterui_feature = "picker")]
+use hydrolysis_style::theme::{RadioGroupLook, SegmentedLook, SegmentedSpec};
+#[cfg(waterui_feature = "slider")]
+use hydrolysis_style::theme::{SliderLook, SliderSpec};
+#[cfg(waterui_feature = "stepper")]
+use hydrolysis_style::theme::{StepperLook, StepperSpec};
+#[cfg(any(
+    waterui_feature = "text-field",
+    waterui_feature = "secure-field",
+    waterui_feature = "date-picker",
+    waterui_feature = "color-picker"
+))]
+use hydrolysis_style::theme::{TextFieldLook, TextFieldSpec};
 use nami::Signal as _;
 use waterui_controls::ControlSize;
 use waterui_controls::button::ButtonStyle;
@@ -209,6 +233,7 @@ impl Default for Glass {
 /// widget-chrome surfaces (a button, a tab bar, a toolbar) draw as their
 /// own members; the containers that fuse neighbours mount under a
 /// `MaterialScope` the host gives the recording.
+#[cfg(any(test, waterui_feature = "navigation"))]
 fn record_standalone(recorder: &mut Recorder, surface: &Surface) {
     materials::record(recorder, &surface.element, false);
 }
@@ -293,38 +318,52 @@ impl WidgetTheme for Glass {
         looks::button(self, spec, env)
     }
 
+    #[cfg(waterui_feature = "toggle")]
     fn switch(&self, spec: &ToggleSpec, env: &Environment) -> SwitchLook {
         looks::switch(self, spec, env)
     }
 
+    #[cfg(waterui_feature = "toggle")]
     fn checkbox(&self, spec: &ToggleSpec, env: &Environment) -> CheckboxLook {
         looks::checkbox(self, spec, env)
     }
 
+    #[cfg(waterui_feature = "stepper")]
     fn stepper(&self, spec: &StepperSpec, env: &Environment) -> StepperLook {
         looks::stepper(self, spec, env)
     }
 
+    #[cfg(any(
+        waterui_feature = "text-field",
+        waterui_feature = "secure-field",
+        waterui_feature = "date-picker",
+        waterui_feature = "color-picker"
+    ))]
     fn text_field(&self, spec: &TextFieldSpec, env: &Environment) -> TextFieldLook {
         looks::text_field(self, spec, env)
     }
 
+    #[cfg(waterui_feature = "menu")]
     fn menu(&self, spec: &MenuSpec, env: &Environment) -> MenuLook {
         looks::menu(self, *spec, env)
     }
 
+    #[cfg(any(waterui_feature = "picker", waterui_feature = "date-picker"))]
     fn menu_picker(&self, spec: &PickerSpec, env: &Environment) -> MenuPickerLook {
         looks::menu_picker(self, spec, env)
     }
 
+    #[cfg(waterui_feature = "picker")]
     fn radio_group(&self, spec: &PickerSpec, env: &Environment) -> RadioGroupLook {
         looks::radio_group(self, spec, env)
     }
 
+    #[cfg(waterui_feature = "picker")]
     fn segmented_picker(&self, spec: &SegmentedSpec, env: &Environment) -> SegmentedLook {
         looks::segmented_picker(self, spec, env)
     }
 
+    #[cfg(waterui_feature = "slider")]
     fn slider(&self, spec: &SliderSpec, env: &Environment) -> SliderLook {
         looks::slider(self, spec, env)
     }
@@ -341,10 +380,12 @@ impl WidgetTheme for Glass {
         looks::loading(self, spec, env)
     }
 
+    #[cfg(waterui_feature = "navigation")]
     fn navigation_bar(&self, spec: &NavigationSpec, env: &Environment) -> NavigationBarLook {
         looks::navigation_bar(self, *spec, env)
     }
 
+    #[cfg(waterui_feature = "navigation")]
     fn tabs(&self, spec: &TabsSpec, env: &Environment) -> TabsLook {
         looks::tabs(self, *spec, env)
     }
@@ -369,10 +410,12 @@ impl WidgetTheme for Glass {
         looks::floating(self, env)
     }
 
+    #[cfg(waterui_feature = "list")]
     fn list(&self, _spec: &ListSpec, _env: &Environment) -> ListLook {
         looks::list(self)
     }
 
+    #[cfg(waterui_feature = "table")]
     fn table(&self, _env: &Environment) -> TableLook {
         looks::table(self)
     }

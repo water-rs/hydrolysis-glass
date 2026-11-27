@@ -13,7 +13,7 @@ repository = "https://github.com/water-rs/hydrolysis-glass"
 description = "Glass material widget theme for WaterUI Hydrolysis"
 keywords = ["ui", "theme", "glass", "waterui", "graphics"]
 categories = ["gui"]
-include = ["src/**", "shaders/**", "README.md", "LICENSE-*"]
+include = ["build.rs", "src/**", "shaders/**", "README.md", "LICENSE-*"]
 
 [package.metadata.waterui.assets]
 
@@ -22,7 +22,41 @@ name = "Inter"
 platforms = ["android", "linux", "windows", "web"]
 
 [features]
-default = []
+default = ["all-controls"]
+all-controls = [
+    "menu",
+    "calendar",
+    "color-picker",
+    "date-picker",
+    "file-picker",
+    "multi-date-picker",
+    "picker",
+    "secure-field",
+    "slider",
+    "stepper",
+    "text-field",
+    "toggle",
+    "validation",
+    "list",
+    "table",
+    "navigation",
+]
+menu = ["hydrolysis-style/menu", "waterui-controls/menu"]
+calendar = ["hydrolysis-style/calendar"]
+color-picker = ["hydrolysis-style/color-picker"]
+date-picker = ["calendar", "stepper", "menu", "hydrolysis-style/date-picker"]
+file-picker = ["hydrolysis-style/file-picker"]
+multi-date-picker = ["calendar", "hydrolysis-style/multi-date-picker"]
+picker = ["menu", "hydrolysis-style/picker"]
+secure-field = ["menu", "hydrolysis-style/secure-field"]
+slider = ["hydrolysis-style/slider", "waterui-controls/slider"]
+stepper = ["hydrolysis-style/stepper", "waterui-controls/stepper"]
+text-field = ["menu", "hydrolysis-style/text-field", "waterui-controls/text-field"]
+toggle = ["hydrolysis-style/toggle", "waterui-controls/toggle"]
+validation = ["text-field", "hydrolysis-style/validation"]
+list = ["hydrolysis-style/list", "waterui-controls/list"]
+table = ["list", "hydrolysis-style/table", "waterui-controls/table"]
+navigation = ["text-field", "hydrolysis-style/navigation"]
 # GPU→CPU readback for the verification harness. Off for consumers:
 # nothing may build a readback path on the runtime API.
 verification = []
@@ -34,7 +68,7 @@ bytemuck = { version = "1", default-features = false, features = ["derive"] }
 # (`MaterialRegistry`, `Recorder::backdrop_material`, `MaterialEffect`,
 # `CaptureClass`) — the render-target-neutral layer, never the engine.
 cherenkov-record = { version = "0.0.0", default-features = false }
-hydrolysis-style = { version = "0.5.1", default-features = false, features = ["all-controls"] }
+hydrolysis-style = { version = "0.5.1", default-features = false }
 nami = { version = "0.13", default-features = false }
 waterui-controls = { version = "0.5.1", default-features = false }
 waterui-core = { version = "0.5.1", default-features = false, features = ["std"] }

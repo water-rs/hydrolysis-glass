@@ -405,11 +405,9 @@ fn highlight_light(r: Recipe, d: f32, n: vec2<f32>, cov: f32) -> vec4<f32> {
     let band_h = HIGHLIGHT_BAND;
     let band_h2 = HIGHLIGHT_BAND * r.hl_bb.y;
     var band = vec2<f32>(0.0);
-    // narrow band with §4.12 outer-lip taper so specular white does not bleed
-    // onto straddling boundary pixels and wash out the exterior perimeter ring
+    // narrow band
     let s = sat(-d / band_h);
-    let lip = sat(-d / 0.35);
-    band.x = (1.0 - r.hl_a.x * s) * (1.0 - s) * lip * cov;
+    band.x = (1.0 - r.hl_a.x * s) * (1.0 - s) * cov;
     // glow band
     let s2 = sat(-d / band_h2);
     band.y = (1.0 - r.hl_a.x * s2) * (1.0 - s2) * cov;
@@ -561,8 +559,7 @@ fn material_fragment(v: FullscreenOut) -> @location(0) vec4<f32> {
     let f = load_field(px);
     let owner = min(f.owner, arrayLength(&recipes) - 1u);
     let r = recipes[owner];
-    let fw = fwidth(f.d);
-    let cov = sat(0.5 - f.d / fw);
+    let fw = max(fwidth(f.d), 1e-4);
     let backdrop = sample_backdrop(p);
 
     let is_light = r.ambient_misc.z > 0.5;
@@ -588,17 +585,18 @@ fn material_fragment(v: FullscreenOut) -> @location(0) vec4<f32> {
 
     let n = f.n / max(length(f.n), 1e-4);
     let h_lat = border_lateral(r, n);
-    let band_ext = sat(1.0 - abs(f.d - r.border_a.w) / max(r.border_a.z, 1e-4));
-    let h_base = select(0.0, 0.19, is_light_regular);
-    let border_alpha = select(band_ext * mix(h_base, 0.52, h_lat), 0.0, is_light_prominent);
-    let ext_alpha = 1.0 - (1.0 - cast_alpha) * (1.0 - border_alpha);
-    let stroke_cov = select(0.0, sat(0.5 - (f.d - 0.5) / max(fw, 1e-4)), is_light_prominent);
+    let h_base = select(0.0, 0.28, is_light_regular);
+    let ring_black = select(mix(h_base, 0.68, h_lat), 0.0, is_clear);
+    let body_d = f.d + 0.40;
+    let cov_body = sat(0.5 - body_d / fw);
+    let cov_perim = sat(0.5 - (f.d - 0.20) / fw);
+    let ring_cov = max(cov_perim - cov_body, 0.0);
     let backdrop_lin = srgb_decode(backdrop.rgb);
 
     var outc = backdrop;
-    if cov > 0.0 {
+    if cov_body > 0.0 {
         let own_elem = elements[min(owner, arrayLength(&elements) - 1u)];
-        var C = glass_body(r, own_elem.rect.zw, p, f.d, n, cov, uni.scene.z);
+        var C = glass_body(r, own_elem.rect.zw, p, body_d, n, cov_body, uni.scene.z);
         // §4.11: the per-channel ceiling, then the display peak.
         C = clamp(C, vec3<f32>(0.0), vec3<f32>(min(r.cast_b.z, uni.misc.x)));
         // §4.12: the highlight sibling.
@@ -608,7 +606,7 @@ fn material_fragment(v: FullscreenOut) -> @location(0) vec4<f32> {
         // the engine's `backdrop_effect` does.
         let k_mul = select(select(0.050, 0.125, is_light), 0.105, is_prominent);
         let k_add = select(select(0.190, 0.000, is_light), 0.038, is_prominent);
-        let raw_light = highlight_light(r, f.d, n, cov);
+        let raw_light = highlight_light(r, body_d, n, cov_body);
         let own_center = own_elem.rect.xy + own_elem.rect.zw * 0.5;
         let touch_pt = select(own_center, r.contour_misc.yz, r.contour_misc.w > 0.5);
         let touch_radius = max(0.5 * own_elem.rect.z, 40.0);
@@ -616,7 +614,7 @@ fn material_fragment(v: FullscreenOut) -> @location(0) vec4<f32> {
         let phi = sat(max(r.hl_b.w, 0.0)) * (1.0 - 0.37 * u_t * u_t);
         let press_boost = 1.0 + 0.35 * phi;
         let light = vec4<f32>(raw_light.rgb * press_boost, raw_light.w);
-        let tint = tint_alphas(r, f.d, cov);
+        let tint = tint_alphas(r, body_d, cov_body);
         let fill = select(
             r.tint.rgb,
             prominent_tint_rgb(r.tint.rgb, C, is_light),
@@ -630,32 +628,31 @@ fn material_fragment(v: FullscreenOut) -> @location(0) vec4<f32> {
             let lift_room = max(vec3<f32>(1.0) - C, vec3<f32>(0.0));
             C = C + phi * 0.22 * lift_room * (0.65 + 0.35 * c_sat);
         }
-        C = C + cross_element_bleed(owner, p, f.d, n, C);
+        C = C + cross_element_bleed(owner, p, body_d, n, C);
         let c_lin = srgb_decode(C);
         if is_light_prominent {
-            let ext_stroke = stroke_cov * (1.0 - cov);
-            let ext_cast = (1.0 - stroke_cov) * cast_alpha * (1.0 - cov);
-            let a = cov + ext_stroke + ext_cast;
+            let a = cov_perim + (1.0 - cov_perim) * cast_alpha;
             let stroke_lin = srgb_decode(fill * (0.90 - 0.08 * h_lat));
-            let out_lin = c_lin * cov + stroke_lin * ext_stroke + backdrop_lin * (1.0 - a);
+            let out_lin = c_lin * cov_body + stroke_lin * ring_cov + backdrop_lin * (1.0 - a);
             outc = vec4<f32>(srgb_encode(out_lin), a + backdrop.a * (1.0 - a));
         } else {
-            let a = cov + (1.0 - cov) * ext_alpha;
-            let atten = 1.0 - border_alpha * (1.0 - cov);
-            let out_lin = c_lin * atten * cov + backdrop_lin * (1.0 - a);
+            let a = cov_body + ring_cov * mix(cast_alpha, 1.0, ring_black)
+                + (1.0 - cov_perim) * cast_alpha;
+            let out_lin = c_lin * cov_body + backdrop_lin * (1.0 - a);
             outc = vec4<f32>(srgb_encode(out_lin), a + backdrop.a * (1.0 - a));
         }
-    } else if is_light_prominent && stroke_cov > 0.0 {
+    } else if is_light_prominent && ring_cov > 0.0 {
         let y_b = luma(unpremultiply(backdrop));
         let fill = r.tint.rgb * (0.60 + 0.40 * y_b);
         let stroke_lin = srgb_decode(fill * (0.90 - 0.08 * h_lat));
-        let a = stroke_cov + (1.0 - stroke_cov) * cast_alpha;
-        let out_lin = stroke_lin * stroke_cov + backdrop_lin * (1.0 - a);
+        let a = cov_perim + (1.0 - cov_perim) * cast_alpha;
+        let out_lin = stroke_lin * ring_cov + backdrop_lin * (1.0 - a);
         outc = vec4<f32>(srgb_encode(out_lin), a + backdrop.a * (1.0 - a));
     } else {
-        // Outside the silhouette: the cast shadow and exterior perimeter ring
+        // Outside the inset body: the cast shadow and perimeter border ring
         // darken the backdrop in linear Display P3 and keep its coverage.
-        let out_lin = backdrop_lin * (1.0 - ext_alpha);
+        let a = ring_cov * mix(cast_alpha, 1.0, ring_black) + (1.0 - cov_perim) * cast_alpha;
+        let out_lin = backdrop_lin * (1.0 - a);
         outc = vec4<f32>(srgb_encode(out_lin), backdrop.a);
     }
     return outc;

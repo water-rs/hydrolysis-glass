@@ -49,6 +49,11 @@ const TARGETS: &[ParityTarget] = &[
         height: 96,
     },
     ParityTarget {
+        preview_fn: "button_symbol_glass",
+        width: 220,
+        height: 80,
+    },
+    ParityTarget {
         preview_fn: "toggle_switch",
         width: 220,
         height: 80,
@@ -90,6 +95,11 @@ const TARGETS: &[ParityTarget] = &[
     },
     ParityTarget {
         preview_fn: "tabs",
+        width: 400,
+        height: 260,
+    },
+    ParityTarget {
+        preview_fn: "tabs_four",
         width: 400,
         height: 260,
     },
@@ -250,6 +260,7 @@ fn run_case(
             width: candidate.width(),
             height: candidate.height(),
             blank,
+            max_edr_headroom: None,
             comparison: Some(StageComparison {
                 reference_path: reference_rel,
                 reference_label: Some("waterui-apple (ios)".to_string()),

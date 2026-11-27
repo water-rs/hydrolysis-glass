@@ -76,8 +76,8 @@ const HL_SECOND_COLOUR: vec4<f32> = vec4<f32>(1.0);
 
 const BORDER_STRENGTH: f32 = 0.4;
 const BORDER_BEARING: f32 = PI * 0.5;
-const BORDER_BAND_WIDTH: f32 = 0.533;
-const BORDER_BAND_OFFSET: f32 = 0.25;
+const BODY_INSET_PT: f32 = 0.40;
+const PERIM_OUTSET_PT: f32 = 0.20;
 
 // Display P3 luminance weights.
 const LUMA_WEIGHTS: vec3<f32> = vec3<f32>(0.22897456, 0.69173852, 0.07928691);
@@ -438,11 +438,9 @@ fn highlight_light(d: f32, n: vec2<f32>, cov: f32, aperture: f32) -> vec4<f32> {
     let cs2 = cos(0.5 * aperture * HL_GLOW_APERTURE);
     let band_h = HIGHLIGHT_BAND;
     let band_h2 = HIGHLIGHT_BAND * HL_GLOW_WIDTH;
-    // narrow band with §4.12 outer-lip taper so specular white does not bleed
-    // onto straddling boundary pixels and wash out the exterior perimeter ring
+    // narrow band
     let s = gsat(-d / band_h);
-    let lip = gsat(-d / 0.35);
-    let band_narrow = (1.0 - HL_INNER_FADE * s) * (1.0 - s) * lip * cov;
+    let band_narrow = (1.0 - HL_INNER_FADE * s) * (1.0 - s) * cov;
     // glow band
     let s2 = gsat(-d / band_h2);
     let band_glow = (1.0 - HL_INNER_FADE * s2) * (1.0 - s2) * cov;
@@ -570,33 +568,35 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
     let is_light_regular = is_light && !is_clear && !is_prominent;
     let is_light_prominent = is_light && is_prominent;
     let h_lat = border_lateral(n, params[11].z);
-    let band_ext = gsat(1.0 - abs(d - BORDER_BAND_OFFSET) / BORDER_BAND_WIDTH);
-    let h_base = select(0.0, 0.19, is_light_regular);
-    let border_alpha = select(band_ext * mix(h_base, 0.52, h_lat), 0.0, is_light_prominent);
-    let ext_alpha = 1.0 - (1.0 - cast_alpha) * (1.0 - border_alpha);
-    let stroke_cov = select(0.0, gsat(0.5 - (geom_sdf - 0.5 * u) / fw), is_light_prominent);
+    let h_base = select(0.0, 0.28, is_light_regular);
+    let ring_black = select(mix(h_base, 0.68, h_lat), 0.0, is_clear);
 
-    // The silhouette coverage: a half-device-pixel ramp at the member's
-    // effective field edge.
-    let cov = gsat(0.5 - geom_sdf / fw);
-    if cov <= 0.0 {
-        if is_light_prominent && stroke_cov > 0.0 {
+    // §4.9 / §4.11: inset glass body by 0.40 pt while the perimeter border ring
+    // occupies the 0.60 pt annulus `cov_perim - cov_body` around `d = 0`.
+    let body_sdf = geom_sdf + BODY_INSET_PT * u;
+    let body_d = d + BODY_INSET_PT;
+    let cov_body = gsat(0.5 - body_sdf / fw);
+    let cov_perim = gsat(0.5 - (geom_sdf - PERIM_OUTSET_PT * u) / fw);
+    let ring_cov = max(cov_perim - cov_body, 0.0);
+    if cov_body <= 0.0 {
+        if is_light_prominent && ring_cov > 0.0 {
             let y_b = luma(glass_work_space(backdrop_sample(px.p)));
             let fill = params[13].rgb * (0.60 + 0.40 * y_b);
             let stroke_lin = space_srgb_decode(fill * (0.90 - 0.08 * h_lat));
-            let a = stroke_cov + (1.0 - stroke_cov) * cast_alpha;
-            return vec4<f32>(stroke_lin * stroke_cov, a);
+            let a = cov_perim + (1.0 - cov_perim) * cast_alpha;
+            return vec4<f32>(stroke_lin * ring_cov, a);
         }
-        return vec4<f32>(0.0, 0.0, 0.0, ext_alpha);
+        let a = ring_cov * mix(cast_alpha, 1.0, ring_black) + (1.0 - cov_perim) * cast_alpha;
+        return vec4<f32>(0.0, 0.0, 0.0, a);
     }
 
     var c = glass_body(
         params,
         px.p,
-        d,
+        body_d,
         n,
         u,
-        cov,
+        cov_body,
         sibling_count,
         self_index,
         is_prominent,
@@ -614,7 +614,7 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
         vec2<f32>(0.105, 0.038),
         is_prominent,
     );
-    let raw_light = highlight_light(d, n, cov, params[12].w);
+    let raw_light = highlight_light(body_d, n, cov_body, params[12].w);
     let press_p = max(params[5].y, 0.0);
     let own_center = params[14].zw + params[15].xy * 0.5;
     let touch_pt = select(own_center, params[1].xy, params[9].x > 0.5);
@@ -623,7 +623,7 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
     let phi = gsat(press_p) * (1.0 - 0.37 * u_t * u_t);
     let press_boost = 1.0 + 0.35 * phi;
     let light = vec4<f32>(raw_light.rgb * press_boost, raw_light.w);
-    let tint = tint_alphas(params[13].a, params[15].w, d, cov);
+    let tint = tint_alphas(params[13].a, params[15].w, body_d, cov_body);
     let y_b = luma(c);
     let prom_w = select(gsat(0.12 * (y_b - 0.16)), 0.40 * (1.0 - y_b), is_light);
     let fill = mix(params[13].rgb, vec3<f32>(select(1.0, 0.0, is_light)), prom_w);
@@ -640,7 +640,7 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
     // siblings within `BLEED_RADIUS = 36.0 pt` (`lambda_bleed = 12.0 pt`).
     if sibling_count > 1u {
         let headroom = max(vec3<f32>(1.0) - c, vec3<f32>(0.0));
-        let edge_decay = exp(min(d, 0.0) / 8.0);
+        let edge_decay = exp(min(body_d, 0.0) / 8.0);
         var bleed = vec3<f32>(0.0);
         for (var i = 0u; i < sibling_count; i = i + 1u) {
             if i == self_index {
@@ -668,13 +668,10 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
     // primaries and unclamped HDR highlights (> 1.0).
     let c_lin = space_srgb_decode(c);
     if is_light_prominent {
-        let ext_stroke = stroke_cov * (1.0 - cov);
-        let ext_cast = (1.0 - stroke_cov) * cast_alpha * (1.0 - cov);
-        let a = cov + ext_stroke + ext_cast;
+        let a = cov_perim + (1.0 - cov_perim) * cast_alpha;
         let stroke_lin = space_srgb_decode(fill * (0.90 - 0.08 * h_lat));
-        return vec4<f32>(c_lin * cov + stroke_lin * ext_stroke, a);
+        return vec4<f32>(c_lin * cov_body + stroke_lin * ring_cov, a);
     }
-    let a = cov + (1.0 - cov) * ext_alpha;
-    let atten = 1.0 - border_alpha * (1.0 - cov);
-    return vec4<f32>(c_lin * atten * cov, a);
+    let a = cov_body + ring_cov * mix(cast_alpha, 1.0, ring_black) + (1.0 - cov_perim) * cast_alpha;
+    return vec4<f32>(c_lin * cov_body, a);
 }

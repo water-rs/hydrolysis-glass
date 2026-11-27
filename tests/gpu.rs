@@ -385,12 +385,13 @@ fn hdr_specular_rim_and_press_boost_exceed_sdr_peak() {
     let idle_img = h.render(Backdrop::White, &idle_scene);
     let pressed_img = h.render(Backdrop::White, &pressed_scene);
 
-    // Probe top rim 1 px inside top edge (y = 200.05 -> px 600, d = -0.17 pt inside 1.0 pt rim)
-    // and bottom rim 1 px inside bottom edge (y = 243.8 -> px 731, d = -0.17 pt).
-    let idle_near = sample_pt(&idle_img, 180.0, 200.05);
-    let pressed_near = sample_pt(&pressed_img, 180.0, 200.05);
-    let idle_far = sample_pt(&idle_img, 180.0, 243.8);
-    let pressed_far = sample_pt(&pressed_img, 180.0, 243.8);
+    // Probe top rim 1 px inside the 0.40 pt-inset glass body edge
+    // (y = 200.6 -> px 602, d = -0.60 pt, body_d = -0.20 pt inside 1.0 pt rim)
+    // and bottom rim symmetrically (y = 243.4 -> px 730, body_d = -0.20 pt).
+    let idle_near = sample_pt(&idle_img, 180.0, 200.6);
+    let pressed_near = sample_pt(&pressed_img, 180.0, 200.6);
+    let idle_far = sample_pt(&idle_img, 180.0, 243.4);
+    let pressed_far = sample_pt(&pressed_img, 180.0, 243.4);
 
     assert!(
         pressed_near[0] > 1.0 && pressed_near[1] > 1.0 && pressed_near[2] > 1.0,
@@ -507,127 +508,127 @@ fn cross_element_bleed_illuminates_adjacent_within_36pt() {
     }
 }
 
-/// §4.9 / §4.11 / §4.13: at `2 px/pt`, the dark perimeter ring sits outside the
-/// silhouette peaking at `d = +0.25 pt` without darkening interior pixels at
-/// `d = -0.25 pt`, and light prominent capsules carry a `0.5 pt` darkened-tint
-/// outer perimeter stroke.
-#[test]
-fn exterior_perimeter_ring_and_light_prominent_outer_stroke() {
+/// Samples `(center, lat_in, top_ring, lat_ring, outer)` at `2 px/pt` on
+/// `Rect(100, 200, 140, 44)`:
+/// left edge `x = 200 px` (`x = 201` is `d = -0.75 pt` interior glass, `x = 200`
+/// is `d = -0.25 pt` perimeter annulus `ring_cov = 0.80`, `x = 198` is
+/// `d = +0.75 pt` exterior backdrop), top edge `y = 400 px` (`y = 400` is
+/// `d = -0.25 pt` perimeter annulus), center `(340, 444)`.
+fn sample_perimeter_probes(img: &Image) -> [[f32; 4]; 5] {
+    let at = |px_x: u32, px_y: u32| img.pixels[(px_y * img.width + px_x) as usize];
+    [
+        at(340, 444),
+        at(201, 444),
+        at(340, 400),
+        at(200, 444),
+        at(198, 444),
+    ]
+}
+
+fn render_perimeter_capsule(
+    h: &mut Harness,
+    appearance: Appearance,
+    tint: Option<[f32; 3]>,
+    name: &str,
+) -> [[f32; 4]; 5] {
     use hydrolysis_glass::material::geometry::Rect;
     use hydrolysis_glass::material::recipe::Tint;
 
-    const SCALE_2X: f32 = 2.0;
-    let sample_2x = |img: &Image, px_x: u32, px_y: u32| -> [f32; 4] {
-        img.pixels[(px_y * img.width + px_x) as usize]
-    };
+    let shape = Shape::capsule(Rect::new(100.0, 200.0, 140.0, 44.0));
+    let mut elem = element(shape, Family::Regular, appearance, Translucency::default());
+    if let Some(rgb) = tint {
+        elem.recipe = elem.recipe.with_tint(Tint::flat(rgb, 1.0));
+    }
+    let img = h.render(
+        Backdrop::White,
+        &Scene::new(SCENE_PT, 2.0, vec![Group::single(elem)]),
+    );
+    img.save(name);
+    sample_perimeter_probes(&img)
+}
 
+/// §4.9 / §4.11 / §4.13: at `2 px/pt`, the glass body is inset by `0.40 pt`
+/// while the perimeter border ring occupies the `0.60 pt` annulus around `d = 0`
+/// without darkening interior pixels (`d = -0.75 pt`) or bleeding past `d = +0.75 pt`,
+/// and light prominent capsules carry a darkened-tint perimeter stroke on the annulus.
+#[test]
+fn exterior_perimeter_ring_and_light_prominent_outer_stroke() {
     let mut h = Harness::new();
-    let rect = Rect::new(100.0, 200.0, 140.0, 44.0);
-    let shape = Shape::capsule(rect);
-
-    let light_reg = element(
-        shape,
-        Family::Regular,
-        Appearance::Light,
-        Translucency::default(),
-    );
-    let dark_reg = element(
-        shape,
-        Family::Regular,
-        Appearance::Dark,
-        Translucency::default(),
-    );
-    let mut dark_prom = dark_reg;
-    dark_prom.recipe = dark_prom.recipe.with_tint(Tint::flat(
-        [63.0 / 255.0, 143.0 / 255.0, 247.0 / 255.0],
-        1.0,
-    ));
-    let mut light_prom = light_reg;
-    light_prom.recipe = light_prom.recipe.with_tint(Tint::flat(
-        [59.0 / 255.0, 134.0 / 255.0, 247.0 / 255.0],
-        1.0,
-    ));
-
-    let render = |h: &mut Harness, elem, name: &str| {
-        let img = h.render(
-            Backdrop::White,
-            &Scene::new(SCENE_PT, SCALE_2X, vec![Group::single(elem)]),
-        );
-        img.save(name);
-        img
-    };
-    let light_img = render(&mut h, light_reg, "perimeter_light_reg");
-    let dark_img = render(&mut h, dark_reg, "perimeter_dark_reg");
-    let dark_prom_img = render(&mut h, dark_prom, "perimeter_dark_prom");
-    let light_prom_img = render(&mut h, light_prom, "perimeter_light_prom");
-
-    // At 2 px/pt on rect (100, 200, 140, 44):
-    // - left edge x = 200 px: x = 199 is d = +0.25 pt, x = 200 is d = -0.25 pt
-    // - top edge y = 400 px:  y = 399 is d = +0.25 pt, y = 400 is d = -0.25 pt
-    // - center is (340, 444)
-    let light_center = sample_2x(&light_img, 340, 444);
-    let light_lat_in = sample_2x(&light_img, 200, 444);
-    let light_top_ext = sample_2x(&light_img, 340, 399);
-    let light_lat_ext = sample_2x(&light_img, 199, 444);
-
+    let [center, lat_in, top_ring, lat_ring, outer] =
+        render_perimeter_capsule(&mut h, Appearance::Light, None, "perimeter_light_reg");
     assert!(
-        (light_lat_in[0] - light_center[0]).abs() < 0.05,
-        "light regular interior at d = -0.25 pt must stay free of §4.9 darkening: \
-         edge {light_lat_in:?} vs center {light_center:?}"
+        (lat_in[0] - center[0]).abs() < 0.05,
+        "light regular interior at d = -0.75 pt must stay free of §4.9 darkening: \
+         edge {lat_in:?} vs center {center:?}"
     );
     assert!(
-        light_top_ext[0] < 0.94 && light_top_ext[0] > 0.87,
-        "light regular top exterior hairline at d = +0.25 pt must darken white backdrop (~232/255): \
-         {light_top_ext:?}"
+        top_ring[0] < 0.93 && top_ring[0] > 0.85,
+        "light regular top perimeter ring at d = -0.25 pt must darken white backdrop (~228-235/255): \
+         {top_ring:?}"
     );
     assert!(
-        light_lat_ext[0] < 0.78 && light_lat_ext[0] > 0.68,
-        "light regular lateral exterior lobe at d = +0.25 pt must darken white backdrop (~184-190/255): \
-         {light_lat_ext:?}"
+        lat_ring[0] < 0.76 && lat_ring[0] > 0.65,
+        "light regular lateral perimeter lobe at d = -0.25 pt must darken white backdrop (~178-190/255): \
+         {lat_ring:?}"
+    );
+    assert!(
+        outer[0] > 0.98,
+        "light regular outer pixel at d = +0.75 pt must stay clear of perimeter ring: {outer:?}"
     );
 
-    // Dark regular & dark prominent: top exterior untouched (`h_base = 0`),
-    // clean interior at `d = -0.25 pt`, lateral exterior matches light regular.
-    for (label, img) in [("dark_reg", &dark_img), ("dark_prom", &dark_prom_img)] {
-        let center = sample_2x(img, 340, 444);
-        let lat_in = sample_2x(img, 200, 444);
-        let top_ext = sample_2x(img, 340, 399);
-        let lat_ext = sample_2x(img, 199, 444);
+    let dark_cases = [
+        ("dark_reg", None, "perimeter_dark_reg"),
+        (
+            "dark_prom",
+            Some([63.0 / 255.0, 143.0 / 255.0, 247.0 / 255.0]),
+            "perimeter_dark_prom",
+        ),
+    ];
+    for (label, tint, name) in dark_cases {
+        let [c, l_in, t_ring, l_ring, out] =
+            render_perimeter_capsule(&mut h, Appearance::Dark, tint, name);
         assert!(
-            (lat_in[0] - center[0]).abs() < 0.06 && (lat_in[2] - center[2]).abs() < 0.06,
-            "{label} interior at d = -0.25 pt must stay free of §4.9 darkening: \
-             edge {lat_in:?} vs center {center:?}"
+            (l_in[0] - c[0]).abs() < 0.06 && (l_in[2] - c[2]).abs() < 0.06,
+            "{label} interior at d = -0.75 pt must stay free of §4.9 darkening: \
+             edge {l_in:?} vs center {c:?}"
         );
         assert!(
-            top_ext[0] > 0.99,
-            "{label} top exterior at d = +0.25 pt must leave backdrop untouched: {top_ext:?}"
+            t_ring[0] > 0.80,
+            "{label} top perimeter at d = -0.25 pt must carry no h_base darkening: {t_ring:?}"
         );
         assert!(
-            (lat_ext[0] - light_lat_ext[0]).abs() < 0.02,
-            "{label} lateral exterior at d = +0.25 pt must match light regular: \
-             {label} {lat_ext:?} vs light {light_lat_ext:?}"
+            l_ring[0] < 0.72,
+            "{label} lateral perimeter at d = -0.25 pt must darken backdrop: {l_ring:?}"
+        );
+        assert!(
+            out[0] > 0.98,
+            "{label} outer pixel at d = +0.75 pt must stay clear of perimeter ring: {out:?}"
         );
     }
 
-    // Light prominent: clean interior at `d = -0.25 pt` and `0.5 pt` darkened-tint
-    // outer stroke at `d = +0.25 pt` on top and lateral.
-    let prom_center = sample_2x(&light_prom_img, 340, 444);
-    let prom_lat_in = sample_2x(&light_prom_img, 200, 444);
-    let prom_top_ext = sample_2x(&light_prom_img, 340, 399);
-    let prom_lat_ext = sample_2x(&light_prom_img, 199, 444);
-    assert!(
-        (prom_lat_in[2] - prom_center[2]).abs() < 0.05,
-        "light prominent interior at d = -0.25 pt must keep full tint coverage: \
-         edge {prom_lat_in:?} vs center {prom_center:?}"
+    let [p_c, p_in, p_top, p_lat, p_out] = render_perimeter_capsule(
+        &mut h,
+        Appearance::Light,
+        Some([59.0 / 255.0, 134.0 / 255.0, 247.0 / 255.0]),
+        "perimeter_light_prom",
     );
     assert!(
-        prom_top_ext[2] > prom_top_ext[0] + 0.50 && prom_top_ext[2] < prom_center[2],
-        "light prominent top exterior at d = +0.25 pt must render darkened blue outer stroke: \
-         top {prom_top_ext:?} vs center {prom_center:?}"
+        (p_in[2] - p_c[2]).abs() < 0.05,
+        "light prominent interior at d = -0.75 pt must keep full tint coverage: \
+         edge {p_in:?} vs center {p_c:?}"
     );
     assert!(
-        prom_lat_ext[2] > prom_lat_ext[0] + 0.45 && prom_lat_ext[2] < prom_top_ext[2],
-        "light prominent lateral exterior at d = +0.25 pt must be darker blue than top stroke: \
-         lat {prom_lat_ext:?} vs top {prom_top_ext:?}"
+        p_top[2] > p_top[0] + 0.50 && p_top[2] < p_c[2],
+        "light prominent top perimeter at d = -0.25 pt must render darkened blue stroke: \
+         top {p_top:?} vs center {p_c:?}"
+    );
+    assert!(
+        p_lat[2] > p_lat[0] + 0.45 && p_lat[2] < p_top[2],
+        "light prominent lateral perimeter at d = -0.25 pt must be darker blue than top stroke: \
+         lat {p_lat:?} vs top {p_top:?}"
+    );
+    assert!(
+        p_out[0] > 0.98,
+        "light prominent outer pixel at d = +0.75 pt must stay clear of perimeter stroke: {p_out:?}"
     );
 }
