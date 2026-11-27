@@ -917,6 +917,26 @@ pt, `"65%"` `34.0 × 13.0` pt) [measured]. Installing a `16.0` pt `Body` slot
 shrinks every control label by `1` pt (`11.5–12.0` pt cap height) and causes
 localized perceptual failure over text blocks.
 
+#### Cross-platform typeface and symbols
+
+- **Native optical-sized UI typeface.** On hosts supplying a native
+  optical-sized UI geometric sans-serif (`system-ui`), all six typography
+  slots (`Title`, `Headline`, `Body`, `Subheadline`, `Footnote`, `Caption`)
+  resolve `system-ui` (`family: None`) with OpenType `opsz` tracking point
+  size [measured].
+- **Cross-platform fallback typeface.** On hosts without that native
+  optical-sized UI face (`android`, `linux`, `windows`, `web`), the theme
+  installs `"Inter, system-ui, sans-serif"` on all six typography slots:
+  `Inter` (SIL OFL-1.1 variable typeface with `wght` `100..900` and `opsz`
+  `14..32` optical sizing) is closest in x-height, aperture, and advance
+  metrics to the reference UI face, staged via the build tool's font registry
+  for those four platform targets only so no font binaries enter the
+  repository and native-face hosts remain unbundled [chosen].
+- **System symbols and portable icons.** Host-exclusive system symbol
+  primitives are compile-time restricted to targets providing that OS symbol
+  catalog; portable multi-platform code uses open-source vector icon packs
+  while control chrome glyphs remain pure vector paths [chosen].
+
 #### Colour roles (Display P3, 8-bit)
 
 | Role | Light appearance | Dark appearance | Tag |
@@ -1790,10 +1810,11 @@ the glass element's rim highlight and cast shadow. The selected item carries an
 inset translucent capsule highlight under its icon and title and tints its icon
 and title with the accent colour.
 
-**Reference.** Compact bottom pill geometry, bottom clearance, label
-typography, resting pill colours, and active lens optics were measured from
-`2 px/pt` reference captures (`400 × 260` pt) and `60` fps glide captures;
-wide horizontal bar metrics and focus rings are [chosen].
+**Reference.** Compact bottom pill geometry, bottom clearance, stacked
+icon-and-label layout, label typography, resting pill colours, and active lens
+optics were measured from `2 px/pt` reference captures (`400 × 260` pt) and
+`60` fps glide captures; wide horizontal bar metrics and focus rings are
+[chosen].
 
 #### Geometry
 
@@ -1802,13 +1823,17 @@ wide horizontal bar metrics and focus rings are [chosen].
   compact floating bottom-pill item minimum width `94.0` pt (`188.0 × 62.0` pt
   for two tabs) with `21.0` pt bottom floating clearance (`y = 177.0..239.0` pt
   in a `260` pt viewport) and `0` pt extra horizontal pill padding, horizontal
-  label inset `12` pt, icon-to-label spacing `6` pt [measured].
-- **Compact vertical item typography and placement.** Tab item labels use
-  `10.0` pt medium text (`7.0–7.5` pt cap height: `"Home"` inks `28.0 × 7.0` pt,
-  `"Search"` `33.0 × 8.0` pt), horizontally centred in the item slot and
-  bottom-aligned inside the upper-icon/lower-label slot (`y = 218.5..225.5` pt
-  within a bar at `y = 177.0..239.0` pt, `13.5` pt above the bar's bottom
-  edge) [measured].
+  label inset `12` pt, sidebar icon-to-label spacing `6` pt [measured].
+- **Compact vertical item typography and placement.** When an icon is present
+  in the floating pill, items stack vertically: an `18.0` pt medium symbol
+  (`~22 × 20` pt glyph box) sits `2.0–4.0` pt above the `10.0` pt Medium
+  (`500`) label (`7.0–7.5` pt cap height: `"Home"` inks `28.0 × 7.0` pt,
+  `"Search"` `33.0 × 8.0` pt), both horizontally centred in the item slot with
+  the label bottom-aligned inside the upper-icon/lower-label slot
+  (`y = 218.5..225.5` pt within a bar at `y = 177.0..239.0` pt, `13.5` pt
+  above the bar's bottom edge) [measured]. Both symbol and label tint with
+  `Accent` when selected and `Foreground` / `MutedForeground` when unselected
+  [measured].
 - **Wide / horizontal bar** (`width >= 600` pt): bar height `48` pt,
   item minimum width `64` pt, horizontal label inset `16` pt,
   icon-to-label spacing `8` pt [chosen].
@@ -1829,8 +1854,8 @@ wide horizontal bar metrics and focus rings are [chosen].
 | bar surface | regular glass capsule (§5; `(32, 32, 32)` over black) [measured] | regular glass capsule (§5; `(249–252, 249–252, 249–252)` over white) [measured] |
 | divider | none (glass rim and shadow) | none (glass rim and shadow) |
 | selected highlight | black at alpha `0.6875` in encoded space (recessed `(10, 10, 10)` inside `(32, 32, 32)`) [measured] | black at alpha `0.068` in encoded space (`(234, 233, 234)` inside `(252, 252, 252)`) [measured] |
-| selected foreground | accent `(63, 143, 247)` [measured] | accent `(59, 134, 247)` [measured] |
-| unselected foreground | foreground `(255, 255, 255)` [measured] | foreground `(0, 0, 0)` [measured] |
+| selected foreground (icon & label) | `Accent` `(63, 143, 247)` [measured] | `Accent` `(59, 134, 247)` [measured] |
+| unselected foreground (icon & label) | `Foreground` `(255, 255, 255)` / `MutedForeground` `(235, 235, 245)` @ `0.60` [measured] | `Foreground` `(0, 0, 0)` / `MutedForeground` `(60, 60, 67)` @ `0.60` [measured] |
 
 #### States
 
