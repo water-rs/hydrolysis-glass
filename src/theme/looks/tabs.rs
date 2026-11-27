@@ -13,6 +13,7 @@ use hydrolysis_style::theme::{
 use waterui_core::Environment;
 use waterui_interaction::interaction::InteractionState;
 use waterui_navigation::tab::TabStyle;
+use waterui_text::font::{Caption, Font, FontWeight};
 
 use crate::dynamics;
 use crate::material::geometry::{CornerCurve, Element, Rect as ElementRect, Shape};
@@ -40,6 +41,8 @@ const HORIZONTAL_METRICS: TabsMetrics = TabsMetrics::new(48.0, 64.0, 16.0, 8.0);
 const COMPACT_ITEM_MIN_WIDTH: f32 = 94.0;
 /// Outer floating clearance from the bottom viewport edge, pt (§8.7, Geometry).
 const FLOATING_MARGIN: f32 = 21.0;
+/// Tab item label font size, pt (§8.7, Geometry).
+const LABEL_FONT_SIZE: f32 = 10.0;
 /// Inset of the selected highlight capsule inside the item's bounds, pt
 /// (§8.7, Geometry).
 const HIGHLIGHT_INSET: f64 = 4.0;
@@ -245,6 +248,11 @@ pub(in super::super) fn look(glass: &Glass, spec: TabsSpec, _env: &Environment) 
         horizontal_padding: 0.0,
     })
     .floating_margin(FLOATING_MARGIN)
+    .label_font(
+        Font::from(Caption)
+            .font_size(LABEL_FONT_SIZE)
+            .weight(FontWeight::Medium),
+    )
     .selected_foreground(Glass::color(glass.palette.accent))
     .unselected_foreground(Glass::color(glass.palette.foreground))
     .drag(TabsDrag::new())
