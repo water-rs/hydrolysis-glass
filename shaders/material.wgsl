@@ -61,7 +61,7 @@ struct MaterialUniforms {
 @group(0) @binding(6) var<storage, read> elements: array<ElementShape>;
 
 const EPS_ALPHA: f32 = 1e-4;
-const HIGHLIGHT_BAND: f32 = 1.0;
+const HIGHLIGHT_BAND: f32 = 1.5;
 const BLEED_RADIUS: f32 = 36.0;
 
 const LUMA_LIMIT_W: vec3<f32> = vec3<f32>(0.22897456, 0.69173852, 0.07928691);
@@ -582,8 +582,8 @@ fn material_fragment(v: FullscreenOut) -> @location(0) vec4<f32> {
         // Each layer is computed once and laid over in either order, as
         // the engine's `backdrop_effect` does.
         let is_prominent = r.hl_bb.w > 1.5;
-        let k_mul = select(select(0.110, 0.085, is_light), 0.105, is_prominent);
-        let k_add = select(select(0.045, 0.025, is_light), 0.038, is_prominent);
+        let k_mul = select(select(0.050, 0.125, is_light), 0.105, is_prominent);
+        let k_add = select(select(0.190, 0.000, is_light), 0.038, is_prominent);
         let raw_light = highlight_light(r, f.d, n, cov);
         let own_center = own_elem.rect.xy + own_elem.rect.zw * 0.5;
         let touch_pt = select(own_center, r.contour_misc.yz, r.contour_misc.w > 0.5);
