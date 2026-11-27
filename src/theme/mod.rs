@@ -881,6 +881,30 @@ mod tests {
     }
 
     #[test]
+    fn tabs_look_vertical_and_horizontal_metrics_match_spec() {
+        use hydrolysis_style::theme::TabItemLayout;
+        use waterui_navigation::tab::TabStyle;
+
+        let g = Glass::dark();
+        let env = environment(&g);
+        let look = g.tabs(&TabsSpec::new(TabStyle::TabBar), &env);
+
+        let vertical = look.metrics(TabItemLayout::Vertical);
+        assert!((vertical.bar_height - 62.0).abs() < f32::EPSILON);
+        assert!((vertical.button_min_width - 64.0).abs() < f32::EPSILON);
+        assert!((vertical.button_horizontal_inset - 12.0).abs() < f32::EPSILON);
+        assert!((vertical.icon_label_spacing - 1.5).abs() < f32::EPSILON);
+        assert!((vertical.icon_size - 23.0).abs() < f32::EPSILON);
+
+        let horizontal = look.metrics(TabItemLayout::Horizontal);
+        assert!((horizontal.bar_height - 48.0).abs() < f32::EPSILON);
+        assert!((horizontal.button_min_width - 64.0).abs() < f32::EPSILON);
+        assert!((horizontal.button_horizontal_inset - 16.0).abs() < f32::EPSILON);
+        assert!((horizontal.icon_label_spacing - 8.0).abs() < f32::EPSILON);
+        assert!((horizontal.icon_size - 18.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
     fn tabs_look_switches_layout_at_600pt_and_drives_selection_and_press_lens() {
         use hydrolysis_style::theme::{
             TabBarWidth, TabItemGeometry, TabItemLayout, TabsValue, ValueMotion,
@@ -914,12 +938,6 @@ mod tests {
             .resolve(&env)
             .snapshot();
         assert_eq!(unselected_fg, resolved(g.palette().foreground));
-        let vertical = look.metrics(TabItemLayout::Vertical);
-        assert!((vertical.bar_height - 62.0).abs() < 1e-9);
-        assert!((vertical.button_min_width - 64.0).abs() < 1e-9);
-        let horizontal = look.metrics(TabItemLayout::Horizontal);
-        assert!((horizontal.bar_height - 48.0).abs() < 1e-9);
-        assert!((horizontal.button_horizontal_inset - 16.0).abs() < 1e-9);
         let ValueMotion::Always(anim) = &look.motion().value else {
             panic!("expected Always value motion on tab bar highlight");
         };

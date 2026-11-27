@@ -1863,20 +1863,22 @@ optics were measured from `2 px/pt` reference captures (`400 × 260` pt) and
   compact floating bottom-pill item minimum width `94.0` pt (`188.0 × 62.0` pt
   for two tabs) with `21.0` pt bottom floating clearance (`y = 177.0..239.0` pt
   in a `260` pt viewport) and `0` pt extra horizontal pill padding, horizontal
-  label inset `12` pt, sidebar icon-to-label spacing `6` pt [measured].
+  label inset `12` pt, vertical icon-to-label box spacing `1.5` pt [measured].
 - **Compact vertical item typography and placement.** When an icon is present
-  in the floating pill, items stack vertically: an `18.0` pt medium symbol
-  (`~22 × 20` pt glyph box) sits `2.0–4.0` pt above the `10.0` pt Medium
-  (`500`) label (`7.0–7.5` pt cap height: `"Home"` inks `28.0 × 7.0` pt,
-  `"Search"` `33.0 × 8.0` pt), both horizontally centred in the item slot with
-  the label bottom-aligned inside the upper-icon/lower-label slot
-  (`y = 218.5..225.5` pt within a bar at `y = 177.0..239.0` pt, `13.5` pt
+  in the floating pill, items stack vertically: a `23.0` pt medium symbol
+  (`~33 × 28` pt symbol layout box; at `2 px/pt`, home symbol ink `55 × 48` px
+  and search symbol ink `44 × 45` px, matching reference within `0–1` px) sits
+  with `1.5` pt vertical box spacing (`11–12` px ink gap at `2 px/pt`) above
+  the `10.0` pt Medium (`500`) label (`7.0–7.5` pt cap height: `"Home"` inks
+  `28.0 × 7.0` pt, `"Search"` `33.0 × 8.0` pt), both horizontally centred in
+  the item slot with the label bottom-aligned inside the upper-icon/lower-label
+  slot (`y = 218.5..225.5` pt within a bar at `y = 177.0..239.0` pt, `13.5` pt
   above the bar's bottom edge) [measured]. Both symbol and label tint with
   `Accent` when selected and `Foreground` / `MutedForeground` when unselected
   [measured].
 - **Wide / horizontal bar** (`width >= 600` pt): bar height `48` pt,
-  item minimum width `64` pt, horizontal label inset `16` pt,
-  icon-to-label spacing `8` pt [chosen].
+  item minimum width `64` pt, horizontal label inset `16` pt, inline icon size
+  `18.0` pt, inline icon-to-label gap `8.0` pt [chosen].
 - **Surface.** A standalone regular-family glass capsule spanning the
   floating pill bounds (`tab_bar_surface`), or the docked band extended through
   adjacent safe-area edges for a sidebar strip [measured].

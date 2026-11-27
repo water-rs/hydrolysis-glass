@@ -26,16 +26,28 @@ use super::super::{Glass, record_standalone};
 use super::{control_motion, is_disabled, paint, spring_animation, stretch_along_axis};
 
 /// The measures of compact vertical items: a 62 pt bar, items at least
-/// 64 pt wide with their labels inset 12 pt, and 3 pt between an icon and
-/// its label (§8.7, Geometry).
-const VERTICAL_METRICS: TabsMetrics = TabsMetrics::new(62.0, 64.0, 12.0, 3.0);
+/// 64 pt wide with their labels inset 12 pt, 1.5 pt vertical box spacing
+/// between a 23 pt icon and its label (§8.7, Geometry).
+const VERTICAL_METRICS: TabsMetrics = TabsMetrics {
+    bar_height: 62.0,
+    button_min_width: 64.0,
+    button_horizontal_inset: 12.0,
+    icon_label_spacing: 1.5,
+    icon_size: 23.0,
+};
 /// Width threshold where bottom bar items switch to horizontal layout, pt
 /// (§8.7, Geometry).
 const HORIZONTAL_BREAKPOINT: f32 = 600.0;
 /// The measures of wide horizontal items: a 48 pt bar, items at least
-/// 64 pt wide with their labels inset 16 pt, and 8 pt between an icon and
-/// its label (§8.7, Geometry).
-const HORIZONTAL_METRICS: TabsMetrics = TabsMetrics::new(48.0, 64.0, 16.0, 8.0);
+/// 64 pt wide with their labels inset 16 pt, and 8 pt between an 18 pt inline
+/// icon and its label (§8.7, Geometry).
+const HORIZONTAL_METRICS: TabsMetrics = TabsMetrics {
+    bar_height: 48.0,
+    button_min_width: 64.0,
+    button_horizontal_inset: 16.0,
+    icon_label_spacing: 8.0,
+    icon_size: 18.0,
+};
 /// Minimum slot width per item in a compact floating bottom tab pill, pt
 /// (§8.7, Geometry).
 const COMPACT_ITEM_MIN_WIDTH: f32 = 94.0;
