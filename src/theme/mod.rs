@@ -32,9 +32,9 @@ use cherenkov_record::kurbo::Rect;
 use cherenkov_record::{MaterialRegistry, Recorder};
 use hydrolysis_style::Style;
 use hydrolysis_style::theme::{
-    BadgeLook, ButtonLook, ButtonSpec, CardLook, CheckboxLook, DialogLook, FloatingLook, GlassLook,
-    IndicatorLook, LinearProgressLook, ListLook, ListSpec, MenuLook, MenuPickerLook, MenuSpec,
-    NavigationBarLook, NavigationSpec, PickerSpec, ProgressSpec, RadioGroupLook,
+    BadgeLook, ButtonLook, ButtonSpec, CardLook, CheckboxLook, CodeLook, DialogLook, FloatingLook,
+    GlassLook, IndicatorLook, LinearProgressLook, ListLook, ListSpec, MenuLook, MenuPickerLook,
+    MenuSpec, NavigationBarLook, NavigationSpec, PickerSpec, ProgressSpec, RadioGroupLook,
     ScrollIndicatorLook, SegmentedLook, SegmentedSpec, SheetLook, SliderLook, SliderSpec,
     SnackbarLook, StepperLook, StepperSpec, SwitchLook, TableLook, TabsLook, TabsSpec,
     TextFieldLook, TextFieldSpec, ToggleSpec, WidgetTheme,
@@ -336,6 +336,10 @@ impl WidgetTheme for Glass {
 
     fn card(&self, style: CardStyle, env: &Environment) -> CardLook {
         looks::card(self, style, env)
+    }
+
+    fn code(&self, _env: &Environment) -> CodeLook {
+        looks::code(self)
     }
 
     fn floating(&self, env: &Environment) -> FloatingLook {
@@ -792,6 +796,22 @@ mod tests {
         assert!((resolved.components[0] - 1.0).abs() < 1e-4);
         assert!(resolved.components[1].abs() < 1e-4);
         assert!(resolved.components[2].abs() < 1e-4);
+    }
+
+    #[test]
+    fn tabs_look_installs_10pt_medium_label_font() {
+        use waterui_navigation::tab::TabStyle;
+
+        let g = Glass::dark();
+        let env = environment(&g);
+        let look = g.tabs(&TabsSpec::new(TabStyle::TabBar), &env);
+        let label_font = look
+            .get_label_font()
+            .expect("tab bar installs 10 pt medium label font")
+            .resolve(&env)
+            .snapshot();
+        assert!((label_font.size() - 10.0).abs() < f32::EPSILON);
+        assert_eq!(label_font.weight(), FontWeight::Medium);
     }
 
     #[test]
@@ -1256,5 +1276,74 @@ mod tests {
                 .top_left,
             22.0
         );
+    }
+
+    #[test]
+    fn code_look_matches_specification_surface_metrics_and_typography() {
+        use waterui_text::font::FontDesign;
+
+        let frame = Rect::new(0.0, 0.0, 320.0, 120.0);
+        for g in [Glass::light(), Glass::dark()] {
+            let env = environment(&g);
+            let look = g.code(&env);
+
+            let metrics = look.metrics();
+            assert!((metrics.horizontal_padding - 14.0).abs() < f32::EPSILON);
+            assert!((metrics.vertical_padding - 14.0).abs() < f32::EPSILON);
+            assert!((metrics.header_spacing - 8.0).abs() < f32::EPSILON);
+
+            let corners = look.surface().shape().corners();
+            assert!(
+                (corners
+                    .target(&Inputs::at_rest(frame, InteractionState::empty(), &()))
+                    .radii_on(frame)
+                    .top_left
+                    - 12.0)
+                    .abs()
+                    < 1e-6
+            );
+
+            let Fill::Paint(fill) = look.surface().fill() else {
+                panic!("expected solid SurfaceVariant fill on code block");
+            };
+            let cherenkov_record::Paint::Solid(fill_color) =
+                fill.target(&Inputs::at_rest(frame, InteractionState::empty(), &()))
+            else {
+                panic!("expected solid fill paint on code block");
+            };
+            assert_eq!(fill_color, palette::working(g.palette().surface_variant));
+
+            let border = look
+                .surface()
+                .get_border()
+                .expect("code block carries a hairline border")
+                .target(&Inputs::at_rest(frame, InteractionState::empty(), &()));
+            assert!((border.width - 0.5).abs() < f32::EPSILON);
+            assert_eq!(
+                border.paint,
+                cherenkov_record::Paint::Solid(palette::working(g.palette().border))
+            );
+
+            let header_font = look.header_font_ref().resolve(&env).snapshot();
+            assert!((header_font.size() - 12.0).abs() < f32::EPSILON);
+            assert_eq!(header_font.weight(), FontWeight::Medium);
+
+            let body_font = look.body_font_ref().resolve(&env).snapshot();
+            assert!((body_font.size() - 17.0).abs() < f32::EPSILON);
+            assert_eq!(body_font.design(), FontDesign::Monospaced);
+
+            assert_eq!(
+                look.header_color_ref().resolve(&env).snapshot(),
+                palette::working(g.palette().muted_foreground)
+            );
+            assert_eq!(
+                look.copy_color_ref().resolve(&env).snapshot(),
+                palette::working(g.palette().muted_foreground)
+            );
+            assert_eq!(
+                look.copied_color_ref().resolve(&env).snapshot(),
+                palette::working(g.palette().accent)
+            );
+        }
     }
 }
