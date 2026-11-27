@@ -93,8 +93,8 @@ pub const UNPREMULTIPLY_EPSILON: f32 = 1e-4;
 /// 0.4 × the declared opacity. **[chosen]**
 pub const TINT_EFFECTIVE_ALPHA: f32 = 0.4;
 
-/// Width of the §4.12 highlight band, pt. **[measured: 1.0 pt sharp rim]**
-pub const HIGHLIGHT_BAND: f32 = 1.0;
+/// Width of the §4.12 highlight band, pt. **[measured: 1.5 pt narrow rim]**
+pub const HIGHLIGHT_BAND: f32 = 1.5;
 
 /// Luma of an encoded colour (§4.6 weights).
 #[must_use]

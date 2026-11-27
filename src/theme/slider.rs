@@ -27,7 +27,7 @@ pub const SYMBOL_GAP: f32 = 12.0;
 /// Smallest width of the knob's travel the layout asks for, pt.
 pub const MIN_TRAVEL: f32 = 120.0;
 /// Space between the slider's own label and its row, pt (§8.3).
-pub const LABEL_SPACING: f32 = 8.0;
+pub const LABEL_SPACING: f32 = 5.0;
 
 /// How far the track runs past each end of the knob's travel, pt: half the
 /// knob, whose centre travels the track inset by it.

@@ -54,7 +54,7 @@
 
 const PI: f32 = 3.141592653589793;
 const EPS_ALPHA: f32 = 1e-4;
-const HIGHLIGHT_BAND: f32 = 1.0;
+const HIGHLIGHT_BAND: f32 = 1.5;
 const BLEED_RADIUS: f32 = 36.0;
 const CONTAINER_UNION_SMOOTHING_PT: f32 = 30.0;
 const DISPERSION_SHIFT_PT: f32 = 2.5;
@@ -596,7 +596,7 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
     // over once: evaluating the layers' loops and branches once per order
     // made D3D12's WARP device render wrong texels and stall.
     let k = select(
-        select(vec2<f32>(0.110, 0.045), vec2<f32>(0.085, 0.025), is_light),
+        select(vec2<f32>(0.050, 0.190), vec2<f32>(0.125, 0.000), is_light),
         vec2<f32>(0.105, 0.038),
         is_prominent,
     );

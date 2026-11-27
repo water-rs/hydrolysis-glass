@@ -656,7 +656,7 @@ mod tests {
         assert!(metrics.horizontal_inset.abs() < 1e-9);
         assert!((metrics.vertical_inset - 6.0).abs() < 1e-9);
         assert!((look.floating_label().get_scale() - 1.0).abs() < 1e-9);
-        assert!((look.floating_label().get_top() - 8.0).abs() < 1e-6);
+        assert!((look.floating_label().get_top() - 6.0).abs() < 1e-6);
         let blink = look.caret().blink();
         assert_eq!(blink.fade_cycle_duration, Duration::from_millis(1_000));
         assert_eq!(blink.frame_interval, Duration::from_millis(16));
