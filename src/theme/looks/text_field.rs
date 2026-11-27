@@ -41,7 +41,7 @@ const OUTLINE_WIDTH: f64 = 1.5;
 /// The floated label's size relative to its resting size (§8.6, Geometry).
 const FLOAT_SCALE: f64 = 1.0;
 /// The floated label's distance below the container's top edge, pt (§8.6, Geometry).
-const FLOAT_TOP: f32 = 6.0;
+const FLOAT_TOP: f32 = 8.0;
 /// The alpha of the accent the selection is painted in (§8.6, Colours).
 const SELECTION_ALPHA: f32 = 0.3;
 /// Disabled opacity applied to fill, label, value and placeholder (§8.6, States).

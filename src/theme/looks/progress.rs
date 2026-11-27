@@ -49,11 +49,11 @@ const fn circular_unfilled_track(appearance: Appearance) -> Rgba {
 /// The bar's length and thickness, pt (§8.12).
 const BAR: Size = Size::new(120.0, 4.0);
 /// The height of the label above a bar, pt (§8.12).
-const LABEL_HEIGHT: f32 = 18.0;
+const LABEL_HEIGHT: f32 = 20.0;
 /// The gap between an indicator and its label above, pt (§8.12).
 const LABEL_SPACING: f32 = 7.0;
 /// The gap between an indicator and its value label below, pt (§8.12).
-const VALUE_LABEL_SPACING: f32 = 8.0;
+const VALUE_LABEL_SPACING: f32 = 7.0;
 /// The ring's diameter and the stroke's width, pt.
 const RING: f64 = 20.0;
 const RING_STROKE: f64 = 2.5;
@@ -404,11 +404,11 @@ mod tests {
         glass.install_tokens(&mut env);
         let look = linear(&glass, &spec(ProgressStyle::Linear), &env);
         assert_eq!(look.control().size(), Size::new(120.0, 4.0));
-        assert!((look.get_label_height() - 18.0).abs() < 1e-9);
-        assert!((look.get_label_spacing() - 7.0).abs() < 1e-9);
-        assert!((look.get_value_label_spacing() - 8.0).abs() < 1e-9);
+        assert!((look.get_label_height() - 20.0).abs() < 1e-6);
+        assert!((look.get_label_spacing() - 7.0).abs() < 1e-6);
+        assert!((look.get_value_label_spacing() - 7.0).abs() < 1e-6);
         let layout = look.layout(120.0, Some(14.0), Some(14.0));
-        assert!((layout.height - 55.0).abs() < 1e-9);
+        assert!((layout.height - 58.0).abs() < 1e-6);
     }
 
     #[test]
@@ -418,10 +418,10 @@ mod tests {
         glass.install_tokens(&mut env);
         let look = circular(&glass, &spec(ProgressStyle::Circular), &env);
         assert_eq!(look.control().size(), Size::new(20.0, 20.0));
-        assert!((look.get_label_height() - 18.0).abs() < 1e-9);
+        assert!((look.get_label_height() - 20.0).abs() < 1e-6);
         assert_eq!(look.get_label_spacing(), Some(7.0));
-        assert_eq!(look.get_value_label_spacing(), Some(8.0));
+        assert_eq!(look.get_value_label_spacing(), Some(7.0));
         let layout = look.layout(120.0, Some(14.0), Some(14.0));
-        assert!((layout.height - 71.0).abs() < 1e-9);
+        assert!((layout.height - 74.0).abs() < 1e-6);
     }
 }

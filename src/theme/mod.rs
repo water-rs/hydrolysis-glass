@@ -470,7 +470,22 @@ mod tests {
         else {
             panic!("expected solid fill paint");
         };
-        assert!((fill_color.components[3] - 0.16).abs() < 1e-4);
+        assert!((fill_color.components[3] - 0.228).abs() < 1e-4);
+        let dark = Glass::dark();
+        let dark_env = environment(&dark);
+        let dark_look = dark.button(
+            &button_spec(ButtonStyle::Bordered, ControlSize::Small),
+            &dark_env,
+        );
+        let Fill::Paint(dark_fill) = dark_look.chrome().surface().fill() else {
+            panic!("expected track paint fill on dark bordered button");
+        };
+        let cherenkov_record::Paint::Solid(dark_color) =
+            dark_fill.target(&Inputs::at_rest(frame, InteractionState::empty(), &()))
+        else {
+            panic!("expected solid fill paint on dark bordered button");
+        };
+        assert!((dark_color.components[3] - 0.105).abs() < 1e-4);
         let label_color = look
             .label()
             .get_color()
@@ -637,7 +652,7 @@ mod tests {
         assert!(metrics.horizontal_inset.abs() < 1e-9);
         assert!((metrics.vertical_inset - 6.0).abs() < 1e-9);
         assert!((look.floating_label().get_scale() - 1.0).abs() < 1e-9);
-        assert!((look.floating_label().get_top() - 6.0).abs() < 1e-9);
+        assert!((look.floating_label().get_top() - 8.0).abs() < 1e-6);
         let blink = look.caret().blink();
         assert_eq!(blink.fade_cycle_duration, Duration::from_millis(1_000));
         assert_eq!(blink.frame_interval, Duration::from_millis(16));

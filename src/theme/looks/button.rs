@@ -2,7 +2,7 @@
 //! capsule that grows and washes while pressed, and the plain, link and
 //! borderless styles, which draw no body.
 
-use cherenkov_record::{BlendSpace, WorkingColor};
+use cherenkov_record::WorkingColor;
 use hydrolysis_style::theme::{
     Backdrop, ButtonLook, ButtonSpec, Chrome, ContentEffect, CornerShape, DragDeformation, Driven,
     FocusIndicator, Inputs, Label, PressFeedback, StateLayer, Surface as ChromeSurface, Transition,
@@ -16,7 +16,7 @@ use waterui_interaction::interaction::InteractionState;
 use waterui_text::font::{Body, Font, FontWeight};
 
 use crate::dynamics::{self, PRESS_MAX_HALF_AXIS_GROWTH};
-use crate::material::recipe::{Family, Recipe};
+use crate::material::recipe::{Appearance, Family, Recipe};
 
 use super::super::Glass;
 use super::super::button::{GROWTH_PER_PRESS, Kind, SizeGroup};
@@ -69,11 +69,7 @@ pub(in super::super) fn look(glass: &Glass, spec: &ButtonSpec, env: &Environment
     // The frame is the label plus the size group's insets and nothing more
     // (§8.1), so the look carries no minimum size. A symbol takes the same
     // insets as a title.
-    let mut look = ButtonLook::new(chrome, label).padding(metrics.inset_x, metrics.inset_y);
-    if bordered {
-        look = look.group_blend_space(BlendSpace::SrgbEncoded);
-    }
-    look
+    ButtonLook::new(chrome, label).padding(metrics.inset_x, metrics.inset_y)
 }
 
 /// The label's colour in every state: white on a prominent body, the tint
@@ -145,9 +141,15 @@ fn borderless_chrome(glass: &Glass) -> Chrome {
 }
 
 /// The chrome of a bordered capsule button: a track-filled continuous capsule
-/// under the theme's state layer and focus ring (§8.1).
+/// under the theme's state layer and focus ring (§8.1). Uses linear-canvas
+/// straight alphas (`0.228` light / `0.105` dark) so `(120, 120, 128)`
+/// composites to `(233, 233, 234)` over white and `(38, 38, 41)` over black.
 fn bordered_chrome(glass: &Glass) -> Chrome {
-    let base = glass.palette.track;
+    let linear_alpha = match glass.palette.appearance {
+        Appearance::Light => 0.228,
+        Appearance::Dark => 0.105,
+    };
+    let base = alpha(glass.palette.track, linear_alpha);
     let fill = Driven::new(move |inputs: &Inputs<'_, ()>| {
         paint(faded(
             base,
