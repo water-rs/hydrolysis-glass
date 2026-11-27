@@ -17,17 +17,32 @@ mod button;
 mod card;
 mod code;
 mod floating;
+#[cfg(waterui_feature = "menu")]
 mod menu;
+#[cfg(any(waterui_feature = "picker", waterui_feature = "date-picker"))]
 mod menu_picker;
+#[cfg(waterui_feature = "navigation")]
 mod navigation;
 mod progress;
+#[cfg(waterui_feature = "picker")]
 mod radio;
+#[cfg(waterui_feature = "picker")]
 mod segmented;
+#[cfg(waterui_feature = "slider")]
 mod slider;
 mod snackbar;
+#[cfg(waterui_feature = "stepper")]
 mod stepper;
+#[cfg(waterui_feature = "navigation")]
 mod tabs;
+#[cfg(any(
+    waterui_feature = "text-field",
+    waterui_feature = "secure-field",
+    waterui_feature = "date-picker",
+    waterui_feature = "color-picker"
+))]
 mod text_field;
+#[cfg(waterui_feature = "toggle")]
 mod toggle;
 
 pub(super) use background::look as glass_background;
@@ -35,28 +50,70 @@ pub(super) use button::look as button;
 pub(super) use card::look as card;
 pub(super) use code::look as code;
 pub(super) use floating::look as floating;
+#[cfg(waterui_feature = "menu")]
 pub(super) use menu::look as menu;
+#[cfg(any(waterui_feature = "picker", waterui_feature = "date-picker"))]
 pub(super) use menu_picker::look as menu_picker;
+#[cfg(waterui_feature = "navigation")]
 pub(super) use navigation::look as navigation_bar;
 pub(super) use progress::{circular as circular_progress, linear as linear_progress, loading};
+#[cfg(waterui_feature = "picker")]
 pub(super) use radio::look as radio_group;
+#[cfg(waterui_feature = "picker")]
 pub(super) use segmented::look as segmented_picker;
+#[cfg(waterui_feature = "slider")]
 pub(super) use slider::look as slider;
 pub(super) use snackbar::look as snackbar;
+#[cfg(waterui_feature = "stepper")]
 pub(super) use stepper::look as stepper;
+#[cfg(waterui_feature = "navigation")]
 pub(super) use tabs::look as tabs;
+#[cfg(any(
+    waterui_feature = "text-field",
+    waterui_feature = "secure-field",
+    waterui_feature = "date-picker",
+    waterui_feature = "color-picker"
+))]
 pub(super) use text_field::look as text_field;
+#[cfg(waterui_feature = "toggle")]
 pub(super) use toggle::{checkbox, switch};
 
-use cherenkov_record::kurbo::{Line, Point, Rect, Size, Vec2};
-use cherenkov_record::{Draw as _, Live, Paint, ShapeData, Stroke, WorkingColor};
+#[cfg(waterui_feature = "list")]
+use cherenkov_record::kurbo::Line;
+#[cfg(any(waterui_feature = "list", waterui_feature = "table"))]
+use cherenkov_record::kurbo::Point;
+use cherenkov_record::kurbo::Size;
+#[cfg(any(
+    waterui_feature = "toggle",
+    waterui_feature = "slider",
+    waterui_feature = "navigation"
+))]
+use cherenkov_record::kurbo::{Rect, Vec2};
+#[cfg(waterui_feature = "list")]
+use cherenkov_record::{Draw as _, Live, ShapeData, Stroke};
+use cherenkov_record::{Paint, WorkingColor};
 use hydrolysis_style::theme::{
-    BadgeLook, BadgeMetrics, Chrome, CornerShape, Custom, DialogLook, Driven, FocusIndicator,
-    HitRegion, Inputs, ListControls, ListDividerMetrics, ListGestures, ListLook, ListMetrics,
-    ListRowMetrics, ListSectionMetrics, ListTrailingControlMetrics, Motion, PressFeedback,
-    ScrollIndicatorLook, SheetLook, StateLayer, Surface as ChromeSurface, TableLook, TableMetrics,
+    BadgeLook, BadgeMetrics, Chrome, Custom, DialogLook, FocusIndicator, HitRegion, Motion,
+    PressFeedback, ScrollIndicatorLook, SheetLook, StateLayer, Surface as ChromeSurface,
     Transition, ValueMotion,
 };
+#[cfg(waterui_feature = "list")]
+use hydrolysis_style::theme::{
+    CornerShape, ListControls, ListDividerMetrics, ListGestures, ListLook, ListMetrics,
+    ListRowMetrics, ListSectionMetrics, ListTrailingControlMetrics,
+};
+#[cfg(any(
+    waterui_feature = "slider",
+    waterui_feature = "picker",
+    waterui_feature = "text-field",
+    waterui_feature = "secure-field",
+    waterui_feature = "date-picker",
+    waterui_feature = "color-picker",
+    waterui_feature = "list"
+))]
+use hydrolysis_style::theme::{Driven, Inputs};
+#[cfg(waterui_feature = "table")]
+use hydrolysis_style::theme::{TableLook, TableMetrics};
 use waterui_core::animation::Animation;
 use waterui_interaction::interaction::InteractionState;
 use waterui_layout::Alignment;
@@ -108,6 +165,11 @@ const fn is_disabled(state: InteractionState) -> bool {
 }
 
 /// Whether a touch holds a control's knob or thumb: the lens's `p` at 1.
+#[cfg(any(
+    waterui_feature = "toggle",
+    waterui_feature = "slider",
+    waterui_feature = "picker"
+))]
 const fn held(state: InteractionState) -> bool {
     state.intersects(InteractionState::PRESSED.union(InteractionState::DRAGGED))
         && !is_disabled(state)
@@ -115,6 +177,14 @@ const fn held(state: InteractionState) -> bool {
 
 /// The paint of a focus ring in `accent`: opaque while the control has
 /// keyboard focus and is enabled, clear otherwise.
+#[cfg(any(
+    waterui_feature = "slider",
+    waterui_feature = "picker",
+    waterui_feature = "text-field",
+    waterui_feature = "secure-field",
+    waterui_feature = "date-picker",
+    waterui_feature = "color-picker"
+))]
 fn focus_ring_paint<V: 'static>(accent: Rgba) -> Driven<Paint, V> {
     Driven::new(move |inputs: &Inputs<'_, V>| {
         let focused =
@@ -131,6 +201,7 @@ fn faded(color: Rgba, opacity: f32) -> Rgba {
 
 /// The opacity of a state layer: the dragged or pressed state outranks
 /// focus, which outranks hover; a disabled control has none.
+#[cfg(any(waterui_feature = "toggle", waterui_feature = "picker"))]
 const fn state_layer_opacity(state: InteractionState) -> f32 {
     if is_disabled(state) {
         0.0
@@ -219,6 +290,7 @@ pub(super) fn badge(glass: &Glass) -> BadgeLook {
 }
 
 /// The look of a list and its row editing controls.
+#[cfg(waterui_feature = "list")]
 pub(super) fn list(glass: &Glass) -> ListLook {
     let palette = glass.palette;
     let move_control = || {
@@ -304,6 +376,11 @@ pub(super) fn spring_animation(spring: crate::dynamics::Spring) -> Animation {
 /// (`eps = 0.12 * tanh(|v_axis| / 600.0)`, `w_eff = w * (1 + eps)`,
 /// `h_eff = h / (1 + 0.65 * eps)`) to `rect`, keeping box convexity at all
 /// velocities without pinching the silhouette.
+#[cfg(any(
+    waterui_feature = "toggle",
+    waterui_feature = "slider",
+    waterui_feature = "navigation"
+))]
 pub(super) fn stretch_along_axis(rect: Rect, velocity: Option<Vec2>, vertical: bool) -> Rect {
     let Some(v) = velocity else {
         return rect;
@@ -325,6 +402,7 @@ pub(super) fn stretch_along_axis(rect: Rect, velocity: Option<Vec2>, vertical: b
 }
 
 /// The look of a backend-rendered table.
+#[cfg(waterui_feature = "table")]
 pub(super) fn table(glass: &Glass) -> TableLook {
     let palette = glass.palette;
     TableLook::new(

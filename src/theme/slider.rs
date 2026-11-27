@@ -2,7 +2,7 @@
 //! shadow and the value spring.
 //!
 //! Everything here is a pure function of the specification's tables; the
-//! slider look ([`super::looks`]) builds a slider from the same decisions.
+//! slider look (`super::looks`) builds a slider from the same decisions.
 //! The drag, its step rounding and the value's range are Hydrolysis's: the
 //! look names the drag mapping (§8.3, Touch) and the renderer executes it.
 
@@ -22,7 +22,7 @@ pub const KNOB_WIDTH: f32 = 37.0;
 /// Height of the knob at rest, pt **[measured: simulator]**.
 pub const KNOB_HEIGHT: f32 = 24.0;
 /// Space between an end symbol's layout box and the track, pt
-/// **[chosen]**.
+/// **\[chosen\]**.
 pub const SYMBOL_GAP: f32 = 12.0;
 /// Smallest width of the knob's travel the layout asks for, pt.
 pub const MIN_TRAVEL: f32 = 120.0;
@@ -41,9 +41,9 @@ pub const TRAVEL_INSET: f32 = KNOB_WIDTH * 0.5;
 pub const LABEL_GAP: f32 = SYMBOL_GAP + TRAVEL_INSET;
 
 /// Alpha of the unfilled track's white (dark) or black (light) fill
-/// **[chosen]**.
+/// **\[chosen\]**.
 pub const UNFILLED_ALPHA: f32 = 0.098;
-/// Alpha of the knob's shadow **[chosen]**.
+/// Alpha of the knob's shadow **\[chosen\]**.
 pub const SHADOW_ALPHA: f32 = 0.137;
 /// Standard deviation of the knob's shadow, pt **[fitted: simulator]**.
 pub const SHADOW_SIGMA: f64 = 5.2;
@@ -70,7 +70,7 @@ pub const fn red_tint(appearance: Appearance) -> Rgba {
 }
 
 /// The unfilled track: white in dark appearance and black in light, at
-/// alpha 0.098 over the backdrop, blended in encoded space **[chosen]**.
+/// alpha 0.098 over the backdrop, blended in encoded space **\[chosen\]**.
 #[must_use]
 pub const fn unfilled_track(appearance: Appearance) -> Rgba {
     let c = match appearance {
@@ -81,7 +81,7 @@ pub const fn unfilled_track(appearance: Appearance) -> Rgba {
 }
 
 /// The press progress `p` that drives the knob's lens uses the button's
-/// press and release springs **[chosen]**, so the controls respond alike.
+/// press and release springs **\[chosen\]**, so the controls respond alike.
 pub const PRESS_SPRING: Spring = Spring::PRESS;
 /// See [`PRESS_SPRING`].
 pub const RELEASE_SPRING: Spring = Spring::RELEASE;
@@ -172,6 +172,7 @@ mod tests {
         assert_eq!(LABEL_GAP - TRAVEL_INSET, SYMBOL_GAP);
         assert_eq!(MIN_TRAVEL, 120.0);
         assert_eq!(HEIGHT, 31.0);
+        assert_eq!(LABEL_SPACING, 5.0);
     }
 
     #[test]

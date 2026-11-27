@@ -4,16 +4,16 @@
 //! Legacy per-frame exponential constants (`PRESS_RATE`, `DRAG_RATE`,
 //! `MORPH_RATE`) are superseded by continuous-time analytical [`Spring`]
 //! presets:
-//! - Press (`BUTTON_PRESS`, `BUTTON_RELEASE`): **[fitted]** (48/60 fps captures);
+//! - Press (`BUTTON_PRESS`, `BUTTON_RELEASE`): **\[fitted\]** (48/60 fps captures);
 //!   hover/focus fade (`PRESS_DURATION`) is not observable on touch-only captures
-//!   and is **[chosen]**.
-//! - Drag (`JELLY_DRAG_ACTIVE`, `JELLY_DRAG_RELEASE`): **[fitted]**; non-spring
-//!   fallback (`DRAG_DURATION`) is **[chosen]**.
+//!   and is **\[chosen\]**.
+//! - Drag (`JELLY_DRAG_ACTIVE`, `JELLY_DRAG_RELEASE`): **\[fitted\]**; non-spring
+//!   fallback (`DRAG_DURATION`) is **\[chosen\]**.
 //! - Shape / corner morph: popover morph springs (`POPOVER_PRESENT`,
 //!   `POPOVER_PRESENT_VERTICAL`, `POPOVER_RADIUS`, `POPOVER_DISMISS`,
-//!   `POPOVER_DISMISS_VERTICAL`) are **[fitted]**; standalone member corner-radius
+//!   `POPOVER_DISMISS_VERTICAL`) are **\[fitted\]**; standalone member corner-radius
 //!   morphing (`SWITCH_KNOB`) and container neighbour attraction are not
-//!   observable in single-control captures and are **[chosen]**.
+//!   observable in single-control captures and are **\[chosen\]**.
 //!
 //! Inputs are reactive signals ([`nami::Binding`] / [`nami::Computed`]);
 //! the dynamics step analytically through [`Spring`] presets and publish the
@@ -35,17 +35,17 @@ const SETTLE_POS_EPS: f32 = 1e-4;
 const SETTLE_VEL_EPS: f32 = 1e-2;
 
 /// Centre-to-centre radius inside which neighbours lean towards a dragged
-/// element, pt. **[chosen]**
+/// element, pt. **\[chosen\]**
 pub const ATTRACTION_RADIUS: f32 = 140.0;
-/// Peak of the quadratic lean term, pt. **[chosen]**
+/// Peak of the quadratic lean term, pt. **\[chosen\]**
 pub const ATTRACTION_PEAK: f32 = 18.0;
-/// Surface gap kept free of the lean, pt. **[chosen]**
+/// Surface gap kept free of the lean, pt. **\[chosen\]**
 pub const ATTRACTION_GAP_MARGIN: f32 = 6.0;
 /// Fraction of the remaining gap a neighbour may close by leaning.
-/// **[chosen]**
+/// **\[chosen\]**
 pub const ATTRACTION_GAP_FRACTION: f32 = 0.5;
 /// Factor by which a group's union smoothing grows while a member is
-/// grabbed (the blend distance tracks drag state). **[chosen]**
+/// grabbed (the blend distance tracks drag state). **\[chosen\]**
 pub const DRAG_SMOOTHING_GAIN: f32 = 0.2;
 
 /// Neighbour lean: `û · min(18·(1 − dist/140)², 0.5·max(gap − 6, 0))`.

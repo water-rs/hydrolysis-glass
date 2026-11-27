@@ -86,15 +86,15 @@ impl Spring {
     pub const POPOVER_RADIUS: Self = Self::new(0.311, 0.750);
 
     /// Modal sheet presentation spring (`T_r = 0.400 s`, `zeta = 0.850`, ~0.6% overshoot,
-    /// §8.10, §9.3). **[chosen]**
+    /// §8.10, §9.3). **\[chosen\]**
     pub const SHEET_PRESENT: Self = Self::new(0.400, 0.850);
 
     /// Modal sheet dismissal spring (`T_r = 0.350 s`, `zeta = 1.000`, critically damped,
-    /// §8.10, §9.3). **[chosen]**
+    /// §8.10, §9.3). **\[chosen\]**
     pub const SHEET_DISMISS: Self = Self::new(0.350, 1.000);
 
     /// Modal sheet detent snap spring (`T_r = 0.380 s`, `zeta = 0.850`, §8.10, §9.3).
-    /// **[chosen]**
+    /// **\[chosen\]**
     pub const SHEET_DETENT: Self = Self::new(0.380, 0.850);
 
     /// Constructs a unit-mass spring from its response period (seconds) and damping ratio.
@@ -318,7 +318,7 @@ pub const fn thumb_press_scale(progress: f32) -> f32 {
 }
 
 /// Rubber-band drag resistance past the maximum sheet detent (§8.10):
-/// `12 * delta / (delta + 24)` pt for positive overscroll `delta`, `0` otherwise. **[chosen]**
+/// `12 * delta / (delta + 24)` pt for positive overscroll `delta`, `0` otherwise. **\[chosen\]**
 #[must_use]
 pub fn sheet_rubber_band_offset(overscroll: f32) -> f32 {
     if overscroll <= 0.0 || !overscroll.is_finite() {

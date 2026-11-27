@@ -9,7 +9,7 @@
 use core::f32::consts::{FRAC_PI_2, PI};
 
 /// Light or dark appearance. It changes the regular family only; the clear
-/// family is identical in both. **[measured]**
+/// family is identical in both. **\[measured\]**
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum Appearance {
     /// Dark appearance.
@@ -38,7 +38,7 @@ pub enum Family {
 pub struct Translucency(f32);
 
 impl Translucency {
-    /// The default setting, 0.5. **[measured]**
+    /// The default setting, 0.5. **\[measured\]**
     pub const DEFAULT: Self = Self(0.5);
 
     /// The setting.
@@ -68,10 +68,10 @@ impl Default for Translucency {
 }
 
 /// Measured range of the regular family, pt — size laws are clamped to it.
-/// **[measured]**
+/// **\[measured\]**
 pub const REGULAR_MEASURED_RANGE: [f32; 2] = [34.33, 200.33];
 /// Measured range of the clear family, pt — size laws are clamped to it.
-/// **[measured]**
+/// **\[measured\]**
 pub const CLEAR_MEASURED_RANGE: [f32; 2] = [40.0, 80.0];
 
 /// Encoded-space Display P3 luma weights of §4.6 — the Display P3 luminance
@@ -90,7 +90,7 @@ pub const UNPREMULTIPLY_EPSILON: f32 = 1e-4;
 
 /// Effective-to-declared tint alpha ratio of a §4.13 tinted-glass element:
 /// the composite strength of the tint layers is open; they composite at
-/// 0.4 × the declared opacity. **[chosen]**
+/// 0.4 × the declared opacity. **\[chosen\]**
 pub const TINT_EFFECTIVE_ALPHA: f32 = 0.4;
 
 /// Width of the §4.12 highlight band, pt. **[measured: 1.5 pt narrow rim]**
@@ -120,7 +120,7 @@ pub fn unpremultiply(c: [f32; 4]) -> ([f32; 3], f32) {
 
 /// §3: the quarter-circle lobe a displaced sample follows,
 /// `shift · (1 − sqrt(t·(2 − t)))` with `t = sat(−d / depth)`.
-/// **[chosen]**
+/// **\[chosen\]**
 #[must_use]
 pub fn lobe(d: f32, depth: f32, shift: f32) -> f32 {
     if depth <= 0.0 {
@@ -137,7 +137,7 @@ pub fn lobe(d: f32, depth: f32, shift: f32) -> f32 {
 /// It is the deviation a trilinear read of a 2 × 2-mean chain at level
 /// `log2 x` makes: `(x² − 1)/12` from the reductions and `x²/6` from the
 /// bilinear read. At `x = 1` it is the plain bilinear read's `1/√6`.
-/// **[chosen]**
+/// **\[chosen\]**
 #[must_use]
 pub fn ambient_sigma(b: f32) -> f32 {
     let x = (if b < 2.0 { 1.0 + b / 2.0 } else { b }).max(1.0);
@@ -183,14 +183,14 @@ pub const BLUR_SIGMA_PT_PER_RADIUS: f32 = 5.0 / 3.0;
 ///
 /// It counts texels of the mip level the grid reads; the pass reads the
 /// grid folded into `(BLUR_TAPS + 1)²` bilinear reads that split each
-/// adjacent texel pair's weight, which reach no farther. **[chosen]**
+/// adjacent texel pair's weight, which reach no farther. **\[chosen\]**
 pub const BLUR_TAPS: u8 = 3;
 
 /// The most deviation the §3 tap grid makes, in texels of its level.
 ///
 /// The read climbs to the level whose texel keeps the Gaussian's
 /// remaining deviation at most this, and blends with the level above.
-/// **[chosen]**
+/// **\[chosen\]**
 pub const BLUR_LEVEL_SIGMA: f32 = 1.5;
 
 /// §3: the standard deviation, pt, of the Gaussian a blur radius of `b`
@@ -208,7 +208,7 @@ pub const fn blur_sigma(b: f32) -> f32 {
 /// the black | white edge through the 60 pt circle and the 160 × 80 pt
 /// capsule, captured at 0.5, and through the large card and the circle in
 /// its container, captured at 0.25 (§6). A deviation counted in capture
-/// texels halves on the finer capture and cannot fit both. **[fitted]**
+/// texels halves on the finer capture and cannot fit both. **\[fitted\]**
 pub const HAZE_SIGMA_PT_PER_RADIUS: f32 = 2.0;
 
 /// §4.4: the standard deviation, pt, of the haze of radius `r`.
@@ -236,7 +236,7 @@ pub const fn sigma_reach(sigma: f32, texel: f32) -> f32 {
 }
 
 /// §3: the smooth step weighting the shadow terms; runs from 1 at
-/// `x = −2` to 0 at `x = 2`. **[fitted]**
+/// `x = −2` to 0 at `x = 2`. **\[fitted\]**
 #[must_use]
 pub fn falloff(x: f32) -> f32 {
     let x2 = x * x;
@@ -254,7 +254,7 @@ pub fn falloff(x: f32) -> f32 {
 ///
 /// `ys[0]` below `xs[0]`, `ys[3]` above `xs[3]`; equal consecutive `xs`
 /// produce a step with the later value applying from that `x` on.
-/// **[chosen]**
+/// **\[chosen\]**
 #[must_use]
 pub fn piecewise(xs: &[f32; 4], ys: &[f32; 4], x: f32) -> f32 {
     if x <= xs[0] {
@@ -288,7 +288,7 @@ fn translucency_row(v0: f32, v05: f32, v1: f32, s: f32) -> f32 {
 
 /// §5.1 size-tabled values with measured points at `m ≤ 60`, `m = 80` and
 /// `m = 200.33`: constant at `m ≤ 60`, linear from 60 to 80 and from 80 to
-/// 200.33. **[chosen]**
+/// 200.33. **\[chosen\]**
 #[must_use]
 fn size_table(m: f32, v60: f32, v80: f32, v200: f32) -> f32 {
     if m <= 60.0 {
@@ -302,7 +302,7 @@ fn size_table(m: f32, v60: f32, v80: f32, v200: f32) -> f32 {
 
 /// §5.1 laws that switch on between the measured sizes: 0 at `m ≤ 60`,
 /// linear from the `m = 60` value to the `m = 80` value between 60 and 80,
-/// the fitted law at `m ≥ 80`. **[chosen]**
+/// the fitted law at `m ≥ 80`. **\[chosen\]**
 #[must_use]
 fn switching_law(m: f32, fit: impl Fn(f32) -> f32) -> f32 {
     if m <= 60.0 {
@@ -352,7 +352,7 @@ fn mix(a: f32, b: f32, t: f32) -> f32 {
 }
 
 /// The §4.6 grade: a luma floor and ceiling and a chroma scale, applied
-/// through the YCbCr construction. **[fitted]**
+/// through the YCbCr construction. **\[fitted\]**
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Grade {
     /// Luma floor `F`: the luma a black input maps to.
@@ -405,7 +405,7 @@ impl Grade {
 
 /// §4.6's grade composite on an unpremultiplied colour:
 /// `mix(C, (1 − wash.a)·graded + wash.a·wash.rgb, grade mix)`.
-/// **[fitted]**
+/// **\[fitted\]**
 #[must_use]
 pub fn grade_composite(
     grade: &Grade,
@@ -479,9 +479,9 @@ impl Tint {
 ///
 /// The bearing θ points a light along `(sin θ, −cos θ)` in y-down space: 0
 /// lights the top edge, π the bottom. The band width, knee and composite
-/// keep the current implementation's forms **[chosen]**, and the glow
+/// keep the current implementation's forms **\[chosen\]**, and the glow
 /// term is a second band of the same two-light form at the measured glow
-/// multipliers **[chosen]**.
+/// multipliers **\[chosen\]**.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Highlight {
     /// Inner fade: the band loses this fraction of its weight by its inner
@@ -507,9 +507,9 @@ pub struct Highlight {
     pub glow_width: f32,
     /// Glow aperture multiplier on the light aperture. **[measured: 0.65]**
     pub glow_aperture: f32,
-    /// First light's colour, straight RGBA. **[measured: white @ 1]**
+    /// First light's colour, straight RGBA. **\[measured: white @ 1\]**
     pub first_colour: [f32; 4],
-    /// Second light's colour, straight RGBA. **[measured: white @ 1]**
+    /// Second light's colour, straight RGBA. **\[measured: white @ 1\]**
     pub second_colour: [f32; 4],
 }
 
@@ -580,7 +580,7 @@ pub struct Recipe {
     /// **[measured size × translucency rows; the joint composition is
     /// chosen]**
     pub luminance_limit: f32,
-    /// §4.6: grade. **[measured]**
+    /// §4.6: grade. **\[measured\]**
     pub grade: Grade,
     /// §4.6: wash colour, straight RGB. **[measured translucency rows; the
     /// between-sample colours are chosen]**
@@ -602,12 +602,12 @@ pub struct Recipe {
     pub ambient_strength: f32,
     /// §4.7: ambient ramp `(e0, e1)`, pt. **[measured: (1, 0)]**
     pub ambient_ramp: [f32; 2],
-    /// §4.7: ambient grade. **[measured]**
+    /// §4.7: ambient grade. **\[measured\]**
     pub ambient_grade: Grade,
     /// §4.7: ambient gate polarity: `true` gates on `Yg`, weighting the
     /// ambient sample toward bright pixels (light appearance and the clear family);
     /// `false` gates on `1 − Yg`, toward dark ones (dark appearance).
-    /// **[fitted]**
+    /// **\[fitted\]**
     pub ambient_favours_light: bool,
     /// §4.4: haze radius; the haze is the Gaussian of [`haze_sigma`]
     /// (pt) of it. **[measured: 8 regular; the clear
@@ -640,7 +640,7 @@ pub struct Recipe {
     pub border_bearing: f32,
     /// §4.9: border band width, pt. **[measured: 0.533]**
     pub border_band_width: f32,
-    /// §4.9: border band offset, pt. **[measured: −0.533]**
+    /// §4.9: border band offset, pt. **[fitted: +0.25]**
     pub border_band_offset: f32,
     /// §4.9: border angular aperture, rad — the SDR-output value.
     /// **[measured: 75° dark and clear, 106° light on SDR output (96° on HDR
@@ -747,10 +747,10 @@ impl Recipe {
     /// with the smallest (`smallest`): every value is the largest
     /// member's — the capture scale among them — except the primary
     /// shift, the primary depth and the first blur depth, which are the
-    /// smallest member's. **[measured]**
+    /// smallest member's. **\[measured\]**
     ///
     /// The tint and the ellipse bend stay `largest`'s here; a container
-    /// gives each member its own (§2). **[chosen]**
+    /// gives each member its own (§2). **\[chosen\]**
     #[must_use]
     pub const fn for_container(largest: &Self, smallest: &Self) -> Self {
         let mut r = *largest;
@@ -880,7 +880,7 @@ impl Recipe {
             border_strength: 0.4,
             border_bearing: FRAC_PI_2,
             border_band_width: 0.533,
-            border_band_offset: -0.533,
+            border_band_offset: 0.25,
             border_aperture: if dark {
                 75.0f32.to_radians()
             } else {
@@ -910,7 +910,7 @@ impl Recipe {
     }
 
     /// §5.2: the clear family at clamped `m` — identical in both
-    /// appearances. **[measured]**
+    /// appearances. **\[measured\]**
     fn clear(m: f32, s: f32) -> Self {
         // The blur gains' translucency row is not marked linear;
         // the gains ramp with the radius's own ramp — saturating at
@@ -951,7 +951,7 @@ impl Recipe {
             border_strength: 0.4,
             border_bearing: FRAC_PI_2,
             border_band_width: 0.533,
-            border_band_offset: -0.533,
+            border_band_offset: 0.25,
             border_aperture: 75.0f32.to_radians(),
             border_colour_bias: -0.3,
             cast_shift: [0.0, 8.0],
@@ -1216,7 +1216,7 @@ mod tests {
                 assert_eq!(r.border_strength, 0.4);
                 assert_eq!(r.border_bearing, FRAC_PI_2);
                 assert_eq!(r.border_band_width, 0.533);
-                assert_eq!(r.border_band_offset, -0.533);
+                assert_eq!(r.border_band_offset, 0.25);
                 assert_eq!(r.border_colour_bias, -0.3);
                 assert_eq!(r.cast_shift, [0.0, 8.0]);
                 assert_eq!(r.cast_gain, 0.3);

@@ -28,17 +28,41 @@ pub mod switch;
 
 use core::time::Duration;
 
+use cherenkov_record::MaterialRegistry;
+#[cfg(any(test, waterui_feature = "navigation"))]
+use cherenkov_record::Recorder;
 use cherenkov_record::kurbo::Rect;
-use cherenkov_record::{MaterialRegistry, Recorder};
 use hydrolysis_style::Style;
+#[cfg(waterui_feature = "table")]
+use hydrolysis_style::theme::TableLook;
 use hydrolysis_style::theme::{
-    BadgeLook, ButtonLook, ButtonSpec, CardLook, CheckboxLook, CodeLook, DialogLook, FloatingLook,
-    GlassLook, IndicatorLook, LinearProgressLook, ListLook, ListSpec, MenuLook, MenuPickerLook,
-    MenuSpec, NavigationBarLook, NavigationSpec, PickerSpec, ProgressSpec, RadioGroupLook,
-    ScrollIndicatorLook, SegmentedLook, SegmentedSpec, SheetLook, SliderLook, SliderSpec,
-    SnackbarLook, StepperLook, StepperSpec, SwitchLook, TableLook, TabsLook, TabsSpec,
-    TextFieldLook, TextFieldSpec, ToggleSpec, WidgetTheme,
+    BadgeLook, ButtonLook, ButtonSpec, CardLook, CodeLook, DialogLook, FloatingLook, GlassLook,
+    IndicatorLook, LinearProgressLook, ProgressSpec, ScrollIndicatorLook, SheetLook, SnackbarLook,
+    WidgetTheme,
 };
+#[cfg(waterui_feature = "toggle")]
+use hydrolysis_style::theme::{CheckboxLook, SwitchLook, ToggleSpec};
+#[cfg(waterui_feature = "list")]
+use hydrolysis_style::theme::{ListLook, ListSpec};
+#[cfg(waterui_feature = "menu")]
+use hydrolysis_style::theme::{MenuLook, MenuSpec};
+#[cfg(any(waterui_feature = "picker", waterui_feature = "date-picker"))]
+use hydrolysis_style::theme::{MenuPickerLook, PickerSpec};
+#[cfg(waterui_feature = "navigation")]
+use hydrolysis_style::theme::{NavigationBarLook, NavigationSpec, TabsLook, TabsSpec};
+#[cfg(waterui_feature = "picker")]
+use hydrolysis_style::theme::{RadioGroupLook, SegmentedLook, SegmentedSpec};
+#[cfg(waterui_feature = "slider")]
+use hydrolysis_style::theme::{SliderLook, SliderSpec};
+#[cfg(waterui_feature = "stepper")]
+use hydrolysis_style::theme::{StepperLook, StepperSpec};
+#[cfg(any(
+    waterui_feature = "text-field",
+    waterui_feature = "secure-field",
+    waterui_feature = "date-picker",
+    waterui_feature = "color-picker"
+))]
+use hydrolysis_style::theme::{TextFieldLook, TextFieldSpec};
 use nami::Signal as _;
 use waterui_controls::ControlSize;
 use waterui_controls::button::ButtonStyle;
@@ -209,8 +233,40 @@ impl Default for Glass {
 /// widget-chrome surfaces (a button, a tab bar, a toolbar) draw as their
 /// own members; the containers that fuse neighbours mount under a
 /// `MaterialScope` the host gives the recording.
+#[cfg(any(test, waterui_feature = "navigation"))]
 fn record_standalone(recorder: &mut Recorder, surface: &Surface) {
     materials::record(recorder, &surface.element, false);
+}
+
+/// Fallback font family stack used on targets without a native optical-sized
+/// system UI geometric sans-serif face (§8.0).
+const FALLBACK_FONT_FAMILY: &str = "Inter, system-ui, sans-serif";
+
+/// Whether the active target resolves its typography slots through the host's
+/// native optical-sized system UI face (`family: None`) instead of the staged
+/// `Inter` fallback family (§8.0).
+const USE_NATIVE_SYSTEM_UI_FONT: bool = cfg!(target_vendor = "apple");
+
+/// Resolves one typography slot for either a native optical-sized system UI
+/// host or a host using [`FALLBACK_FONT_FAMILY`] (§8.0).
+const fn theme_font(size: f32, weight: FontWeight, native_system_ui: bool) -> ResolvedFont {
+    if native_system_ui {
+        ResolvedFont::new(size, weight)
+    } else {
+        ResolvedFont::with_static_family(size, weight, FALLBACK_FONT_FAMILY)
+    }
+}
+
+/// Builds the theme's six typography slots (§8.0).
+fn font_settings(native_system_ui: bool) -> FontSettings {
+    let slot = |size, weight| theme_font(size, weight, native_system_ui);
+    FontSettings::new()
+        .title(slot(28.0, FontWeight::Normal))
+        .headline(slot(17.0, FontWeight::SemiBold))
+        .body(slot(17.0, FontWeight::Normal))
+        .subheadline(slot(15.0, FontWeight::Normal))
+        .footnote(slot(13.0, FontWeight::Normal))
+        .caption(slot(12.0, FontWeight::Normal))
 }
 
 impl Style for Glass {
@@ -240,15 +296,7 @@ impl Style for Glass {
                     .error_foreground(resolved(p.error_foreground))
                     .scrim(resolved(p.scrim)),
             )
-            .fonts(
-                FontSettings::new()
-                    .title(ResolvedFont::new(28.0, FontWeight::Normal))
-                    .headline(ResolvedFont::new(17.0, FontWeight::SemiBold))
-                    .body(ResolvedFont::new(17.0, FontWeight::Normal))
-                    .subheadline(ResolvedFont::new(15.0, FontWeight::Normal))
-                    .footnote(ResolvedFont::new(13.0, FontWeight::Normal))
-                    .caption(ResolvedFont::new(12.0, FontWeight::Normal)),
-            )
+            .fonts(font_settings(USE_NATIVE_SYSTEM_UI_FONT))
             .install(env);
     }
 }
@@ -270,38 +318,52 @@ impl WidgetTheme for Glass {
         looks::button(self, spec, env)
     }
 
+    #[cfg(waterui_feature = "toggle")]
     fn switch(&self, spec: &ToggleSpec, env: &Environment) -> SwitchLook {
         looks::switch(self, spec, env)
     }
 
+    #[cfg(waterui_feature = "toggle")]
     fn checkbox(&self, spec: &ToggleSpec, env: &Environment) -> CheckboxLook {
         looks::checkbox(self, spec, env)
     }
 
+    #[cfg(waterui_feature = "stepper")]
     fn stepper(&self, spec: &StepperSpec, env: &Environment) -> StepperLook {
         looks::stepper(self, spec, env)
     }
 
+    #[cfg(any(
+        waterui_feature = "text-field",
+        waterui_feature = "secure-field",
+        waterui_feature = "date-picker",
+        waterui_feature = "color-picker"
+    ))]
     fn text_field(&self, spec: &TextFieldSpec, env: &Environment) -> TextFieldLook {
         looks::text_field(self, spec, env)
     }
 
+    #[cfg(waterui_feature = "menu")]
     fn menu(&self, spec: &MenuSpec, env: &Environment) -> MenuLook {
         looks::menu(self, *spec, env)
     }
 
+    #[cfg(any(waterui_feature = "picker", waterui_feature = "date-picker"))]
     fn menu_picker(&self, spec: &PickerSpec, env: &Environment) -> MenuPickerLook {
         looks::menu_picker(self, spec, env)
     }
 
+    #[cfg(waterui_feature = "picker")]
     fn radio_group(&self, spec: &PickerSpec, env: &Environment) -> RadioGroupLook {
         looks::radio_group(self, spec, env)
     }
 
+    #[cfg(waterui_feature = "picker")]
     fn segmented_picker(&self, spec: &SegmentedSpec, env: &Environment) -> SegmentedLook {
         looks::segmented_picker(self, spec, env)
     }
 
+    #[cfg(waterui_feature = "slider")]
     fn slider(&self, spec: &SliderSpec, env: &Environment) -> SliderLook {
         looks::slider(self, spec, env)
     }
@@ -318,10 +380,12 @@ impl WidgetTheme for Glass {
         looks::loading(self, spec, env)
     }
 
+    #[cfg(waterui_feature = "navigation")]
     fn navigation_bar(&self, spec: &NavigationSpec, env: &Environment) -> NavigationBarLook {
         looks::navigation_bar(self, *spec, env)
     }
 
+    #[cfg(waterui_feature = "navigation")]
     fn tabs(&self, spec: &TabsSpec, env: &Environment) -> TabsLook {
         looks::tabs(self, *spec, env)
     }
@@ -346,10 +410,12 @@ impl WidgetTheme for Glass {
         looks::floating(self, env)
     }
 
+    #[cfg(waterui_feature = "list")]
     fn list(&self, _spec: &ListSpec, _env: &Environment) -> ListLook {
         looks::list(self)
     }
 
+    #[cfg(waterui_feature = "table")]
     fn table(&self, _env: &Environment) -> TableLook {
         looks::table(self)
     }
@@ -1344,6 +1410,65 @@ mod tests {
                 look.copied_color_ref().resolve(&env).snapshot(),
                 palette::working(g.palette().accent)
             );
+        }
+    }
+
+    #[test]
+    fn font_settings_select_system_ui_or_inter_fallback_across_all_slots() {
+        use waterui_core::resolve::Resolvable as _;
+        use waterui_text::font::{Body, Caption, Footnote, Headline, Subheadline, Title};
+
+        let assert_slots = |env: &Environment, expected_family: Option<&str>| {
+            let slots = [
+                (Title.resolve(env).snapshot(), 28.0_f32, FontWeight::Normal),
+                (
+                    Headline.resolve(env).snapshot(),
+                    17.0_f32,
+                    FontWeight::SemiBold,
+                ),
+                (Body.resolve(env).snapshot(), 17.0_f32, FontWeight::Normal),
+                (
+                    Subheadline.resolve(env).snapshot(),
+                    15.0_f32,
+                    FontWeight::Normal,
+                ),
+                (
+                    Footnote.resolve(env).snapshot(),
+                    13.0_f32,
+                    FontWeight::Normal,
+                ),
+                (
+                    Caption.resolve(env).snapshot(),
+                    12.0_f32,
+                    FontWeight::Normal,
+                ),
+            ];
+            for (resolved, expected_size, expected_weight) in slots {
+                assert!((resolved.size() - expected_size).abs() < 1e-4);
+                assert_eq!(resolved.weight(), expected_weight);
+                assert_eq!(
+                    resolved.family().map(waterui_core::Str::as_str),
+                    expected_family
+                );
+            }
+        };
+
+        let mut native_env = Environment::new();
+        Theme::new()
+            .fonts(font_settings(true))
+            .install(&mut native_env);
+        assert_slots(&native_env, None);
+
+        let mut fallback_env = Environment::new();
+        Theme::new()
+            .fonts(font_settings(false))
+            .install(&mut fallback_env);
+        assert_slots(&fallback_env, Some(FALLBACK_FONT_FAMILY));
+
+        let active_expected = (!USE_NATIVE_SYSTEM_UI_FONT).then_some(FALLBACK_FONT_FAMILY);
+        for g in [Glass::light(), Glass::dark()] {
+            let env = environment(&g);
+            assert_slots(&env, active_expected);
         }
     }
 }

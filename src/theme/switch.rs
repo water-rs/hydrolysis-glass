@@ -2,7 +2,7 @@
 //! motion and the glass knob a touch holds.
 //!
 //! Everything here is a pure function of the specification's tables; the
-//! switch look ([`super::looks`]) builds a switch from the same decisions.
+//! switch look (`super::looks`) builds a switch from the same decisions.
 
 use cherenkov_record::kurbo::{Rect, RoundedRectRadii};
 use cherenkov_record::{ContinuousRect, MaterialEffect, ShapeData};
@@ -15,16 +15,16 @@ use super::button::Spring;
 use super::materials::{self, CONTINUOUS_SMOOTHING};
 use super::palette::Rgba;
 
-/// The switch's layout frame, pt **[measured]**.
+/// The switch's layout frame, pt **\[measured\]**.
 pub const FRAME: [f64; 2] = [61.0, 28.0];
 /// The track, pt: 2 pt longer than the frame, overhanging its trailing
-/// edge, and taking no layout space **[measured]**.
+/// edge, and taking no layout space **\[measured\]**.
 pub const TRACK: [f64; 2] = [63.0, 28.0];
-/// The knob at rest, pt **[measured]**.
+/// The knob at rest, pt **\[measured\]**.
 pub const KNOB: [f32; 2] = [37.0, 24.0];
-/// Gap between the knob and the track's edges, pt **[measured]**.
+/// Gap between the knob and the track's edges, pt **\[measured\]**.
 pub const KNOB_INSET: f64 = 2.0;
-/// How far the knob travels from off to on, pt **[measured]**.
+/// How far the knob travels from off to on, pt **\[measured\]**.
 pub const TRAVEL: f32 = 22.0;
 
 /// The track's rectangle for a switch laid out at `frame` in `direction`:
@@ -77,7 +77,7 @@ pub fn capsule(rect: Rect) -> ShapeData {
 }
 
 /// The off track's fill: the secondary label colour at 30 % alpha, so it
-/// reads as the backdrop shifted toward grey **[measured]**.
+/// reads as the backdrop shifted toward grey **\[measured\]**.
 #[must_use]
 pub const fn off_fill(appearance: Appearance) -> Rgba {
     match appearance {
@@ -86,13 +86,13 @@ pub const fn off_fill(appearance: Appearance) -> Rgba {
     }
 }
 
-/// The default tint: the theme's Display P3 accent colour **[measured]**.
+/// The default tint: the theme's Display P3 accent colour **\[measured\]**.
 #[must_use]
 pub const fn default_tint(appearance: Appearance) -> Rgba {
     super::button::default_tint(appearance)
 }
 
-/// Opacity of a disabled switch, track and knob together **[fitted]**.
+/// Opacity of a disabled switch, track and knob together **\[fitted\]**.
 pub const DISABLED_OPACITY: f32 = 0.5;
 
 /// The knob's fill, white and opaque in both appearances.

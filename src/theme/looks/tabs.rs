@@ -26,9 +26,9 @@ use super::super::{Glass, record_standalone};
 use super::{control_motion, is_disabled, paint, spring_animation, stretch_along_axis};
 
 /// The measures of compact vertical items: a 62 pt bar, items at least
-/// 64 pt wide with their labels inset 12 pt, and 6 pt between an icon and
+/// 64 pt wide with their labels inset 12 pt, and 3 pt between an icon and
 /// its label (§8.7, Geometry).
-const VERTICAL_METRICS: TabsMetrics = TabsMetrics::new(62.0, 64.0, 12.0, 6.0);
+const VERTICAL_METRICS: TabsMetrics = TabsMetrics::new(62.0, 64.0, 12.0, 3.0);
 /// Width threshold where bottom bar items switch to horizontal layout, pt
 /// (§8.7, Geometry).
 const HORIZONTAL_BREAKPOINT: f32 = 600.0;

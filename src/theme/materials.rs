@@ -600,7 +600,7 @@ const _: () = assert!(
 /// specification has not observed mixed); the one whose uniforms order
 /// first, element by element, is the smallest of them and the one that
 /// orders last the largest, so the choice never depends on the members'
-/// order. **[chosen]**
+/// order. **\[chosen\]**
 #[derive(Clone, Copy, Debug, Default)]
 pub struct GlassContainer;
 
@@ -688,7 +688,7 @@ impl ContainerRecipe for GlassContainer {
 /// The border correction's measured row folded into
 /// `material_engine.wgsl`: strength, bearing, band width, band offset and
 /// colour bias.
-const BORDER_ROW: [f32; 5] = [0.4, FRAC_PI_2, 0.533, -0.533, -0.3];
+const BORDER_ROW: [f32; 5] = [0.4, FRAC_PI_2, 0.533, 0.25, -0.3];
 
 /// The highlight terms the shader folds in, shared by every recipe: inner
 /// fade, both gains, the knee, both bearings, and the glow's gain, width

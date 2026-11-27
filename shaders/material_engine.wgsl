@@ -76,9 +76,8 @@ const HL_SECOND_COLOUR: vec4<f32> = vec4<f32>(1.0);
 
 const BORDER_STRENGTH: f32 = 0.4;
 const BORDER_BEARING: f32 = PI * 0.5;
-const BORDER_BAND_WIDTH: f32 = 0.533;
-const BORDER_BAND_OFFSET: f32 = -0.533;
-const BORDER_COLOUR_BIAS: f32 = -0.3;
+const BODY_INSET_PT: f32 = 0.40;
+const PERIM_OUTSET_PT: f32 = 0.20;
 
 // Display P3 luminance weights.
 const LUMA_WEIGHTS: vec3<f32> = vec3<f32>(0.22897456, 0.69173852, 0.07928691);
@@ -414,19 +413,19 @@ fn glass_body(
         c = c * (1.0 - alpha_r);
     }
 
-    // §4.9: the border correction — two opposing edge lobes around the
-    // rim; the strength, bearing, band and bias are the recipe's shared
-    // constants (see the header), only the aperture rides in `params`.
+    return c;
+}
+
+// §4.9: lateral opposing lobe weight in [0, 1] around the exterior perimeter;
+// strength and bearing are the recipe's shared constants, only the aperture
+// rides in `params`.
+fn border_lateral(n: vec2<f32>, aperture: f32) -> f32 {
     let u_b = vec2<f32>(sin(BORDER_BEARING), -cos(BORDER_BEARING));
-    let cs = cos(0.5 * params[11].z);
-    let band_b = gsat(1.0 - abs(d - BORDER_BAND_OFFSET) / BORDER_BAND_WIDTH);
+    let cs = cos(0.5 * aperture);
     let q1 = gsat((dot(n, u_b) - cs) / (1.0 - cs));
     let q2 = gsat((dot(n, -u_b) - cs) / (1.0 - cs));
-    let h = band_b * (q1 / max(1.0 + BORDER_STRENGTH * (1.0 - q1), 1e-4)
-        + q2 / max(1.0 + BORDER_STRENGTH * (1.0 - q2), 1e-4));
-    c = c * (1.0 + BORDER_COLOUR_BIAS * h * (3.0 - 2.0 * c));
-
-    return c;
+    return q1 / max(1.0 + BORDER_STRENGTH * (1.0 - q1), 1e-4)
+        + q2 / max(1.0 + BORDER_STRENGTH * (1.0 - q2), 1e-4);
 }
 
 // The §4.12 two-light rim highlight plus the glow term — a second band
@@ -480,11 +479,11 @@ fn add_highlight(c: vec3<f32>, light: vec4<f32>, k_mul: f32, k_add: f32) -> vec3
 // These are the fill's and the gradient's alphas, 0 without a tint or
 // coverage; `add_tint` lays them over a colour.
 fn tint_alphas(tint_a: f32, has_tint: f32, d: f32, cov: f32) -> vec2<f32> {
-    let a_flat = tint_a * cov;
+    let a_flat = tint_a;
     // A flat tint (flag 2, §8.1) takes no edge gradient.
     let edge = step(has_tint, 1.5);
     let t = gsat(-d / 10.0);
-    let a_rim = edge * tint_a * (1.0 - ease_cubic(t)) * cov;
+    let a_rim = edge * tint_a * (1.0 - ease_cubic(t));
     return select(vec2<f32>(0.0), vec2<f32>(a_flat, a_rim), has_tint >= 0.5 && cov > 0.0);
 }
 
@@ -557,17 +556,6 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
         return vec4<f32>(0.0);
     }
 
-    // The silhouette coverage: a half-device-pixel ramp at the member's
-    // effective field edge.
-    let cov = gsat(0.5 - geom_sdf / fw);
-    if cov <= 0.0 {
-        let is_light_reg = select(0.0, 1.0, is_light)
-            * select(0.0, 1.0, params[1].z > 0.0);
-        let hairline_alpha = is_light_reg * 0.09 * gsat(1.0 - 2.0 * d);
-        let ext_alpha = 1.0 - (1.0 - cast_alpha) * (1.0 - hairline_alpha);
-        return vec4<f32>(0.0, 0.0, 0.0, ext_alpha);
-    }
-
     // §2: the owning member's ellipse bend, applied to the field normal
     // the way the standalone's field pass bent it before shading.
     var n = geom_normal;
@@ -576,13 +564,39 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
         n = normalize(mix(n, ellipse_normal(rect, px.local), params[15].z));
     }
 
+    let is_clear = params[12].y < 0.2;
+    let is_light_regular = is_light && !is_clear && !is_prominent;
+    let is_light_prominent = is_light && is_prominent;
+    let h_lat = border_lateral(n, params[11].z);
+    let h_base = select(0.0, 0.28, is_light_regular);
+    let ring_black = select(mix(h_base, 0.68, h_lat), 0.0, is_clear);
+
+    // §4.9 / §4.11: inset glass body by 0.40 pt while the perimeter border ring
+    // occupies the 0.60 pt annulus `cov_perim - cov_body` around `d = 0`.
+    let body_sdf = geom_sdf + BODY_INSET_PT * u;
+    let body_d = d + BODY_INSET_PT;
+    let cov_body = gsat(0.5 - body_sdf / fw);
+    let cov_perim = gsat(0.5 - (geom_sdf - PERIM_OUTSET_PT * u) / fw);
+    let ring_cov = max(cov_perim - cov_body, 0.0);
+    if cov_body <= 0.0 {
+        if is_light_prominent && ring_cov > 0.0 {
+            let y_b = luma(glass_work_space(backdrop_sample(px.p)));
+            let fill = params[13].rgb * (0.60 + 0.40 * y_b);
+            let stroke_lin = space_srgb_decode(fill * (0.90 - 0.08 * h_lat));
+            let a = cov_perim + (1.0 - cov_perim) * cast_alpha;
+            return vec4<f32>(stroke_lin * ring_cov, a);
+        }
+        let a = ring_cov * mix(cast_alpha, 1.0, ring_black) + (1.0 - cov_perim) * cast_alpha;
+        return vec4<f32>(0.0, 0.0, 0.0, a);
+    }
+
     var c = glass_body(
         params,
         px.p,
-        d,
+        body_d,
         n,
         u,
-        cov,
+        cov_body,
         sibling_count,
         self_index,
         is_prominent,
@@ -600,7 +614,7 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
         vec2<f32>(0.105, 0.038),
         is_prominent,
     );
-    let raw_light = highlight_light(d, n, cov, params[12].w);
+    let raw_light = highlight_light(body_d, n, cov_body, params[12].w);
     let press_p = max(params[5].y, 0.0);
     let own_center = params[14].zw + params[15].xy * 0.5;
     let touch_pt = select(own_center, params[1].xy, params[9].x > 0.5);
@@ -609,7 +623,7 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
     let phi = gsat(press_p) * (1.0 - 0.37 * u_t * u_t);
     let press_boost = 1.0 + 0.35 * phi;
     let light = vec4<f32>(raw_light.rgb * press_boost, raw_light.w);
-    let tint = tint_alphas(params[13].a, params[15].w, d, cov);
+    let tint = tint_alphas(params[13].a, params[15].w, body_d, cov_body);
     let y_b = luma(c);
     let prom_w = select(gsat(0.12 * (y_b - 0.16)), 0.40 * (1.0 - y_b), is_light);
     let fill = mix(params[13].rgb, vec3<f32>(select(1.0, 0.0, is_light)), prom_w);
@@ -626,7 +640,7 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
     // siblings within `BLEED_RADIUS = 36.0 pt` (`lambda_bleed = 12.0 pt`).
     if sibling_count > 1u {
         let headroom = max(vec3<f32>(1.0) - c, vec3<f32>(0.0));
-        let edge_decay = exp(min(d, 0.0) / 8.0);
+        let edge_decay = exp(min(body_d, 0.0) / 8.0);
         var bleed = vec3<f32>(0.0);
         for (var i = 0u; i < sibling_count; i = i + 1u) {
             if i == self_index {
@@ -652,10 +666,12 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
     // Convert Display P3-encoded straight colour directly back to extended
     // linear Display P3 with no sRGB gamut transform, preserving wide-gamut
     // primaries and unclamped HDR highlights (> 1.0).
-    let is_light_reg = select(0.0, 1.0, is_light) * select(0.0, 1.0, params[1].z > 0.0);
-    let hairline_alpha = is_light_reg * select(0.0, 0.09, d > 0.0) * gsat(1.0 - 2.0 * d);
-    let ext_alpha = 1.0 - (1.0 - cast_alpha) * (1.0 - hairline_alpha);
-    let a = cov + (1.0 - cov) * ext_alpha;
-    let straight = space_srgb_decode(c * (cov / a));
-    return vec4<f32>(straight * a, a);
+    let c_lin = space_srgb_decode(c);
+    if is_light_prominent {
+        let a = cov_perim + (1.0 - cov_perim) * cast_alpha;
+        let stroke_lin = space_srgb_decode(fill * (0.90 - 0.08 * h_lat));
+        return vec4<f32>(c_lin * cov_body + stroke_lin * ring_cov, a);
+    }
+    let a = cov_body + ring_cov * mix(cast_alpha, 1.0, ring_black) + (1.0 - cov_perim) * cast_alpha;
+    return vec4<f32>(c_lin * cov_body, a);
 }
