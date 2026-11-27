@@ -356,8 +356,16 @@ lights, a **first** and a **second**:
 - **Glow.** A second, broader band whose gain, width and aperture
   multipliers are 0.15, 8 and 0.65 [measured]. Its form is open.
 - The layer acts on the colour already accumulated under it, within the
-  highlight's coverage [chosen]. The rim it produces is about 1 pt thick
-  [measured].
+  highlight's coverage [chosen]. The narrow rim band spans `1.5` pt inward
+  (with the `8×` glow band spanning `12.0` pt) and composites onto the glass
+  body `C` via the chroma-preserving soft-light law
+  `C · (1 + k_mul · L · (3 − 2 · sat(C))) + k_add · L` with
+  `(k_mul, k_add) = (0.050, 0.190)` for regular dark glass, `(0.125, 0.000)`
+  for regular light glass, and `(0.105, 0.038)` for prominent tinted glass
+  [fitted: reproduces top and bottom rim profiles over black dark
+  `(85 → 62 → 42 → 38)` at `d = −0.25, −0.75, −1.25, −2.25` pt and over
+  saturated blue `(55, 109, 234)` in dark and light appearances within `6.9`
+  and `4.5` levels RMSE respectively].
 - Whether the highlights respond to device motion is open: no observation was
   made with the device tilted.
 
@@ -478,8 +486,9 @@ saturated green `(81, 166, 104)` and saturated blue `(55, 109, 234)` within
 `(81, 168, 105)`, `(66, 124, 255)` against measured `31`, `184`,
 `(81, 168, 108)`, `(64, 126, 253)`) [fitted]. Over black in dark appearance,
 the top and bottom rim highlight of a `34.5` pt regular control lifts the
-`1` pt rim band to `(62, 62, 62)` (`+31` levels over the `(31, 31, 31)` body)
-[measured].
+outer `1.5` pt rim band to `(85, 85, 85)` at `d = −0.25` pt, `(62, 62, 62)`
+at `d = −0.75` pt, and `(42, 42, 42)` at `d = −1.25` pt over the `(32, 32, 32)`
+body [measured].
 
 Highlight bearings and colours do not switch.
 
@@ -1345,12 +1354,13 @@ the knob]. The slider takes the width it is given and has no intrinsic
 width; the height and the parts are the same at every control size,
 mini through extra large [measured: simulator].
 
-- **Label spacing.** A labelled slider places its `Body` (`17.0` pt, §8.0)
-  label above the `31` pt slider row with `8.0` pt vertical spacing between
-  the label band and the slider row (in an `80` pt viewport with `12` pt
-  padding, `"Volume"` ink sits at `y = 16.0..29.0` pt, the `24` pt knob at
-  `y = 41.0..65.0` pt, and the `6` pt track at `y = 49.5..55.5` pt; reducing
-  the gap to `4.0` pt shifts the track `2.5` pt too high) [measured].
+- **Label spacing.** A labelled slider places its `Body` (`17.0` pt, `20.02` pt
+  natural line height, §8.0) label above the `31` pt slider row with `5.0` pt
+  vertical spacing between the label band and the slider row (in an `80` pt
+  viewport with `12` pt padding, `"Volume"` ink sits at `y = 16.0..28.5` pt,
+  the `24` pt knob at `y = 41.0..65.0` pt, and the `6` pt track at
+  `y = 49.5..55.5` pt; an `8.0` pt gap shifts the label `1.5` pt high and the
+  track `1.5` pt low) [measured].
 - **Corners.** The track and the knob are capsules, radius 3 and 12, with
   continuous corners [chosen: the 1/3 pt sampling does not separate
   circular from continuous corners].
@@ -1723,10 +1733,11 @@ highlight. At rest no part is glass.
   neither inside label nor floating prompt centres its text vertically inside
   the container [chosen].
 - **Floating label.** Rests vertically centred in the container; while
-  the field holds focus or content, it keeps its full `1.0` scale (`17` pt)
-  and moves `8.0` pt below the container's top edge (aligning both lines at
-  `y = 21.0` and `y = 46.0` pt inside an `80` pt padded viewport; `6.0` pt
-  leaves both `2.0` pt high at `19.0` and `44.0` pt) [measured].
+  the field holds focus or content, it keeps its full `1.0` scale (`17` pt,
+  `20.02` pt natural line height) and moves `6.0` pt below the container's top
+  edge (aligning `"Name"` at `y = 21.0..33.0` pt and value at
+  `y = 46.0..58.5` pt inside an `80` pt padded viewport; `8.0` pt pushes the
+  floating label `2.0` pt low to `y = 23.0` pt) [measured].
 - **Focus outlines.** While focused and enabled, an accent outline of
   width `1.5` pt sits flush inside the container's edge (`0.75` pt inset,
   corner radius `9.25` pt), and the theme's `2` pt accent focus ring sits
