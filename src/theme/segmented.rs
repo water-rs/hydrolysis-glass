@@ -55,7 +55,7 @@ impl SizeGroup {
 
     /// The control's frame height, pt **[measured: simulator]**.
     #[must_use]
-    pub const fn frame_height(self) -> f64 {
+    pub const fn frame_height(self) -> f32 {
         match self {
             Self::Regular => 31.0,
             Self::Large => 48.0,
@@ -64,7 +64,7 @@ impl SizeGroup {
 }
 
 /// How far the container overhangs the frame's bottom edge, pt **[measured]**.
-pub const CONTAINER_OVERHANG: f64 = 0.0;
+pub const CONTAINER_OVERHANG: f32 = 0.0;
 /// The thumb's inset from its segment on every side of the container, pt
 /// **[measured: simulator]**.
 pub const THUMB_INSET: f64 = 2.0;
@@ -89,7 +89,12 @@ pub const fn label_weight(selected: bool) -> FontWeight {
 /// edge, and 1 pt taller than the row.
 #[must_use]
 pub fn container_rect(row: Rect) -> Rect {
-    Rect::new(row.x0, row.y0, row.x1, row.y1 + CONTAINER_OVERHANG)
+    Rect::new(
+        row.x0,
+        row.y0,
+        row.x1,
+        row.y1 + f64::from(CONTAINER_OVERHANG),
+    )
 }
 
 /// The width of each of `count` equal segments of `row`, whatever their
@@ -149,7 +154,7 @@ pub const SELECTION: Spring = Spring {
 };
 
 /// How far a touch may move and still be a tap, pt **[chosen]**.
-pub const TAP_SLOP: f64 = 10.0;
+pub const TAP_SLOP: f32 = 10.0;
 
 /// Smallest height of a segment's touch target, pt **[chosen]**.
 pub const MIN_HIT_HEIGHT: f64 = 44.0;
@@ -215,7 +220,10 @@ pub fn lens_capture_scale(
     appearance: Appearance,
     translucency: Translucency,
 ) -> f32 {
-    let h = 2.0f64.mul_add(-THUMB_INSET, group.frame_height() + CONTAINER_OVERHANG);
+    let h = 2.0f64.mul_add(
+        -THUMB_INSET,
+        f64::from(group.frame_height() + CONTAINER_OVERHANG),
+    );
     lens_recipe(h, h, appearance, translucency).capture_scale
 }
 
@@ -251,10 +259,10 @@ mod tests {
     #[test]
     fn heights_follow_the_size_group() {
         for (group, frame, container, thumb) in [
-            (SizeGroup::Regular, 31.0, 31.0, 27.0),
-            (SizeGroup::Large, 48.0, 48.0, 44.0),
+            (SizeGroup::Regular, 31.0_f32, 31.0, 27.0),
+            (SizeGroup::Large, 48.0_f32, 48.0, 44.0),
         ] {
-            let row = Rect::new(0.0, 0.0, 300.0, group.frame_height());
+            let row = Rect::new(0.0, 0.0, 300.0, f64::from(group.frame_height()));
             assert_eq!(group.frame_height(), frame);
             assert_eq!(container_rect(row).height(), container);
             assert_eq!(thumb_rect(row, 3, 0.0, 1.0).height(), thumb);

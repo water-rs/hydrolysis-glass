@@ -39,7 +39,7 @@ const LAYOUT: MenuLayout = MenuLayout {
 };
 
 /// Initial Gaussian blur radius for menu content reveal, pt.
-const CONTENT_BLUR_FROM: f64 = 15.0;
+const CONTENT_BLUR_FROM: f32 = 15.0;
 
 /// Cubic Hermite smoothstep on `[edge0, edge1]`.
 fn smoothstep(edge0: f64, edge1: f64, x: f64) -> f64 {
@@ -85,7 +85,7 @@ pub(in super::super) fn look(glass: &Glass, _spec: MenuSpec, _env: &Environment)
     .content_blur_from(CONTENT_BLUR_FROM)
     .content_blur_window(0.55, 0.98)
     .dismiss_content_blur_window(0.65, 1.0)
-    .surface_corner_radius(f64::from(POPOVER_TARGET_RADIUS))
+    .surface_corner_radius(POPOVER_TARGET_RADIUS)
     .cover_trigger(true);
     MenuLook::new(
         LAYOUT,
@@ -104,11 +104,11 @@ pub(in super::super) fn look(glass: &Glass, _spec: MenuSpec, _env: &Environment)
             return;
         }
         let max_r = 0.5 * sample.surface.width().min(sample.surface.height());
-        let target_radius = if sample.surface_corner_radius > 0.0 {
+        let target_radius = f64::from(if sample.surface_corner_radius > 0.0 {
             sample.surface_corner_radius
         } else {
-            f64::from(POPOVER_TARGET_RADIUS)
-        };
+            POPOVER_TARGET_RADIUS
+        });
         let q = sample
             .progress
             .clamp(0.0, 1.0)

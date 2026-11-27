@@ -30,7 +30,7 @@ use super::{faded, focus_ring_paint, is_disabled, paint, state_chrome};
 /// 6 pt vertically (§8.6, Geometry).
 const METRICS: InputFieldMetrics = InputFieldMetrics::new(25.0, 120.0, 36.0, 0.0, 6.0);
 /// The picker container's corner radius, pt (§8.6, Geometry).
-const CORNER_RADIUS: f64 = 10.0;
+const CORNER_RADIUS: f32 = 10.0;
 /// The resting text size inside a text field, pt.
 const FIELD_TEXT_SIZE: f32 = 17.0;
 /// The resting line height inside a text field, pt.
@@ -41,7 +41,7 @@ const OUTLINE_WIDTH: f64 = 1.5;
 /// The floated label's size relative to its resting size (§8.6, Geometry).
 const FLOAT_SCALE: f64 = 1.0;
 /// The floated label's distance below the container's top edge, pt (§8.6, Geometry).
-const FLOAT_TOP: f64 = 6.0;
+const FLOAT_TOP: f32 = 6.0;
 /// The alpha of the accent the selection is painted in (§8.6, Colours).
 const SELECTION_ALPHA: f32 = 0.3;
 /// Disabled opacity applied to fill, label, value and placeholder (§8.6, States).
@@ -121,7 +121,10 @@ fn field_container(glass: &Glass) -> Chrome {
         |recorder, frame, (outline,)| {
             let inset = OUTLINE_WIDTH * 0.5;
             recorder.stroke(
-                RoundedRect::from_rect(frame.inset(-inset), (CORNER_RADIUS - inset).max(0.0)),
+                RoundedRect::from_rect(
+                    frame.inset(-inset),
+                    (f64::from(CORNER_RADIUS) - inset).max(0.0),
+                ),
                 Stroke::new(OUTLINE_WIDTH),
                 outline,
             );
@@ -154,7 +157,10 @@ pub(super) fn container(glass: &Glass) -> Chrome {
         |recorder, frame, (outline,)| {
             let inset = OUTLINE_WIDTH * 0.5;
             recorder.stroke(
-                RoundedRect::from_rect(frame.inset(-inset), (CORNER_RADIUS - inset).max(0.0)),
+                RoundedRect::from_rect(
+                    frame.inset(-inset),
+                    (f64::from(CORNER_RADIUS) - inset).max(0.0),
+                ),
                 Stroke::new(OUTLINE_WIDTH),
                 outline,
             );

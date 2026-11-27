@@ -15,9 +15,9 @@ use waterui_graphics::WorkingColor;
 use super::palette::{Palette, alpha, over, working};
 
 /// Opaque menu and popup corner radius, pt.
-pub const MENU_CORNER_RADIUS: f64 = 14.0;
+pub const MENU_CORNER_RADIUS: f32 = 14.0;
 /// Hairline thickness, pt.
-pub const HAIRLINE: f64 = 0.5;
+pub const HAIRLINE: f32 = 0.5;
 /// Elevation shadow blur of opaque popups, pt.
 pub const POPUP_SHADOW_BLUR: f64 = 24.0;
 /// Vertical displacement of the opaque popups' elevation shadow, pt.
@@ -25,9 +25,9 @@ pub const POPUP_SHADOW_OFFSET: f64 = 8.0;
 /// Alpha of the popup elevation shadow.
 pub const POPUP_SHADOW_ALPHA: f32 = 0.18;
 /// Focus ring thickness, pt.
-pub const FOCUS_RING_WIDTH: f64 = 2.0;
+pub const FOCUS_RING_WIDTH: f32 = 2.0;
 /// Focus ring gap from the control, pt.
-pub const FOCUS_RING_GAP: f64 = 2.0;
+pub const FOCUS_RING_GAP: f32 = 2.0;
 /// Alpha of a hover state layer.
 pub const HOVER_ALPHA: f32 = 0.06;
 /// Alpha of a pressed state layer.
@@ -220,14 +220,18 @@ pub fn table_header_background(palette: &Palette, draw: &mut Recorder, bounds: R
 
 /// A cell border hairline.
 pub fn table_cell_border(palette: &Palette, draw: &mut Recorder, bounds: Rect) {
-    draw.stroke(bounds, Stroke::new(HAIRLINE), working(palette.border));
+    draw.stroke(
+        bounds,
+        Stroke::new(f64::from(HAIRLINE)),
+        working(palette.border),
+    );
 }
 
 /// A column separator hairline.
 pub fn table_column_separator(palette: &Palette, draw: &mut Recorder, from: Point, to: Point) {
     draw.stroke(
         Line::new(from, to),
-        Stroke::new(HAIRLINE),
+        Stroke::new(f64::from(HAIRLINE)),
         working(palette.border),
     );
 }

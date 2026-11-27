@@ -168,7 +168,7 @@ fn state_chrome(glass: &Glass, surface: ChromeSurface) -> Chrome {
 fn hit_region() -> HitRegion {
     HitRegion::NONE
         .minimum(Size::new(f64::from(MIN_HIT_SIDE), f64::from(MIN_HIT_SIDE)))
-        .cancel_distance(f64::from(CANCEL_DISTANCE))
+        .cancel_distance(CANCEL_DISTANCE)
 }
 
 /// The motion of the controls that animate their state layers: an eased
@@ -332,8 +332,7 @@ pub(super) fn table(glass: &Glass) -> TableLook {
             cell_vertical_inset: 8.0,
             header_height: 36.0,
             row_height: 40.0,
-            // Matches `chrome::HAIRLINE` (`f64` stroke width).
-            outline_width: 0.5,
+            outline_width: chrome::HAIRLINE,
         },
         Custom::<(), _>::new((), move |recorder, frame, ()| {
             chrome::table_background(&palette, recorder, frame);

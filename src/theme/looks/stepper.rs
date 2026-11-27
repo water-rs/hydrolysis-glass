@@ -41,13 +41,13 @@ const BUTTON_WIDTH: f64 = 46.5;
 /// Height of each stepper end, pt (§8.5, Geometry).
 const BUTTON_HEIGHT: f64 = 32.0;
 /// Gap between the two halves (`0.0` so the seam never opens a background gap, §8.5).
-const SPACING: f64 = 0.0;
+const SPACING: f32 = 0.0;
 /// Width of the central vertical divider drawn across the seam (split `0.5` pt per half), pt (§8.5).
 const DIVIDER_HALF_WIDTH: f64 = 0.5;
 /// Top and bottom inset of the `24.0` pt central divider inside the `32.0` pt pill, pt (§8.5).
 const DIVIDER_VERTICAL_INSET: f64 = 4.0;
 /// The gap between the stepper's label and its buttons, pt (§8.5, Geometry).
-const LABEL_SPACING: f64 = 12.0;
+const LABEL_SPACING: f32 = 12.0;
 /// An icon's half length, in shares of the pill height (`6.5 / 32.0`, `13.0` pt total span, §8.5).
 const ICON_HALF: f64 = 6.5 / BUTTON_HEIGHT;
 /// An icon stroke's width, pt (§8.5, Geometry).
@@ -164,7 +164,7 @@ fn end(glass: &Glass, end: End, rtl: bool) -> Chrome {
     // overlaps targets, while extending vertically to 44 pt (§8.5, Geometry).
     let hit = HitRegion::NONE
         .minimum(Size::new(0.0, f64::from(MIN_HIT_SIDE)))
-        .cancel_distance(f64::from(CANCEL_DISTANCE));
+        .cancel_distance(CANCEL_DISTANCE);
     state_chrome(
         glass,
         ChromeSurface::new(

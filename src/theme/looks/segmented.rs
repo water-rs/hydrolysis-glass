@@ -32,16 +32,16 @@ use crate::theme::button::Spring;
 
 /// Space between the picker's own label above the row and the row, pt: the
 /// theme's picker label spacing.
-const LABEL_SPACING: f64 = 4.0;
+const LABEL_SPACING: f32 = 4.0;
 /// Room on each side of a label inside its segment, pt: the theme's picker
 /// horizontal inset. The label is centred on both axes (§8.4), so the
 /// padding only bounds how wide it may lay out.
 const LABEL_PADDING_X: f64 = 12.0;
 /// The narrowest a segment is measured, pt: the theme's picker segment
 /// minimum.
-const MINIMUM_SEGMENT_WIDTH: f64 = 64.0;
+const MINIMUM_SEGMENT_WIDTH: f32 = 64.0;
 /// The narrowest the control is measured, pt: the theme's picker minimum.
-const MINIMUM_WIDTH: f64 = 120.0;
+const MINIMUM_WIDTH: f32 = 120.0;
 
 /// The control's motion: eased hover, focus and drag, the press and release
 /// springs of §8.1 for the press that makes the lens, and the selection
@@ -219,14 +219,14 @@ fn focus_ring(
     glass: &Glass,
     count: usize,
 ) -> Custom<SegmentedValue, impl DrivenSet<SegmentedValue> + use<>> {
-    let reach = FOCUS_RING_WIDTH.mul_add(0.5, FOCUS_RING_GAP);
+    let reach = f64::from(FOCUS_RING_WIDTH).mul_add(0.5, f64::from(FOCUS_RING_GAP));
     let ring = Driven::new(move |inputs: &Inputs<'_, SegmentedValue>| {
         switch::capsule(thumb(count, inputs).inflate(reach, reach))
     });
     Custom::new(
         (ring, focus_ring_paint(glass.palette.accent)),
         |recorder, _frame, (ring, ring_paint)| {
-            recorder.stroke(ring, Stroke::new(FOCUS_RING_WIDTH), ring_paint);
+            recorder.stroke(ring, Stroke::new(f64::from(FOCUS_RING_WIDTH)), ring_paint);
         },
     )
 }

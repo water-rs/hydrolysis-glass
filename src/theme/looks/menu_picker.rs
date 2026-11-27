@@ -30,12 +30,14 @@ const LAYOUT: MenuPickerLayout = MenuPickerLayout {
 /// `indicator_space` Hydrolysis keeps clear of the value, inside the
 /// trailing inset (at the left in RTL), over the field's whole height.
 fn indicator_band(frame: Rect, rtl: bool) -> Rect {
+    let inset = f64::from(LAYOUT.horizontal_inset);
+    let space = f64::from(LAYOUT.indicator_space);
     if rtl {
-        let x0 = frame.x0 + LAYOUT.horizontal_inset;
-        Rect::new(x0, frame.y0, x0 + LAYOUT.indicator_space, frame.y1)
+        let x0 = frame.x0 + inset;
+        Rect::new(x0, frame.y0, x0 + space, frame.y1)
     } else {
-        let x1 = frame.x1 - LAYOUT.horizontal_inset;
-        Rect::new(x1 - LAYOUT.indicator_space, frame.y0, x1, frame.y1)
+        let x1 = frame.x1 - inset;
+        Rect::new(x1 - space, frame.y0, x1, frame.y1)
     }
 }
 
