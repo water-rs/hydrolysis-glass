@@ -25,7 +25,7 @@ use wgpu::util::DeviceExt;
 pub const COMPOSITE_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 /// Format of the field texture: `(d, n.x, n.y, owner)`.
 pub const FIELD_FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba32Float;
-/// Cap of the capture chain's mip levels. **[chosen]**
+/// Cap of the capture chain's mip levels. **\[chosen\]**
 ///
 /// The chain runs one level per halving until the capture is down to one
 /// texel on its long side, or this many levels, whichever comes first.
@@ -33,14 +33,14 @@ pub const CAPTURE_MIP_LEVELS: u32 = 9;
 
 /// Rotation of the foreground aberration axis relative to the surface
 /// normal, radians — §4.14 leaves the dispersion parameters open.
-/// **[chosen]**
+/// **\[chosen\]**
 pub const DISPERSION_AXIS_ANGLE: f32 = 0.35;
 /// Width of the seven spectral taps at the silhouette, pt — §4.14 leaves
 /// the dispersion parameters open. **[chosen: one dominant ~1–2 px fringe
 /// per side at 3 px/pt]**
 pub const DISPERSION_WIDTH_PT: f32 = 0.6;
 /// Foreground edge fade band, pt — the §4.14 fade's parameters are open
-/// there. **[chosen]**
+/// there. **\[chosen\]**
 pub const FOREGROUND_FADE_PT: f32 = 1.5;
 
 /// A set of elements sharing one backdrop capture and one union field.
@@ -519,7 +519,7 @@ fn init_buffer(
 /// Every group's passes run on textures sized to the union of its member
 /// bounds inflated by the farthest recipe reach (`group_region`), so cost
 /// is proportional to the elements, not the screen. Capture, buffer and
-/// bind-group objects are kept on [`GroupGpu`] across frames; each
+/// bind-group objects are kept on `GroupGpu` across frames; each
 /// `render` only rewrites buffer contents and re-runs the passes.
 #[derive(Debug)]
 pub struct GlassRenderer {

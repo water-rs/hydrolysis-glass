@@ -15,6 +15,12 @@ keywords = ["ui", "theme", "glass", "waterui", "graphics"]
 categories = ["gui"]
 include = ["src/**", "shaders/**", "README.md", "LICENSE-*"]
 
+[package.metadata.waterui.assets]
+
+[[package.metadata.waterui.assets.font]]
+name = "Inter"
+platforms = ["android", "linux", "windows", "web"]
+
 [features]
 default = []
 # GPU→CPU readback for the verification harness. Off for consumers:

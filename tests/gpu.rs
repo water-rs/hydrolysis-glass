@@ -506,3 +506,128 @@ fn cross_element_bleed_illuminates_adjacent_within_36pt() {
         );
     }
 }
+
+/// §4.9 / §4.11 / §4.13: at `2 px/pt`, the dark perimeter ring sits outside the
+/// silhouette peaking at `d = +0.25 pt` without darkening interior pixels at
+/// `d = -0.25 pt`, and light prominent capsules carry a `0.5 pt` darkened-tint
+/// outer perimeter stroke.
+#[test]
+fn exterior_perimeter_ring_and_light_prominent_outer_stroke() {
+    use hydrolysis_glass::material::geometry::Rect;
+    use hydrolysis_glass::material::recipe::Tint;
+
+    const SCALE_2X: f32 = 2.0;
+    let sample_2x = |img: &Image, px_x: u32, px_y: u32| -> [f32; 4] {
+        img.pixels[(px_y * img.width + px_x) as usize]
+    };
+
+    let mut h = Harness::new();
+    let rect = Rect::new(100.0, 200.0, 140.0, 44.0);
+    let shape = Shape::capsule(rect);
+
+    let light_reg = element(
+        shape,
+        Family::Regular,
+        Appearance::Light,
+        Translucency::default(),
+    );
+    let dark_reg = element(
+        shape,
+        Family::Regular,
+        Appearance::Dark,
+        Translucency::default(),
+    );
+    let mut dark_prom = dark_reg;
+    dark_prom.recipe = dark_prom.recipe.with_tint(Tint::flat(
+        [63.0 / 255.0, 143.0 / 255.0, 247.0 / 255.0],
+        1.0,
+    ));
+    let mut light_prom = light_reg;
+    light_prom.recipe = light_prom.recipe.with_tint(Tint::flat(
+        [59.0 / 255.0, 134.0 / 255.0, 247.0 / 255.0],
+        1.0,
+    ));
+
+    let render = |h: &mut Harness, elem, name: &str| {
+        let img = h.render(
+            Backdrop::White,
+            &Scene::new(SCENE_PT, SCALE_2X, vec![Group::single(elem)]),
+        );
+        img.save(name);
+        img
+    };
+    let light_img = render(&mut h, light_reg, "perimeter_light_reg");
+    let dark_img = render(&mut h, dark_reg, "perimeter_dark_reg");
+    let dark_prom_img = render(&mut h, dark_prom, "perimeter_dark_prom");
+    let light_prom_img = render(&mut h, light_prom, "perimeter_light_prom");
+
+    // At 2 px/pt on rect (100, 200, 140, 44):
+    // - left edge x = 200 px: x = 199 is d = +0.25 pt, x = 200 is d = -0.25 pt
+    // - top edge y = 400 px:  y = 399 is d = +0.25 pt, y = 400 is d = -0.25 pt
+    // - center is (340, 444)
+    let light_center = sample_2x(&light_img, 340, 444);
+    let light_lat_in = sample_2x(&light_img, 200, 444);
+    let light_top_ext = sample_2x(&light_img, 340, 399);
+    let light_lat_ext = sample_2x(&light_img, 199, 444);
+
+    assert!(
+        (light_lat_in[0] - light_center[0]).abs() < 0.05,
+        "light regular interior at d = -0.25 pt must stay free of §4.9 darkening: \
+         edge {light_lat_in:?} vs center {light_center:?}"
+    );
+    assert!(
+        light_top_ext[0] < 0.94 && light_top_ext[0] > 0.87,
+        "light regular top exterior hairline at d = +0.25 pt must darken white backdrop (~232/255): \
+         {light_top_ext:?}"
+    );
+    assert!(
+        light_lat_ext[0] < 0.78 && light_lat_ext[0] > 0.68,
+        "light regular lateral exterior lobe at d = +0.25 pt must darken white backdrop (~184-190/255): \
+         {light_lat_ext:?}"
+    );
+
+    // Dark regular & dark prominent: top exterior untouched (`h_base = 0`),
+    // clean interior at `d = -0.25 pt`, lateral exterior matches light regular.
+    for (label, img) in [("dark_reg", &dark_img), ("dark_prom", &dark_prom_img)] {
+        let center = sample_2x(img, 340, 444);
+        let lat_in = sample_2x(img, 200, 444);
+        let top_ext = sample_2x(img, 340, 399);
+        let lat_ext = sample_2x(img, 199, 444);
+        assert!(
+            (lat_in[0] - center[0]).abs() < 0.06 && (lat_in[2] - center[2]).abs() < 0.06,
+            "{label} interior at d = -0.25 pt must stay free of §4.9 darkening: \
+             edge {lat_in:?} vs center {center:?}"
+        );
+        assert!(
+            top_ext[0] > 0.99,
+            "{label} top exterior at d = +0.25 pt must leave backdrop untouched: {top_ext:?}"
+        );
+        assert!(
+            (lat_ext[0] - light_lat_ext[0]).abs() < 0.02,
+            "{label} lateral exterior at d = +0.25 pt must match light regular: \
+             {label} {lat_ext:?} vs light {light_lat_ext:?}"
+        );
+    }
+
+    // Light prominent: clean interior at `d = -0.25 pt` and `0.5 pt` darkened-tint
+    // outer stroke at `d = +0.25 pt` on top and lateral.
+    let prom_center = sample_2x(&light_prom_img, 340, 444);
+    let prom_lat_in = sample_2x(&light_prom_img, 200, 444);
+    let prom_top_ext = sample_2x(&light_prom_img, 340, 399);
+    let prom_lat_ext = sample_2x(&light_prom_img, 199, 444);
+    assert!(
+        (prom_lat_in[2] - prom_center[2]).abs() < 0.05,
+        "light prominent interior at d = -0.25 pt must keep full tint coverage: \
+         edge {prom_lat_in:?} vs center {prom_center:?}"
+    );
+    assert!(
+        prom_top_ext[2] > prom_top_ext[0] + 0.50 && prom_top_ext[2] < prom_center[2],
+        "light prominent top exterior at d = +0.25 pt must render darkened blue outer stroke: \
+         top {prom_top_ext:?} vs center {prom_center:?}"
+    );
+    assert!(
+        prom_lat_ext[2] > prom_lat_ext[0] + 0.45 && prom_lat_ext[2] < prom_top_ext[2],
+        "light prominent lateral exterior at d = +0.25 pt must be darker blue than top stroke: \
+         lat {prom_lat_ext:?} vs top {prom_top_ext:?}"
+    );
+}

@@ -213,6 +213,37 @@ fn record_standalone(recorder: &mut Recorder, surface: &Surface) {
     materials::record(recorder, &surface.element, false);
 }
 
+/// Fallback font family stack used on targets without a native optical-sized
+/// system UI geometric sans-serif face (§8.0).
+const FALLBACK_FONT_FAMILY: &str = "Inter, system-ui, sans-serif";
+
+/// Whether the active target resolves its typography slots through the host's
+/// native optical-sized system UI face (`family: None`) instead of the staged
+/// `Inter` fallback family (§8.0).
+const USE_NATIVE_SYSTEM_UI_FONT: bool = cfg!(target_vendor = "apple");
+
+/// Resolves one typography slot for either a native optical-sized system UI
+/// host or a host using [`FALLBACK_FONT_FAMILY`] (§8.0).
+const fn theme_font(size: f32, weight: FontWeight, native_system_ui: bool) -> ResolvedFont {
+    if native_system_ui {
+        ResolvedFont::new(size, weight)
+    } else {
+        ResolvedFont::with_static_family(size, weight, FALLBACK_FONT_FAMILY)
+    }
+}
+
+/// Builds the theme's six typography slots (§8.0).
+fn font_settings(native_system_ui: bool) -> FontSettings {
+    let slot = |size, weight| theme_font(size, weight, native_system_ui);
+    FontSettings::new()
+        .title(slot(28.0, FontWeight::Normal))
+        .headline(slot(17.0, FontWeight::SemiBold))
+        .body(slot(17.0, FontWeight::Normal))
+        .subheadline(slot(15.0, FontWeight::Normal))
+        .footnote(slot(13.0, FontWeight::Normal))
+        .caption(slot(12.0, FontWeight::Normal))
+}
+
 impl Style for Glass {
     fn install_tokens(&self, env: &mut Environment) {
         let p = &self.palette;
@@ -240,15 +271,7 @@ impl Style for Glass {
                     .error_foreground(resolved(p.error_foreground))
                     .scrim(resolved(p.scrim)),
             )
-            .fonts(
-                FontSettings::new()
-                    .title(ResolvedFont::new(28.0, FontWeight::Normal))
-                    .headline(ResolvedFont::new(17.0, FontWeight::SemiBold))
-                    .body(ResolvedFont::new(17.0, FontWeight::Normal))
-                    .subheadline(ResolvedFont::new(15.0, FontWeight::Normal))
-                    .footnote(ResolvedFont::new(13.0, FontWeight::Normal))
-                    .caption(ResolvedFont::new(12.0, FontWeight::Normal)),
-            )
+            .fonts(font_settings(USE_NATIVE_SYSTEM_UI_FONT))
             .install(env);
     }
 }
@@ -1344,6 +1367,65 @@ mod tests {
                 look.copied_color_ref().resolve(&env).snapshot(),
                 palette::working(g.palette().accent)
             );
+        }
+    }
+
+    #[test]
+    fn font_settings_select_system_ui_or_inter_fallback_across_all_slots() {
+        use waterui_core::resolve::Resolvable as _;
+        use waterui_text::font::{Body, Caption, Footnote, Headline, Subheadline, Title};
+
+        let assert_slots = |env: &Environment, expected_family: Option<&str>| {
+            let slots = [
+                (Title.resolve(env).snapshot(), 28.0_f32, FontWeight::Normal),
+                (
+                    Headline.resolve(env).snapshot(),
+                    17.0_f32,
+                    FontWeight::SemiBold,
+                ),
+                (Body.resolve(env).snapshot(), 17.0_f32, FontWeight::Normal),
+                (
+                    Subheadline.resolve(env).snapshot(),
+                    15.0_f32,
+                    FontWeight::Normal,
+                ),
+                (
+                    Footnote.resolve(env).snapshot(),
+                    13.0_f32,
+                    FontWeight::Normal,
+                ),
+                (
+                    Caption.resolve(env).snapshot(),
+                    12.0_f32,
+                    FontWeight::Normal,
+                ),
+            ];
+            for (resolved, expected_size, expected_weight) in slots {
+                assert!((resolved.size() - expected_size).abs() < 1e-4);
+                assert_eq!(resolved.weight(), expected_weight);
+                assert_eq!(
+                    resolved.family().map(waterui_core::Str::as_str),
+                    expected_family
+                );
+            }
+        };
+
+        let mut native_env = Environment::new();
+        Theme::new()
+            .fonts(font_settings(true))
+            .install(&mut native_env);
+        assert_slots(&native_env, None);
+
+        let mut fallback_env = Environment::new();
+        Theme::new()
+            .fonts(font_settings(false))
+            .install(&mut fallback_env);
+        assert_slots(&fallback_env, Some(FALLBACK_FONT_FAMILY));
+
+        let active_expected = (!USE_NATIVE_SYSTEM_UI_FONT).then_some(FALLBACK_FONT_FAMILY);
+        for g in [Glass::light(), Glass::dark()] {
+            let env = environment(&g);
+            assert_slots(&env, active_expected);
         }
     }
 }

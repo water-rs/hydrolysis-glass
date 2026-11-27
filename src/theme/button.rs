@@ -92,7 +92,7 @@ impl SizeGroup {
     }
 }
 
-/// One size group's measured values (§8.1, Geometry). **[measured]**
+/// One size group's measured values (§8.1, Geometry). **\[measured\]**
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SizeMetrics {
     /// Label text size, pt; the weight is regular in every group.
@@ -104,14 +104,14 @@ pub struct SizeMetrics {
     /// Vertical inset, pt.
     pub inset_y: f32,
     /// Layout width of a symbol drawn at the label's text size, pt
-    /// **[fitted]**.
+    /// **\[fitted\]**.
     pub symbol_width: f32,
     /// Corner radius of a rounded-rectangle shape given no radius, pt.
     pub rounded_radius: f32,
 }
 
 /// Gap between a symbol and the title of an icon-and-title label, pt
-/// **[fitted]**.
+/// **\[fitted\]**.
 pub const ICON_TITLE_GAP: f32 = 8.0;
 
 /// Layout width of an icon-and-title label: the symbol, the gap, the
@@ -156,11 +156,11 @@ pub fn shape(frame: Rect, border: BorderShape, group: SizeGroup) -> Shape {
     }
 }
 
-/// Smallest side of the touch target, pt **[chosen]**.
+/// Smallest side of the touch target, pt **\[chosen\]**.
 pub const MIN_HIT_SIDE: f32 = 44.0;
 
 /// The hit region: the frame, extended to at least 44 × 44 pt about its
-/// centre **[chosen]**.
+/// centre **\[chosen\]**.
 #[must_use]
 pub const fn hit_region(frame: Rect) -> Rect {
     let [cx, cy] = frame.center();
@@ -170,7 +170,7 @@ pub const fn hit_region(frame: Rect) -> Rect {
 }
 
 /// How far outside the hit region a touch may stray before the press
-/// cancels, pt **[chosen]**.
+/// cancels, pt **\[chosen\]**.
 pub const CANCEL_DISTANCE: f32 = 70.0;
 
 /// Whether a touch `distance` pt outside the hit region cancels the press:
@@ -182,7 +182,7 @@ pub fn cancels_press(distance: f32) -> bool {
 }
 
 /// Growth of the whole button at full press: `s = 1 + 0.245·p`
-/// **[measured]**.
+/// **\[measured\]**.
 pub const GROWTH_PER_PRESS: f32 = 0.245;
 
 /// The uniform scale of a button at press progress `p`.
@@ -204,10 +204,10 @@ pub fn growth_for(width: f32, height: f32, p: f32) -> f32 {
     (GROWTH_PER_PRESS * p).clamp(-limit, limit) + 1.0
 }
 
-/// Peak alpha of the press wash at full press **[measured]**.
+/// Peak alpha of the press wash at full press **\[measured\]**.
 pub const WASH_ALPHA: f32 = 0.30;
 /// How much the wash fades toward the ends of the button
-/// (`1 − 0.37·u²`) **[measured]**.
+/// (`1 − 0.37·u²`) **\[measured\]**.
 pub const WASH_EDGE_FADE: f32 = 0.37;
 /// Minimum half-width radius of the touch-point wash in points, so compact
 /// buttons keep a smooth radial falloff.
@@ -223,7 +223,7 @@ pub fn wash_alpha(p: f32, u: f32) -> f32 {
 }
 
 /// A unit-mass damped spring that drives the press progress toward its
-/// target (§8.1, Press motion). **[fitted]**
+/// target (§8.1, Press motion). **\[fitted\]**
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Spring {
     /// Natural frequency ω0, rad/s.
@@ -256,7 +256,7 @@ impl Spring {
 }
 
 /// The default tint (the Display P3-calibrated accent colour): `(63, 143, 247)`
-/// in dark appearance, `(59, 134, 247)` in light **[measured]**.
+/// in dark appearance, `(59, 134, 247)` in light **\[measured\]**.
 #[must_use]
 pub const fn default_tint(appearance: Appearance) -> Rgba {
     match appearance {
@@ -266,7 +266,7 @@ pub const fn default_tint(appearance: Appearance) -> Rgba {
 }
 
 /// The grey of a disabled prominent fill and how far the body moves toward
-/// it, `mix(body, g, k)` **[fitted]**.
+/// it, `mix(body, g, k)` **\[fitted\]**.
 #[must_use]
 pub const fn disabled_prominent_fill(appearance: Appearance) -> (f32, f32) {
     match appearance {
@@ -277,7 +277,7 @@ pub const fn disabled_prominent_fill(appearance: Appearance) -> (f32, f32) {
 
 /// The label colour dimmed for a disabled button: the colour beneath it
 /// plus 50 levels per channel in dark appearance and minus 75 in light,
-/// clamped **[measured]**.
+/// clamped **\[measured\]**.
 #[must_use]
 pub fn dimmed_label(beneath: [f32; 3], appearance: Appearance) -> [f32; 3] {
     let offset = match appearance {

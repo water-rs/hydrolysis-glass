@@ -26,17 +26,17 @@ pub enum CornerCurve {
 /// The specification only pins the corner to "between 2 (circle) and
 /// ∞ (square)", bulging outward of the circular arc by ≲0.5 px at the
 /// capture resolution; `2.02` puts the bulge at ≈0.14 pt on a 40 pt radius
-/// (0.4 px at 3 px/pt). **[chosen]**
+/// (0.4 px at 3 px/pt). **\[chosen\]**
 pub const CONTINUOUS_EXPONENT: f32 = 2.02;
 
 /// Deep-interior clamp of the field, pt, shared by every element. It only
-/// bounds the stored distance far inside a member. **[chosen]**
+/// bounds the stored distance far inside a member. **\[chosen\]**
 pub const NEGATIVE_SENTINEL: f32 = -10000.0;
 
-/// Union smoothing of a standalone element's field, pt. **[measured]**
+/// Union smoothing of a standalone element's field, pt. **\[measured\]**
 pub const STANDALONE_UNION_SMOOTHING: f32 = 8.0;
 
-/// Union smoothing of a container's shared field, pt. **[measured]**
+/// Union smoothing of a container's shared field, pt. **\[measured\]**
 pub const CONTAINER_UNION_SMOOTHING: f32 = 30.0;
 
 /// An axis-aligned rectangle in points.
@@ -356,7 +356,7 @@ impl<'a> UnionField<'a> {
 
 /// The meniscus profile `μ(x; h) = 1 − sqrt(t·(2 − t))`, `t = sat(x / h)`:
 /// 1 at `x = 0`, infinite-slope start, 0 at `x = h` — the §3 lobe
-/// profile. **[chosen]**
+/// profile. **\[chosen\]**
 #[must_use]
 pub fn meniscus(x: f32, h: f32) -> f32 {
     if h <= 0.0 {

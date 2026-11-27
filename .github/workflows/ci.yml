@@ -58,6 +58,33 @@ jobs:
         if: runner.os == 'Windows'
         uses: tracel-ai/github-actions/install-dxc@295f2fdbae5271f4f8ad56d634e4ff6a95daafc8
       - uses: Swatinem/rust-cache@v2
+      - uses: astral-sh/setup-uv@v6
+      # Hydrolysis's styled tests resolve their font families through
+      # system font discovery; the fonts are built from pinned,
+      # hash-verified sources by the install script of the pinned waterui.
+      - name: Locate the Hydrolysis test-font script
+        id: test-fonts
+        shell: bash
+        run: |
+          set -euo pipefail
+          script="$(cargo metadata --format-version 1 --locked | jq -er '.packages[] | select(.name == "hydrolysis") | .manifest_path | sub("Cargo.toml$"; "test-fonts/install.py")')"
+          {
+            echo "script=$script"
+            echo "dir=$(dirname "$script")"
+            echo "hash=$(uv run --no-project python -c 'import hashlib, sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' "$script")"
+          } >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ${{ steps.test-fonts.outputs.dir }}/*.ttf
+            ${{ steps.test-fonts.outputs.dir }}/*.otf
+          key: test-fonts-v1-${{ runner.os }}-${{ steps.test-fonts.outputs.hash }}
+      - name: Install Hydrolysis test fonts
+        shell: bash
+        # Fetches the GitHub-hosted sources as authenticated traffic.
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: uv run "${{ steps.test-fonts.outputs.script }}"
       - if: runner.os == 'Linux'
         run: cargo fmt --all -- --check
       - run: cargo clippy --locked --all-targets -- -D warnings

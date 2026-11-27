@@ -2,7 +2,7 @@
 //! the label fonts, the selection spring and the press lens.
 //!
 //! Everything here is a pure function of the specification's tables; the
-//! segmented look ([`super::looks`]) builds the control from the same
+//! segmented look (`super::looks`) builds the control from the same
 //! decisions. The drag, its settle and the right-to-left mirror are
 //! Hydrolysis's: the look names the drag and the renderer executes it. At
 //! rest no part is glass: the container and the thumb are flat fills blended
@@ -63,7 +63,7 @@ impl SizeGroup {
     }
 }
 
-/// How far the container overhangs the frame's bottom edge, pt **[measured]**.
+/// How far the container overhangs the frame's bottom edge, pt **\[measured\]**.
 pub const CONTAINER_OVERHANG: f32 = 0.0;
 /// The thumb's inset from its segment on every side of the container, pt
 /// **[measured: simulator]**.
@@ -125,7 +125,7 @@ pub fn thumb_rect(row: Rect, count: usize, s: f64, scale: f64) -> Rect {
     Rect::from_center_size(rest.center(), rest.size() * scale)
 }
 
-/// The container's fill, straight alpha over the backdrop **[chosen]**.
+/// The container's fill, straight alpha over the backdrop **\[chosen\]**.
 #[must_use]
 pub const fn container_fill(appearance: Appearance) -> Rgba {
     match appearance {
@@ -134,7 +134,7 @@ pub const fn container_fill(appearance: Appearance) -> Rgba {
     }
 }
 
-/// The thumb's fill, straight alpha over the container **[chosen]**.
+/// The thumb's fill, straight alpha over the container **\[chosen\]**.
 #[must_use]
 pub const fn thumb_fill(appearance: Appearance) -> Rgba {
     match appearance {
@@ -153,13 +153,13 @@ pub const SELECTION: Spring = Spring {
     zeta: 0.85,
 };
 
-/// How far a touch may move and still be a tap, pt **[chosen]**.
+/// How far a touch may move and still be a tap, pt **\[chosen\]**.
 pub const TAP_SLOP: f32 = 10.0;
 
-/// Smallest height of a segment's touch target, pt **[chosen]**.
+/// Smallest height of a segment's touch target, pt **\[chosen\]**.
 pub const MIN_HIT_HEIGHT: f64 = 44.0;
 
-/// Growth of a pressed thumb: `1 + 0.15·p` about its centre **[chosen]**.
+/// Growth of a pressed thumb: `1 + 0.15·p` about its centre **\[chosen\]**.
 pub const LENS_GROWTH_PER_PRESS: f64 = 0.15;
 
 /// The thumb's scale at press progress `p`.

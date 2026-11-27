@@ -77,8 +77,7 @@ const HL_SECOND_COLOUR: vec4<f32> = vec4<f32>(1.0);
 const BORDER_STRENGTH: f32 = 0.4;
 const BORDER_BEARING: f32 = PI * 0.5;
 const BORDER_BAND_WIDTH: f32 = 0.533;
-const BORDER_BAND_OFFSET: f32 = -0.533;
-const BORDER_COLOUR_BIAS: f32 = -0.3;
+const BORDER_BAND_OFFSET: f32 = 0.25;
 
 // Display P3 luminance weights.
 const LUMA_WEIGHTS: vec3<f32> = vec3<f32>(0.22897456, 0.69173852, 0.07928691);
@@ -414,19 +413,19 @@ fn glass_body(
         c = c * (1.0 - alpha_r);
     }
 
-    // §4.9: the border correction — two opposing edge lobes around the
-    // rim; the strength, bearing, band and bias are the recipe's shared
-    // constants (see the header), only the aperture rides in `params`.
+    return c;
+}
+
+// §4.9: lateral opposing lobe weight in [0, 1] around the exterior perimeter;
+// strength and bearing are the recipe's shared constants, only the aperture
+// rides in `params`.
+fn border_lateral(n: vec2<f32>, aperture: f32) -> f32 {
     let u_b = vec2<f32>(sin(BORDER_BEARING), -cos(BORDER_BEARING));
-    let cs = cos(0.5 * params[11].z);
-    let band_b = gsat(1.0 - abs(d - BORDER_BAND_OFFSET) / BORDER_BAND_WIDTH);
+    let cs = cos(0.5 * aperture);
     let q1 = gsat((dot(n, u_b) - cs) / (1.0 - cs));
     let q2 = gsat((dot(n, -u_b) - cs) / (1.0 - cs));
-    let h = band_b * (q1 / max(1.0 + BORDER_STRENGTH * (1.0 - q1), 1e-4)
-        + q2 / max(1.0 + BORDER_STRENGTH * (1.0 - q2), 1e-4));
-    c = c * (1.0 + BORDER_COLOUR_BIAS * h * (3.0 - 2.0 * c));
-
-    return c;
+    return q1 / max(1.0 + BORDER_STRENGTH * (1.0 - q1), 1e-4)
+        + q2 / max(1.0 + BORDER_STRENGTH * (1.0 - q2), 1e-4);
 }
 
 // The §4.12 two-light rim highlight plus the glow term — a second band
@@ -439,9 +438,11 @@ fn highlight_light(d: f32, n: vec2<f32>, cov: f32, aperture: f32) -> vec4<f32> {
     let cs2 = cos(0.5 * aperture * HL_GLOW_APERTURE);
     let band_h = HIGHLIGHT_BAND;
     let band_h2 = HIGHLIGHT_BAND * HL_GLOW_WIDTH;
-    // narrow band
+    // narrow band with §4.12 outer-lip taper so specular white does not bleed
+    // onto straddling boundary pixels and wash out the exterior perimeter ring
     let s = gsat(-d / band_h);
-    let band_narrow = (1.0 - HL_INNER_FADE * s) * (1.0 - s) * cov;
+    let lip = gsat(-d / 0.35);
+    let band_narrow = (1.0 - HL_INNER_FADE * s) * (1.0 - s) * lip * cov;
     // glow band
     let s2 = gsat(-d / band_h2);
     let band_glow = (1.0 - HL_INNER_FADE * s2) * (1.0 - s2) * cov;
@@ -480,11 +481,11 @@ fn add_highlight(c: vec3<f32>, light: vec4<f32>, k_mul: f32, k_add: f32) -> vec3
 // These are the fill's and the gradient's alphas, 0 without a tint or
 // coverage; `add_tint` lays them over a colour.
 fn tint_alphas(tint_a: f32, has_tint: f32, d: f32, cov: f32) -> vec2<f32> {
-    let a_flat = tint_a * cov;
+    let a_flat = tint_a;
     // A flat tint (flag 2, §8.1) takes no edge gradient.
     let edge = step(has_tint, 1.5);
     let t = gsat(-d / 10.0);
-    let a_rim = edge * tint_a * (1.0 - ease_cubic(t)) * cov;
+    let a_rim = edge * tint_a * (1.0 - ease_cubic(t));
     return select(vec2<f32>(0.0), vec2<f32>(a_flat, a_rim), has_tint >= 0.5 && cov > 0.0);
 }
 
@@ -557,23 +558,36 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
         return vec4<f32>(0.0);
     }
 
-    // The silhouette coverage: a half-device-pixel ramp at the member's
-    // effective field edge.
-    let cov = gsat(0.5 - geom_sdf / fw);
-    if cov <= 0.0 {
-        let is_light_reg = select(0.0, 1.0, is_light)
-            * select(0.0, 1.0, params[1].z > 0.0);
-        let hairline_alpha = is_light_reg * 0.09 * gsat(1.0 - 2.0 * d);
-        let ext_alpha = 1.0 - (1.0 - cast_alpha) * (1.0 - hairline_alpha);
-        return vec4<f32>(0.0, 0.0, 0.0, ext_alpha);
-    }
-
     // §2: the owning member's ellipse bend, applied to the field normal
     // the way the standalone's field pass bent it before shading.
     var n = geom_normal;
     if params[15].z > 0.0 {
         let rect = vec4<f32>(params[14].z, params[14].w, params[15].x, params[15].y);
         n = normalize(mix(n, ellipse_normal(rect, px.local), params[15].z));
+    }
+
+    let is_clear = params[12].y < 0.2;
+    let is_light_regular = is_light && !is_clear && !is_prominent;
+    let is_light_prominent = is_light && is_prominent;
+    let h_lat = border_lateral(n, params[11].z);
+    let band_ext = gsat(1.0 - abs(d - BORDER_BAND_OFFSET) / BORDER_BAND_WIDTH);
+    let h_base = select(0.0, 0.19, is_light_regular);
+    let border_alpha = select(band_ext * mix(h_base, 0.52, h_lat), 0.0, is_light_prominent);
+    let ext_alpha = 1.0 - (1.0 - cast_alpha) * (1.0 - border_alpha);
+    let stroke_cov = select(0.0, gsat(0.5 - (geom_sdf - 0.5 * u) / fw), is_light_prominent);
+
+    // The silhouette coverage: a half-device-pixel ramp at the member's
+    // effective field edge.
+    let cov = gsat(0.5 - geom_sdf / fw);
+    if cov <= 0.0 {
+        if is_light_prominent && stroke_cov > 0.0 {
+            let y_b = luma(glass_work_space(backdrop_sample(px.p)));
+            let fill = params[13].rgb * (0.60 + 0.40 * y_b);
+            let stroke_lin = space_srgb_decode(fill * (0.90 - 0.08 * h_lat));
+            let a = stroke_cov + (1.0 - stroke_cov) * cast_alpha;
+            return vec4<f32>(stroke_lin * stroke_cov, a);
+        }
+        return vec4<f32>(0.0, 0.0, 0.0, ext_alpha);
     }
 
     var c = glass_body(
@@ -652,10 +666,15 @@ fn backdrop_effect(px: BackdropPixel, params: array<vec4<f32>, 16>) -> vec4<f32>
     // Convert Display P3-encoded straight colour directly back to extended
     // linear Display P3 with no sRGB gamut transform, preserving wide-gamut
     // primaries and unclamped HDR highlights (> 1.0).
-    let is_light_reg = select(0.0, 1.0, is_light) * select(0.0, 1.0, params[1].z > 0.0);
-    let hairline_alpha = is_light_reg * select(0.0, 0.09, d > 0.0) * gsat(1.0 - 2.0 * d);
-    let ext_alpha = 1.0 - (1.0 - cast_alpha) * (1.0 - hairline_alpha);
+    let c_lin = space_srgb_decode(c);
+    if is_light_prominent {
+        let ext_stroke = stroke_cov * (1.0 - cov);
+        let ext_cast = (1.0 - stroke_cov) * cast_alpha * (1.0 - cov);
+        let a = cov + ext_stroke + ext_cast;
+        let stroke_lin = space_srgb_decode(fill * (0.90 - 0.08 * h_lat));
+        return vec4<f32>(c_lin * cov + stroke_lin * ext_stroke, a);
+    }
     let a = cov + (1.0 - cov) * ext_alpha;
-    let straight = space_srgb_decode(c * (cov / a));
-    return vec4<f32>(straight * a, a);
+    let atten = 1.0 - border_alpha * (1.0 - cov);
+    return vec4<f32>(c_lin * atten * cov, a);
 }

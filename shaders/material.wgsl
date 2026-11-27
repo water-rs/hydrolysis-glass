@@ -206,6 +206,26 @@ fn unpremultiply(c: vec4<f32>) -> vec3<f32> {
     return s;
 }
 
+fn srgb_decode_ch(c: f32) -> f32 {
+    let a = abs(c);
+    let lin = select(pow((a + 0.055) / 1.055, 2.4), a / 12.92, a <= 0.04045);
+    return select(lin, -lin, c < 0.0);
+}
+
+fn srgb_encode_ch(c: f32) -> f32 {
+    let a = abs(c);
+    let enc = select(1.055 * pow(a, 1.0 / 2.4) - 0.055, 12.92 * a, a <= 0.0031308);
+    return select(enc, -enc, c < 0.0);
+}
+
+fn srgb_decode(c: vec3<f32>) -> vec3<f32> {
+    return vec3<f32>(srgb_decode_ch(c.r), srgb_decode_ch(c.g), srgb_decode_ch(c.b));
+}
+
+fn srgb_encode(c: vec3<f32>) -> vec3<f32> {
+    return vec3<f32>(srgb_encode_ch(c.r), srgb_encode_ch(c.g), srgb_encode_ch(c.b));
+}
+
 // §4.6's grade: the Display P3 YCbCr construction — luma remapped onto
 // [floor, ceiling], both chroma channels re-scaled about 0.5 by chroma.
 fn apply_grade(grade: vec3<f32>, c: vec3<f32>) -> vec3<f32> {
@@ -353,19 +373,20 @@ fn glass_body(
         C = C * (1.0 - alpha_r);
     }
 
-    // §4.9: the border correction — two opposing edge lobes around the rim.
-    if r.border_a.x > 0.0 {
-        let u = vec2<f32>(sin(r.border_a.y), -cos(r.border_a.y));
-        let cs = cos(0.5 * r.border_b.x);
-        let band_b = sat(1.0 - abs(d - r.border_a.w) / r.border_a.z);
-        let q1 = sat((dot(n, u) - cs) / (1.0 - cs));
-        let q2 = sat((dot(n, -u) - cs) / (1.0 - cs));
-        let h = band_b * (q1 / max(1.0 + r.border_a.x * (1.0 - q1), 1e-4)
-            + q2 / max(1.0 + r.border_a.x * (1.0 - q2), 1e-4));
-        C = C * (1.0 + r.border_b.y * h * (3.0 - 2.0 * C));
-    }
-
     return C;
+}
+
+// §4.9: lateral opposing lobe weight in [0, 1] around the exterior perimeter.
+fn border_lateral(r: Recipe, n: vec2<f32>) -> f32 {
+    if r.border_a.x <= 0.0 {
+        return 0.0;
+    }
+    let u = vec2<f32>(sin(r.border_a.y), -cos(r.border_a.y));
+    let cs = cos(0.5 * r.border_b.x);
+    let q1 = sat((dot(n, u) - cs) / (1.0 - cs));
+    let q2 = sat((dot(n, -u) - cs) / (1.0 - cs));
+    return q1 / max(1.0 + r.border_a.x * (1.0 - q1), 1e-4)
+        + q2 / max(1.0 + r.border_a.x * (1.0 - q2), 1e-4);
 }
 
 // §3's falloff profile applied to the shadow's normalized distance.
@@ -384,9 +405,11 @@ fn highlight_light(r: Recipe, d: f32, n: vec2<f32>, cov: f32) -> vec4<f32> {
     let band_h = HIGHLIGHT_BAND;
     let band_h2 = HIGHLIGHT_BAND * r.hl_bb.y;
     var band = vec2<f32>(0.0);
-    // narrow band
+    // narrow band with §4.12 outer-lip taper so specular white does not bleed
+    // onto straddling boundary pixels and wash out the exterior perimeter ring
     let s = sat(-d / band_h);
-    band.x = (1.0 - r.hl_a.x * s) * (1.0 - s) * cov;
+    let lip = sat(-d / 0.35);
+    band.x = (1.0 - r.hl_a.x * s) * (1.0 - s) * lip * cov;
     // glow band
     let s2 = sat(-d / band_h2);
     band.y = (1.0 - r.hl_a.x * s2) * (1.0 - s2) * cov;
@@ -427,11 +450,11 @@ fn add_highlight(outc: vec3<f32>, light: vec4<f32>, k_mul: f32, k_add: f32) -> v
 // These are the fill's and the gradient's alphas, 0 without a tint or
 // coverage; `add_tint` lays them over a colour.
 fn tint_alphas(r: Recipe, d: f32, cov: f32) -> vec2<f32> {
-    let a_flat = r.tint.a * cov;
+    let a_flat = r.tint.a;
     // A flat tint (flag 2, §8.1) takes no edge gradient.
     let edge = step(r.hl_bb.w, 1.5);
     let t = sat(-d / 10.0);
-    let a_rim = edge * r.tint.a * (1.0 - ease_cubic(t)) * cov;
+    let a_rim = edge * r.tint.a * (1.0 - ease_cubic(t));
     return select(vec2<f32>(0.0), vec2<f32>(a_flat, a_rim), r.hl_bb.w >= 0.5 && cov > 0.0);
 }
 
@@ -543,7 +566,10 @@ fn material_fragment(v: FullscreenOut) -> @location(0) vec4<f32> {
     let backdrop = sample_backdrop(p);
 
     let is_light = r.ambient_misc.z > 0.5;
-    let is_light_regular = is_light && r.rim.z > 0.0;
+    let is_clear = r.cast_b.x < 0.2;
+    let is_prominent = r.hl_bb.w > 1.5;
+    let is_light_regular = is_light && !is_clear && !is_prominent;
+    let is_light_prominent = is_light && is_prominent;
 
     // §4.10: the cast shadow — plain black, no backdrop sample, at the
     // shifted field.
@@ -554,24 +580,23 @@ fn material_fragment(v: FullscreenOut) -> @location(0) vec4<f32> {
             * falloff(4.0 * sat(0.25 * f_s.d / r.cast_a.z + 0.5) - 2.0);
     }
 
-    // Light-mode 0.5 pt exterior hairline outside the regular silhouette.
-    let hairline_alpha = select(
-        0.0,
-        0.09 * sat(1.0 - 2.0 * f.d),
-        is_light_regular && f.d > 0.0 && f.d <= 0.5,
-    );
-    let ext_alpha = 1.0 - (1.0 - cast_alpha) * (1.0 - hairline_alpha);
-
     // Past the element's exterior span the pass returns the backdrop
-    // (§4.11); the shadow or hairline can still cover the pixel.
-    if f.d > r.cast_b.y && ext_alpha < 1e-4 {
+    // (§4.11); the shadow can still cover the pixel.
+    if f.d > r.cast_b.y && cast_alpha < 1e-4 {
         return backdrop;
     }
 
-    let backdrop_hair = vec4<f32>(backdrop.rgb * (1.0 - hairline_alpha), backdrop.a);
-    var outc = backdrop_hair;
+    let n = f.n / max(length(f.n), 1e-4);
+    let h_lat = border_lateral(r, n);
+    let band_ext = sat(1.0 - abs(f.d - r.border_a.w) / max(r.border_a.z, 1e-4));
+    let h_base = select(0.0, 0.19, is_light_regular);
+    let border_alpha = select(band_ext * mix(h_base, 0.52, h_lat), 0.0, is_light_prominent);
+    let ext_alpha = 1.0 - (1.0 - cast_alpha) * (1.0 - border_alpha);
+    let stroke_cov = select(0.0, sat(0.5 - (f.d - 0.5) / max(fw, 1e-4)), is_light_prominent);
+    let backdrop_lin = srgb_decode(backdrop.rgb);
+
+    var outc = backdrop;
     if cov > 0.0 {
-        let n = f.n / max(length(f.n), 1e-4);
         let own_elem = elements[min(owner, arrayLength(&elements) - 1u)];
         var C = glass_body(r, own_elem.rect.zw, p, f.d, n, cov, uni.scene.z);
         // §4.11: the per-channel ceiling, then the display peak.
@@ -581,7 +606,6 @@ fn material_fragment(v: FullscreenOut) -> @location(0) vec4<f32> {
         // highlight, every other tint over it.
         // Each layer is computed once and laid over in either order, as
         // the engine's `backdrop_effect` does.
-        let is_prominent = r.hl_bb.w > 1.5;
         let k_mul = select(select(0.050, 0.125, is_light), 0.105, is_prominent);
         let k_add = select(select(0.190, 0.000, is_light), 0.038, is_prominent);
         let raw_light = highlight_light(r, f.d, n, cov);
@@ -607,16 +631,32 @@ fn material_fragment(v: FullscreenOut) -> @location(0) vec4<f32> {
             C = C + phi * 0.22 * lift_room * (0.65 + 0.35 * c_sat);
         }
         C = C + cross_element_bleed(owner, p, f.d, n, C);
-        let interior = vec4<f32>(C, 1.0);
-        let shadow = vec4<f32>(0.0, 0.0, 0.0, cast_alpha);
-        let res = mix(shadow, interior, cov);
-        outc = res + backdrop_hair * (1.0 - res.a);
+        let c_lin = srgb_decode(C);
+        if is_light_prominent {
+            let ext_stroke = stroke_cov * (1.0 - cov);
+            let ext_cast = (1.0 - stroke_cov) * cast_alpha * (1.0 - cov);
+            let a = cov + ext_stroke + ext_cast;
+            let stroke_lin = srgb_decode(fill * (0.90 - 0.08 * h_lat));
+            let out_lin = c_lin * cov + stroke_lin * ext_stroke + backdrop_lin * (1.0 - a);
+            outc = vec4<f32>(srgb_encode(out_lin), a + backdrop.a * (1.0 - a));
+        } else {
+            let a = cov + (1.0 - cov) * ext_alpha;
+            let atten = 1.0 - border_alpha * (1.0 - cov);
+            let out_lin = c_lin * atten * cov + backdrop_lin * (1.0 - a);
+            outc = vec4<f32>(srgb_encode(out_lin), a + backdrop.a * (1.0 - a));
+        }
+    } else if is_light_prominent && stroke_cov > 0.0 {
+        let y_b = luma(unpremultiply(backdrop));
+        let fill = r.tint.rgb * (0.60 + 0.40 * y_b);
+        let stroke_lin = srgb_decode(fill * (0.90 - 0.08 * h_lat));
+        let a = stroke_cov + (1.0 - stroke_cov) * cast_alpha;
+        let out_lin = stroke_lin * stroke_cov + backdrop_lin * (1.0 - a);
+        outc = vec4<f32>(srgb_encode(out_lin), a + backdrop.a * (1.0 - a));
     } else {
-        // Outside the silhouette: the cast shadow, premultiplied black at
-        // `cast_alpha`, source-over the hairline-darkened backdrop — it
-        // darkens the colour and keeps the backdrop's coverage.
-        let shadow = vec4<f32>(0.0, 0.0, 0.0, cast_alpha);
-        outc = shadow + backdrop_hair * (1.0 - cast_alpha);
+        // Outside the silhouette: the cast shadow and exterior perimeter ring
+        // darken the backdrop in linear Display P3 and keep its coverage.
+        let out_lin = backdrop_lin * (1.0 - ext_alpha);
+        outc = vec4<f32>(srgb_encode(out_lin), backdrop.a);
     }
     return outc;
 }
